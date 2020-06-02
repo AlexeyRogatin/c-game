@@ -122,11 +122,96 @@ typedef struct
     i32 height;
 } Tile_Map;
 
+typedef struct
+{
+    V2 pos;
+    V2 size;
+} Camera;
+
 Game_Object player;
 
-f32 gravity = 0;
+f32 gravity = -0.7;
 
 bool initialized = false;
+
+void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Input input)
+{
+    //стороны объекта
+    i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
+    i32 objRight = gameObject->pos.x + (gameObject->size.x / 2);
+    i32 objBottom = gameObject->pos.y - (gameObject->size.y / 2);
+    i32 objTop = gameObject->pos.y + (gameObject->size.y / 2);
+
+    //проверка столкновений
+    for (i32 tileIndex = 0; tileIndex < tileMap.width * tileMap.height; tileIndex++)
+    {
+        Tile tile = tiles[tileIndex];
+        if (tile.type == Tile_Type_WALL)
+        {
+            i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS;
+            i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS;
+            i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS;
+            i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS;
+
+            if (gameObject->speed.x != 0)
+            {
+                i32 objSide;
+                i32 tileSide;
+                if (gameObject->speed.x > 0)
+                {
+                    objSide = objRight;
+                    tileSide = tileLeft;
+                }
+                else
+                {
+                    objSide = objLeft;
+                    tileSide = tileRight;
+                }
+
+                if (
+                    !(objRight + gameObject->speed.x <= tileLeft ||
+                      objLeft + gameObject->speed.x >= tileRight ||
+                      objTop <= tileBottom ||
+                      objBottom >= tileTop))
+                {
+                    gameObject->speed.x = 0;
+                    gameObject->pos.x -= objSide - tileSide;
+                }
+            }
+
+            if (gameObject->speed.y != 0)
+            {
+                i32 objSide;
+                i32 tileSide;
+                if (gameObject->speed.y > 0)
+                {
+                    objSide = objTop;
+                    tileSide = tileBottom;
+                }
+                else
+                {
+                    objSide = objBottom;
+                    tileSide = tileTop;
+                }
+
+                if (
+                    !(objTop + gameObject->speed.y <= tileBottom ||
+                      objBottom + gameObject->speed.y >= tileTop ||
+                      objRight <= tileLeft ||
+                      objLeft >= tileRight))
+                {
+                    gameObject->speed.y = 0;
+                    gameObject->pos.y -= objSide - tileSide;
+                    if (input.space.is_down && tileSide == tileTop)
+                    {
+                        gameObject->speed.y += 21;
+                    }
+                }
+            }
+        }
+    }
+    gameObject->pos += gameObject->speed;
+}
 
 void game_update(Bitmap screen, Input input)
 {
@@ -143,7 +228,7 @@ void game_update(Bitmap screen, Input input)
         tile_map = (Tile *)malloc(sizeof(Tile) * tileMap.width * tileMap.height);
 
         char tile_string[] =
-            "       #"
+            " #     #"
             "#  #    "
             "#      #"
             "#####  #";
@@ -168,7 +253,7 @@ void game_update(Bitmap screen, Input input)
         //addPlayer
         player = {0};
         player.pos = {100, 100};
-        player.size = {64, 64};
+        player.size = {32, 32};
     }
 
     //clearRect
@@ -185,26 +270,12 @@ void game_update(Bitmap screen, Input input)
         draw_rect(screen, tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
     }
 
-    // for (i32 y = 0; y < tile_map_height; y++)
-    // {
-    //     for (i32 x = 0; x < tile_map_width; x++)
-    //     {
-    //         u32 color = 0xFF000000;
-    //         Tile_Type type = tile_map[y * tile_map_width + x].type;
-    //         if (type == Tile_Type_WALL)
-    //         {
-    //             color = 0xFF00FFFF;
-    //         }
-    //         draw_rect(screen, x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
-    //     }
-    // }
-
     //accel
-    f32 accelConst = 5;
+    f32 accelConst = 0.5;
     f32 frictionConst = 0.95;
 
-    player.speed = {(input.right.is_down - input.left.is_down) * accelConst,
-                    (input.up.is_down - input.down.is_down) * accelConst};
+    player.speed += {(input.right.is_down - input.left.is_down) * accelConst,
+                     0};
 
     //friction
     player.speed *= frictionConst;
@@ -212,7 +283,7 @@ void game_update(Bitmap screen, Input input)
     //gravity
     player.speed.y += gravity;
 
-    player.pos += player.speed;
+    moveGameObject(tile_map, tileMap, &player, input);
 
     //drawPlayer
     draw_rect(screen, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
