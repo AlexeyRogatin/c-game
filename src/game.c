@@ -33,9 +33,19 @@ typedef struct
 
 Bitmap win32_read_bmp(char *file_name);
 
-//drawing
-void draw_rect(Bitmap screen, i32 x, i32 y, i32 width, i32 height, i32 color)
+//camera
+typedef struct
 {
+    V2 pos;
+} Camera;
+
+Camera camera = {{0, 0}};
+
+//drawing
+void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height, i32 color)
+{
+    x += screen.width / 2 - camera.pos.x;
+    y += screen.height / 2 - camera.pos.y;
     i32 left = x - width / 2;
     i32 right = x + width / 2;
     i32 bottom = y - height / 2;
@@ -58,8 +68,10 @@ void draw_rect(Bitmap screen, i32 x, i32 y, i32 width, i32 height, i32 color)
     }
 }
 
-void draw_bitmap(Bitmap screen, i32 pos_x, i32 pos_y, Bitmap bitmap)
+void draw_bitmap(Bitmap screen, Camera camera, i32 pos_x, i32 pos_y, Bitmap bitmap)
 {
+    pos_x += screen.width / 2 - camera.pos.x;
+    pos_x += screen.height / 2 - camera.pos.y;
     i32 left = pos_x - bitmap.width / 2;
     i32 right = pos_x + bitmap.width / 2;
     i32 bottom = pos_y - bitmap.height / 2;
@@ -122,15 +134,7 @@ typedef struct
     i32 height;
 } Tile_Map;
 
-typedef struct
-{
-    V2 pos;
-    V2 size;
-} Camera;
-
 Game_Object player;
-
-f32 gravity = -0.7;
 
 bool initialized = false;
 
@@ -257,22 +261,12 @@ void game_update(Bitmap screen, Input input)
     }
 
     //clearRect
-    draw_rect(screen, screen.width / 2, screen.height / 2, screen.width, screen.height, 0xFF000000);
-
-    for (i32 tileIndex = 0; tileIndex < tileMap.width * tileMap.height; tileIndex++)
-    {
-        u32 color = 0xFF000000;
-        Tile tile = tile_map[tileIndex];
-        if (tile.type == Tile_Type_WALL)
-        {
-            color = 0xFF00FFFF;
-        }
-        draw_rect(screen, tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
-    }
+    draw_rect(screen, camera, screen.width / 2, screen.height / 2, screen.width, screen.height, 0xFF000000);
 
     //accel
     f32 accelConst = 0.5;
     f32 frictionConst = 0.95;
+    f32 gravity = -0.7;
 
     player.speed += {(input.right.is_down - input.left.is_down) * accelConst,
                      0};
@@ -285,6 +279,20 @@ void game_update(Bitmap screen, Input input)
 
     moveGameObject(tile_map, tileMap, &player, input);
 
+    camera.pos = player.pos;
+
+    //drawTile
+    for (i32 tileIndex = 0; tileIndex < tileMap.width * tileMap.height; tileIndex++)
+    {
+        u32 color = 0xFF000000;
+        Tile tile = tile_map[tileIndex];
+        if (tile.type == Tile_Type_WALL)
+        {
+            color = 0xFF00FFFF;
+        }
+        draw_rect(screen, camera, tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
+    }
+
     //drawPlayer
-    draw_rect(screen, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
+    draw_rect(screen, camera, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
 }

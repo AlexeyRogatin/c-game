@@ -172,7 +172,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width
