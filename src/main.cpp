@@ -283,7 +283,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         f64 time_per_frame = win32_get_time() - prev_time;
 
-        f64 target_time_per_frame = 1.0f / 60.0f;
+        f64 target_time_per_frame = 1.0f / 30.0f;
 
         while (time_per_frame < target_time_per_frame)
         {
