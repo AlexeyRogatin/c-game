@@ -1,6 +1,9 @@
 #include <malloc.h>
 #include "game_math.c"
 
+f64 target_time_per_frame = 1.0f / 60.0f;
+f32 dt = (f32)target_time_per_frame;
+
 //input
 typedef struct
 {
@@ -130,16 +133,16 @@ Tile *tile_map = NULL;
 
 typedef struct
 {
+    V2 chunkSize;
+    V2 chunkCount;
+} Tile_Map;
+
+typedef struct
+{
     V2 pos;
     V2 size;
     V2 speed;
 } Game_Object;
-
-typedef struct
-{
-    V2 chunkSize;
-    V2 chunkCount;
-} Tile_Map;
 
 Game_Object player;
 
@@ -186,8 +189,8 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
                     }
 
                     if (
-                        !(objRight + gameObject->speed.x <= tileLeft ||
-                          objLeft + gameObject->speed.x >= tileRight ||
+                        !(objRight + gameObject->speed.x * dt <= tileLeft ||
+                          objLeft + gameObject->speed.x * dt >= tileRight ||
                           objTop <= tileBottom ||
                           objBottom >= tileTop))
                     {
@@ -212,8 +215,8 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
                     }
 
                     if (
-                        !(objTop + gameObject->speed.y <= tileBottom ||
-                          objBottom + gameObject->speed.y >= tileTop ||
+                        !(objTop + gameObject->speed.y * dt <= tileBottom ||
+                          objBottom + gameObject->speed.y * dt >= tileTop ||
                           objRight <= tileLeft ||
                           objLeft >= tileRight))
                     {
@@ -221,14 +224,14 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
                         gameObject->pos.y -= objSide - tileSide;
                         if (input.space.is_down && tileSide == tileTop)
                         {
-                            gameObject->speed.y += 21;
+                            gameObject->speed.y += 21 * 60 * dt * 60;
                         }
                     }
                 }
             }
         }
     }
-    gameObject->pos += gameObject->speed;
+    gameObject->pos += gameObject->speed * dt;
 }
 
 void game_update(Bitmap screen, Input input)
@@ -298,17 +301,17 @@ void game_update(Bitmap screen, Input input)
     draw_rect(screen, camera, camera.pos.x, camera.pos.y, screen.width + 5, screen.height + 5, 0xFF000000);
 
     //accel
-    f32 accelConst = 0.5;
+    f32 accelConst = 0.5 * 60 * 60;
     f32 frictionConst = 0.95;
-    f32 gravity = -0.7;
+    f32 gravity = -0.7 * 60 * 60;
 
-    player.speed += {(input.right.is_down - input.left.is_down) * accelConst, 0};
+    player.speed += {(input.right.is_down - input.left.is_down) * accelConst * dt, 0};
 
     //friction
     player.speed *= frictionConst;
 
     //gravity
-    player.speed.y += gravity;
+    player.speed.y += gravity * dt;
 
     moveGameObject(tile_map, tileMap, &player, input);
 

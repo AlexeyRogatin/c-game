@@ -1,4 +1,5 @@
 #include "math.h"
+#include "stdlib.h"
 
 typedef struct
 {
@@ -76,4 +77,15 @@ V2 unit(V2 a)
         V2 result = a / length(a);
     }
     return result;
-}
+};
+
+f32 randomFloat(f32 start, f32 end)
+{
+    f32 result = rand() / (f32)RAND_MAX * (end - start) + start;
+    return result;
+};
+f32 randomInt(f32 start, f32 end)
+{
+    i32 result = round(randomFloat(start, end));
+    return result;
+};

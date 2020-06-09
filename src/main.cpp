@@ -172,7 +172,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE,
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width
@@ -282,8 +282,6 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             SRCCOPY);
 
         f64 time_per_frame = win32_get_time() - prev_time;
-
-        f64 target_time_per_frame = 1.0f / 30.0f;
 
         while (time_per_frame < target_time_per_frame)
         {
