@@ -1,4 +1,5 @@
 #include <malloc.h>
+#include "math.h"
 #include "game_math.c"
 
 f64 target_time_per_frame = 1.0f / 60.0f;
@@ -119,6 +120,9 @@ typedef enum
 {
     Tile_Type_NONE,
     Tile_Type_WALL,
+    Tile_Type_BORDER,
+    Tile_Type_ENTER,
+    Tile_Type_EXIT,
 } Tile_Type;
 
 typedef struct
@@ -127,15 +131,13 @@ typedef struct
     Tile_Type type;
 } Tile;
 
-#define TILE_SIZE_PIXELS 42
+#define TILE_SIZE_PIXELS 64
+#define CHUNK_SIZE_X 10
+#define CHUNK_SIZE_Y 8
+#define CHUNK_COUNT_X 4
+#define CHUNK_COUNT_Y 4
 
 Tile *tile_map = NULL;
-
-typedef struct
-{
-    V2 chunkSize;
-    V2 chunkCount;
-} Tile_Map;
 
 typedef struct
 {
@@ -148,7 +150,7 @@ Game_Object player;
 
 bool initialized = false;
 
-void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Input input)
+void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 {
     //стороны объекта
     i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
@@ -159,14 +161,14 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
     V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
                      roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
 
-    //проверка столкновений
+    //проверка столкновений с тайлами
     for (i32 x = (i32)objTilePos.x - 2; x < (i32)objTilePos.x + 2; x++)
     {
         for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
         {
-            i32 tileIndex = y * tileMap.chunkSize.x * tileMap.chunkCount.x + x;
+            i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
             Tile tile = tiles[tileIndex];
-            if (tile.type && tile.type == Tile_Type_WALL)
+            if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
             {
                 i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
                 i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
@@ -222,7 +224,7 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
                     {
                         gameObject->speed.y = 0;
                         gameObject->pos.y -= objSide - tileSide;
-                        if (input.space.is_down && tileSide == tileTop)
+                        if (input.space.went_down && tileSide == tileTop)
                         {
                             gameObject->speed.y += 21 * 60 * dt * 60;
                         }
@@ -236,11 +238,7 @@ void moveGameObject(Tile *tiles, Tile_Map tileMap, Game_Object *gameObject, Inpu
 
 void game_update(Bitmap screen, Input input)
 {
-    Tile_Map tileMap = {
-        {20, 16},
-        {4, 4}};
-
-    V2 mapSize = {tileMap.chunkSize.x * tileMap.chunkCount.x, tileMap.chunkSize.y * tileMap.chunkCount.y};
+    V2 mapSize = {CHUNK_SIZE_X * (CHUNK_COUNT_X + 2), CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2)};
 
     //only one time
     if (!initialized)
@@ -249,40 +247,197 @@ void game_update(Bitmap screen, Input input)
 
         tile_map = (Tile *)malloc(sizeof(Tile) * mapSize.x * mapSize.y);
 
-        char tile_string[] =
-            "#                   "
-            "  #                 "
-            "      #             "
-            "                    "
-            "                    "
-            "                    "
-            "        #           "
-            "                    "
-            "                    "
-            "         #    #     "
-            "                    "
-            "            #       "
-            "                    "
-            "               #    "
-            "                    "
-            "### ### # ## ######";
+        //making chunks
+        char *chunkStrings[(CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2)];
+
+        V2 enterChunkPos = {randomInt(1, CHUNK_COUNT_X), 1};
+        V2 chunkPos = enterChunkPos;
+        V2 endChunkPos = {randomInt(1, CHUNK_COUNT_X), CHUNK_COUNT_Y};
+
+        //заполняем чанки
+        for (i32 y = 0; y < CHUNK_COUNT_Y + 2; y++)
+        {
+            for (i32 x = 0; x < CHUNK_COUNT_X + 2; x++)
+            {
+                if (y == 0 || y == CHUNK_COUNT_Y + 1 || x == 0 || x == CHUNK_COUNT_Y + 1)
+                {
+                    //чанк-граница
+                    chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
+                        "=========="
+                        "=========="
+                        "=========="
+                        "=========="
+                        "=========="
+                        "=========="
+                        "=========="
+                        "==========";
+                }
+                else
+                {
+                    //чанк-наполнитель
+                    chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
+                        "##########"
+                        "##########"
+                        "##########"
+                        "##########"
+                        "##########"
+                        "##########"
+                        "##########"
+                        "##########";
+                }
+            }
+        }
+
+        i8 direction = randomInt(-1, 1);
+        if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
+        {
+            direction = -direction;
+        }
+
+        while (chunkPos != endChunkPos)
+        {
+            if ((randomFloat(0, 1) < 0.3 || direction == 0) && chunkPos.y < CHUNK_COUNT_Y)
+            {
+                if (chunkPos == enterChunkPos)
+                {
+                    //чанк-вход с проходом вниз
+                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                        "#      #  "
+                        "#         "
+                        "          "
+                        "          "
+                        "     N    "
+                        "    ###   "
+                        " #        "
+                        "##### ####";
+                }
+                else
+                {
+                    //чанк-проход вниз
+                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                        "          "
+                        "          "
+                        "      ####"
+                        "##        "
+                        "   #      "
+                        "   #######"
+                        " #     ###"
+                        "##### ####";
+                }
+                chunkPos.y++;
+
+                i32 chance = randomInt(0, 1);
+                if (chance == 0)
+                {
+                    direction = 1;
+                }
+                else if (chance == 1)
+                {
+                    direction = -1;
+                }
+            }
+            else
+            {
+                if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
+                {
+                    direction = 0;
+                }
+
+                if (chunkPos.y == CHUNK_COUNT_Y)
+                {
+                    direction = endChunkPos.x - chunkPos.x;
+                    if (direction > 0)
+                    {
+                        direction = 1;
+                    }
+                    else
+                    {
+                        direction = -1;
+                    }
+                }
+
+                if (direction != 0)
+                {
+                    if (chunkPos == enterChunkPos)
+                    {
+                        //чанк-вход
+                        chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                            "          "
+                            "          "
+                            "    N     "
+                            "   ####   "
+                            "   #####  "
+                            "  ####### "
+                            "   ###### "
+                            "##########";
+                    }
+                    else
+                    {
+                        //обычный чанк
+                        chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                            "          "
+                            " #######  "
+                            "          "
+                            "         #"
+                            "          "
+                            "   ###    "
+                            "#      ###"
+                            "##########";
+                    }
+                    chunkPos.x += direction;
+                }
+            }
+            //чанк-выход
+            if (chunkPos == endChunkPos)
+            {
+                chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                    "          "
+                    " #        "
+                    "#         "
+                    "         #"
+                    "          "
+                    "     X    "
+                    "  ######  "
+                    " ######## ";
+            }
+        }
+
+        char *chunk_string;
 
         //start at last row
-        for (i32 chunkIndexY = 0; chunkIndexY < tileMap.chunkCount.y; chunkIndexY++)
+        for (i32 chunkIndexY = 0; chunkIndexY < CHUNK_COUNT_Y + 2; chunkIndexY++)
         {
-            for (i32 chunkIndexX = 0; chunkIndexX < tileMap.chunkCount.x; chunkIndexX++)
+            for (i32 chunkIndexX = 0; chunkIndexX < CHUNK_COUNT_X + 2; chunkIndexX++)
             {
-                for (i32 y = 0; y < tileMap.chunkSize.y; y++)
+                chunk_string = chunkStrings[(CHUNK_COUNT_Y + 2 - chunkIndexY - 1) * (CHUNK_COUNT_X + 2) + chunkIndexX];
+                for (i32 y = 0; y < CHUNK_SIZE_Y; y++)
                 {
-                    for (i32 x = 0; x < tileMap.chunkSize.x; x++)
+                    for (i32 x = 0; x < CHUNK_SIZE_X; x++)
                     {
-                        i32 tileX = x + chunkIndexX * tileMap.chunkSize.x;
-                        i32 tileY = y + chunkIndexY * tileMap.chunkSize.y;
+                        i32 tileX = x + chunkIndexX * CHUNK_SIZE_X;
+                        i32 tileY = y + chunkIndexY * CHUNK_SIZE_Y;
                         i32 index = tileY * mapSize.x + tileX;
                         Tile_Type type = Tile_Type_NONE;
-                        if (tile_string[((i32)tileMap.chunkSize.y - y - 1) * (i32)tileMap.chunkSize.x + x] == '#')
+                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == '#')
                         {
                             type = Tile_Type_WALL;
+                        }
+                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'N')
+                        {
+                            type = Tile_Type_ENTER;
+                            //addPlayer
+                            player = {0};
+                            player.pos = {(f32)tileX * TILE_SIZE_PIXELS,
+                                          (f32)tileY * TILE_SIZE_PIXELS};
+                            player.size = {42, 42};
+                        }
+                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
+                        {
+                            type = Tile_Type_EXIT;
+                        }
+                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == '=')
+                        {
+                            type = Tile_Type_BORDER;
                         }
                         tile_map[index].pos = {(f32)tileX, (f32)tileY};
                         tile_map[index].type = type;
@@ -290,11 +445,6 @@ void game_update(Bitmap screen, Input input)
                 }
             }
         }
-
-        //addPlayer
-        player = {0};
-        player.pos = {100, 100};
-        player.size = {32, 32};
     }
 
     //clearRect
@@ -303,7 +453,8 @@ void game_update(Bitmap screen, Input input)
     //accel
     f32 accelConst = 0.5 * 60 * 60;
     f32 frictionConst = 0.95;
-    f32 gravity = -0.7 * 60 * 60;
+    f32 gravity = -0.75 * 60 * 60;
+    //-0.75
 
     player.speed += {(input.right.is_down - input.left.is_down) * accelConst * dt, 0};
 
@@ -313,9 +464,29 @@ void game_update(Bitmap screen, Input input)
     //gravity
     player.speed.y += gravity * dt;
 
-    moveGameObject(tile_map, tileMap, &player, input);
+    moveGameObject(tile_map, &player, input);
 
     camera.pos = player.pos;
+
+    if (!(player.pos.x - screen.width / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300))
+    {
+        camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300 + screen.width / 2;
+    }
+
+    if (!(player.pos.x + screen.width / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300))
+    {
+        camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300 - screen.width / 2;
+    }
+
+    if (!(player.pos.y - screen.height / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240))
+    {
+        camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240 + screen.height / 2;
+    }
+
+    if (!(player.pos.y + screen.height / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240))
+    {
+        camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240 - screen.height / 2;
+    }
 
     //drawTile
     for (i32 tileIndex = 0; tileIndex < mapSize.x * mapSize.y; tileIndex++)
@@ -324,7 +495,15 @@ void game_update(Bitmap screen, Input input)
         Tile tile = tile_map[tileIndex];
         if (tile.type == Tile_Type_WALL)
         {
-            color = 0xFF00FFFF;
+            color = 0xFFFFFF00;
+        }
+        if (tile.type == Tile_Type_ENTER || tile.type == Tile_Type_EXIT)
+        {
+            color = 0xFFFF0000;
+        }
+        if (tile.type == Tile_Type_BORDER)
+        {
+            color = 0xFF0000FF;
         }
         draw_rect(screen, camera, tile.pos.x * TILE_SIZE_PIXELS, tile.pos.y * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
     }

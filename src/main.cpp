@@ -156,6 +156,9 @@ f64 win32_get_time()
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
+    time_t curTime = time(NULL);
+    srand((u32)curTime);
+
     LARGE_INTEGER perf_frequency_li;
     QueryPerformanceFrequency(&perf_frequency_li);
     performance_frequency = perf_frequency_li.QuadPart;
@@ -172,7 +175,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        WS_POPUPWINDOW | WS_VISIBLE | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width
