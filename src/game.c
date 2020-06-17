@@ -152,88 +152,153 @@ bool initialized = false;
 
 void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 {
+    if (gameObject->speed.x > 0)
+    {
+        i32 foo = 0;
+    }
+
     //стороны объекта
     i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
     i32 objRight = gameObject->pos.x + (gameObject->size.x / 2);
     i32 objBottom = gameObject->pos.y - (gameObject->size.y / 2);
     i32 objTop = gameObject->pos.y + (gameObject->size.y / 2);
 
-    V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
-                     roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
+    V2 fullSpeed = gameObject->speed;
 
-    //проверка столкновений с тайлами
-    for (i32 x = (i32)objTilePos.x - 2; x < (i32)objTilePos.x + 2; x++)
+    V2 speedChange = unit(gameObject->speed) * TILE_SIZE_PIXELS / 32;
+
+    if ((fullSpeed.x > speedChange.x && fullSpeed.x > 0) || (fullSpeed.x < speedChange.x && fullSpeed.x < 0))
     {
-        for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
+        gameObject->speed.x = 0;
+    }
+    if ((fullSpeed.y > speedChange.y && fullSpeed.y > 0) || (fullSpeed.y < speedChange.y && fullSpeed.y < 0))
+    {
+        gameObject->speed.y = 0;
+    }
+
+    bool collisionXHappened = false;
+    bool collisionYHappened = false;
+
+    do
+    {
+        if (!collisionXHappened)
         {
-            i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
-            Tile tile = tiles[tileIndex];
-            if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
+            if (fullSpeed.x > speedChange.x && fullSpeed.x > 0)
             {
-                i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
-                i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
-
-                if (gameObject->speed.x != 0)
+                gameObject->speed.x += speedChange.x;
+                if (gameObject->speed.x > fullSpeed.x)
                 {
-                    i32 objSide;
-                    i32 tileSide;
-                    if (gameObject->speed.x > 0)
-                    {
-                        objSide = objRight;
-                        tileSide = tileLeft;
-                    }
-                    else
-                    {
-                        objSide = objLeft;
-                        tileSide = tileRight;
-                    }
-
-                    if (
-                        !(objRight + gameObject->speed.x * dt <= tileLeft ||
-                          objLeft + gameObject->speed.x * dt >= tileRight ||
-                          objTop <= tileBottom ||
-                          objBottom >= tileTop))
-                    {
-                        gameObject->speed.x = 0;
-                        gameObject->pos.x -= objSide - tileSide;
-                    }
+                    gameObject->speed.x = fullSpeed.x;
                 }
-
-                if (gameObject->speed.y != 0)
+            }
+            if (fullSpeed.x < speedChange.x && fullSpeed.x < 0)
+            {
+                gameObject->speed.x += speedChange.x;
+                if (gameObject->speed.x < fullSpeed.x)
                 {
-                    i32 objSide;
-                    i32 tileSide;
-                    if (gameObject->speed.y > 0)
+                    gameObject->speed.x = fullSpeed.x;
+                }
+            }
+        }
+        if (!collisionYHappened)
+        {
+            if (fullSpeed.y > speedChange.y && fullSpeed.y > 0)
+            {
+                gameObject->speed.y += speedChange.y;
+                if (gameObject->speed.y > fullSpeed.y)
+                {
+                    gameObject->speed.y = fullSpeed.y;
+                }
+            }
+            if (fullSpeed.y < speedChange.y && fullSpeed.y < 0)
+            {
+                gameObject->speed.y += speedChange.y;
+                if (gameObject->speed.y < fullSpeed.y)
+                {
+                    gameObject->speed.y = fullSpeed.y;
+                }
+            }
+        }
+
+        V2 objTilePos = {roundf((gameObject->pos.x + gameObject->speed.x) / TILE_SIZE_PIXELS), roundf((gameObject->pos.y + gameObject->speed.y) / TILE_SIZE_PIXELS)};
+
+        //проверка столкновений с тайлами
+        for (i32 x = (i32)objTilePos.x - 2; x < (i32)objTilePos.x + 2; x++)
+        {
+            for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
+            {
+                i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
+                Tile tile = tiles[tileIndex];
+                if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
+                {
+                    i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                    i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+                    i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                    i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+
+                    if (gameObject->speed.x != 0 && !collisionXHappened)
                     {
-                        objSide = objTop;
-                        tileSide = tileBottom;
-                    }
-                    else
-                    {
-                        objSide = objBottom;
-                        tileSide = tileTop;
+                        i32 objSide;
+                        i32 tileSide;
+                        if (gameObject->speed.x > 0)
+                        {
+                            objSide = objRight;
+                            tileSide = tileLeft;
+                        }
+                        else
+                        {
+                            objSide = objLeft;
+                            tileSide = tileRight;
+                        }
+
+                        if (
+                            !(objRight + gameObject->speed.x <= tileLeft ||
+                              objLeft + gameObject->speed.x >= tileRight ||
+                              objTop <= tileBottom ||
+                              objBottom >= tileTop))
+                        {
+                            gameObject->speed.x = 0;
+                            collisionXHappened = true;
+                            gameObject->pos.x -= objSide - tileSide;
+                        }
                     }
 
-                    if (
-                        !(objTop + gameObject->speed.y * dt <= tileBottom ||
-                          objBottom + gameObject->speed.y * dt >= tileTop ||
-                          objRight <= tileLeft ||
-                          objLeft >= tileRight))
+                    if (gameObject->speed.y != 0 && !collisionYHappened)
                     {
-                        gameObject->speed.y = 0;
-                        gameObject->pos.y -= objSide - tileSide;
-                        if (input.space.went_down && tileSide == tileTop)
+                        i32 objSide;
+                        i32 tileSide;
+                        if (gameObject->speed.y > 0)
                         {
-                            gameObject->speed.y += 21 * 60 * dt * 60;
+                            objSide = objTop;
+                            tileSide = tileBottom;
+                        }
+                        else
+                        {
+                            objSide = objBottom;
+                            tileSide = tileTop;
+                        }
+
+                        if (
+                            !(objTop + gameObject->speed.y <= tileBottom ||
+                              objBottom + gameObject->speed.y >= tileTop ||
+                              objRight <= tileLeft ||
+                              objLeft >= tileRight))
+                        {
+                            gameObject->speed.y = 0;
+                            collisionYHappened = true;
+                            gameObject->pos.y -= objSide - tileSide;
+                            if (input.space.went_down && tileSide == tileTop)
+                            {
+                                //21
+                                gameObject->speed.y += TILE_SIZE_PIXELS / 2 * 10;
+                            }
                         }
                     }
                 }
             }
         }
-    }
-    gameObject->pos += gameObject->speed * dt;
+    } while ((gameObject->speed.x != fullSpeed.x && !collisionXHappened) || (gameObject->speed.y != fullSpeed.y && !collisionYHappened));
+    gameObject->pos += gameObject->speed;
 }
 
 void game_update(Bitmap screen, Input input)
@@ -451,18 +516,19 @@ void game_update(Bitmap screen, Input input)
     draw_rect(screen, camera, camera.pos.x, camera.pos.y, screen.width + 5, screen.height + 5, 0xFF000000);
 
     //accel
-    f32 accelConst = 0.5 * 60 * 60;
+    //0.95
+    f32 accelConst = TILE_SIZE_PIXELS / 2;
     f32 frictionConst = 0.95;
-    f32 gravity = -0.75 * 60 * 60;
+    f32 gravity = -0.75;
     //-0.75
 
-    player.speed += {(input.right.is_down - input.left.is_down) * accelConst * dt, 0};
+    player.speed += {(input.right.is_down - input.left.is_down) * accelConst, (input.up.is_down - input.down.is_down) * accelConst};
 
     //friction
     player.speed *= frictionConst;
 
     //gravity
-    player.speed.y += gravity * dt;
+    player.speed.y += gravity;
 
     moveGameObject(tile_map, &player, input);
 

@@ -74,7 +74,7 @@ V2 unit(V2 a)
     f32 l = length(a);
     if (l != 0)
     {
-        V2 result = a / length(a);
+        result = a / length(a);
     }
     return result;
 };

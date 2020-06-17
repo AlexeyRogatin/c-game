@@ -22,7 +22,7 @@ typedef u8 byte;
     if (!(cond))     \
         *(int *)NULL = 12;
 
-#include <stdio.h>
+#include "stdio.h"
 #include "game.c"
 #include "Windows.h"
 
