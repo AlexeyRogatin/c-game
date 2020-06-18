@@ -152,28 +152,20 @@ bool initialized = false;
 
 void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 {
-    if (gameObject->speed.x > 0)
+    if (gameObject->speed.y > 0)
     {
         i32 foo = 0;
     }
 
-    //стороны объекта
-    i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
-    i32 objRight = gameObject->pos.x + (gameObject->size.x / 2);
-    i32 objBottom = gameObject->pos.y - (gameObject->size.y / 2);
-    i32 objTop = gameObject->pos.y + (gameObject->size.y / 2);
-
     V2 fullSpeed = gameObject->speed;
 
-    V2 speedChange = unit(gameObject->speed) * TILE_SIZE_PIXELS / 32;
+    V2 speedLeft = fullSpeed;
 
-    if ((fullSpeed.x > speedChange.x && fullSpeed.x > 0) || (fullSpeed.x < speedChange.x && fullSpeed.x < 0))
+    V2 speedChange = unit(gameObject->speed);
+
+    if (length(fullSpeed) > length(speedChange))
     {
-        gameObject->speed.x = 0;
-    }
-    if ((fullSpeed.y > speedChange.y && fullSpeed.y > 0) || (fullSpeed.y < speedChange.y && fullSpeed.y < 0))
-    {
-        gameObject->speed.y = 0;
+        gameObject->speed = {0, 0};
     }
 
     bool collisionXHappened = false;
@@ -185,18 +177,28 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
         {
             if (fullSpeed.x > speedChange.x && fullSpeed.x > 0)
             {
-                gameObject->speed.x += speedChange.x;
-                if (gameObject->speed.x > fullSpeed.x)
+                if (speedLeft.x < speedChange.x)
                 {
-                    gameObject->speed.x = fullSpeed.x;
+                    gameObject->speed.x = speedLeft.x;
+                    speedLeft.x = 0;
+                }
+                else
+                {
+                    gameObject->speed.x = speedChange.x;
+                    speedLeft.x -= speedChange.x;
                 }
             }
             if (fullSpeed.x < speedChange.x && fullSpeed.x < 0)
             {
-                gameObject->speed.x += speedChange.x;
-                if (gameObject->speed.x < fullSpeed.x)
+                if (speedLeft.x > speedChange.x)
                 {
-                    gameObject->speed.x = fullSpeed.x;
+                    gameObject->speed.x = speedLeft.x;
+                    speedLeft.x = 0;
+                }
+                else
+                {
+                    gameObject->speed.x = speedChange.x;
+                    speedLeft.x -= speedChange.x;
                 }
             }
         }
@@ -204,21 +206,37 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
         {
             if (fullSpeed.y > speedChange.y && fullSpeed.y > 0)
             {
-                gameObject->speed.y += speedChange.y;
-                if (gameObject->speed.y > fullSpeed.y)
+                if (speedLeft.y < speedChange.y)
                 {
-                    gameObject->speed.y = fullSpeed.y;
+                    gameObject->speed.y = speedLeft.y;
+                    speedLeft.y = 0;
+                }
+                else
+                {
+                    gameObject->speed.y = speedChange.y;
+                    speedLeft.y -= speedChange.y;
                 }
             }
             if (fullSpeed.y < speedChange.y && fullSpeed.y < 0)
             {
-                gameObject->speed.y += speedChange.y;
-                if (gameObject->speed.y < fullSpeed.y)
+                if (speedLeft.y > speedChange.y)
                 {
-                    gameObject->speed.y = fullSpeed.y;
+                    gameObject->speed.y = speedLeft.y;
+                    speedLeft.y = 0;
+                }
+                else
+                {
+                    gameObject->speed.y = speedChange.y;
+                    speedLeft.y -= speedChange.y;
                 }
             }
         }
+
+        //стороны объекта
+        i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
+        i32 objRight = gameObject->pos.x + (gameObject->size.x / 2);
+        i32 objBottom = gameObject->pos.y - (gameObject->size.y / 2);
+        i32 objTop = gameObject->pos.y + (gameObject->size.y / 2);
 
         V2 objTilePos = {roundf((gameObject->pos.x + gameObject->speed.x) / TILE_SIZE_PIXELS), roundf((gameObject->pos.y + gameObject->speed.y) / TILE_SIZE_PIXELS)};
 
@@ -229,7 +247,7 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
             {
                 i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
                 Tile tile = tiles[tileIndex];
-                if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
+                if (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER)
                 {
                     i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
                     i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
@@ -290,15 +308,15 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
                             if (input.space.went_down && tileSide == tileTop)
                             {
                                 //21
-                                gameObject->speed.y += TILE_SIZE_PIXELS / 2 * 10;
+                                gameObject->speed.y += 21;
                             }
                         }
                     }
                 }
             }
         }
-    } while ((gameObject->speed.x != fullSpeed.x && !collisionXHappened) || (gameObject->speed.y != fullSpeed.y && !collisionYHappened));
-    gameObject->pos += gameObject->speed;
+        gameObject->pos += gameObject->speed;
+    } while (length(gameObject->speed) != 0 && length(fullSpeed) > length(speedChange));
 }
 
 void game_update(Bitmap screen, Input input)
@@ -517,7 +535,7 @@ void game_update(Bitmap screen, Input input)
 
     //accel
     //0.95
-    f32 accelConst = TILE_SIZE_PIXELS / 2;
+    f32 accelConst = 0.95;
     f32 frictionConst = 0.95;
     f32 gravity = -0.75;
     //-0.75
