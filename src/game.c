@@ -308,7 +308,8 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
                             if (input.space.went_down && tileSide == tileTop)
                             {
                                 //21
-                                gameObject->speed.y += 21;
+                                gameObject->speed.y += 21 * 60;
+                                collisionYHappened = false;
                             }
                         }
                     }
@@ -535,7 +536,7 @@ void game_update(Bitmap screen, Input input)
 
     //accel
     //0.95
-    f32 accelConst = 0.95;
+    f32 accelConst = 2;
     f32 frictionConst = 0.95;
     f32 gravity = -0.75;
     //-0.75
