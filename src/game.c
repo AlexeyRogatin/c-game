@@ -35,7 +35,10 @@ typedef struct
     i32 height;
 } Bitmap;
 
+//считывание изображений
 Bitmap win32_read_bmp(char *file_name);
+
+Bitmap imgPlayerIdle = win32_read_bmp("../data/test.bmp");
 
 //camera
 typedef struct
@@ -45,8 +48,19 @@ typedef struct
 
 Camera camera = {{0, 0}};
 
+typedef union {
+    struct
+    {
+        u8 b;
+        u8 g;
+        u8 r;
+        u8 a;
+    };
+    u32 argb;
+} ARGB;
+
 //drawing
-void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height, i32 color)
+void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height, u32 color)
 {
     x += screen.width / 2 - camera.pos.x;
     y += screen.height / 2 - camera.pos.y;
@@ -55,8 +69,13 @@ void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height
     i32 bottom = y - height / 2;
     i32 top = y + height / 2;
 
+    ARGB newColor;
+    newColor.argb = color;
+    f32 alpha = (f32)newColor.a / 0xFF;
+
     if (!(bottom > screen.height || top < 0 || right < 0 || left > screen.width))
     {
+
         if (left < 0)
             left = 0;
         if (right > screen.width)
@@ -70,7 +89,15 @@ void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height
         {
             for (i32 x = left; x < right; x++)
             {
-                *(screen.pixels + y * screen.width + x) = color;
+                ARGB color;
+                color.argb = *(screen.pixels + y * screen.width + x);
+
+                color.r = newColor.r * alpha + color.r * (1 - alpha);
+                color.g = newColor.g * alpha + color.g * (1 - alpha);
+                color.b = newColor.b * alpha + color.b * (1 - alpha);
+                color.a = 0xFF;
+
+                *(screen.pixels + y * screen.width + x) = color.argb;
             }
         }
     }
@@ -79,39 +106,36 @@ void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height
 void draw_bitmap(Bitmap screen, Camera camera, i32 pos_x, i32 pos_y, Bitmap bitmap)
 {
     pos_x += screen.width / 2 - camera.pos.x;
-    pos_x += screen.height / 2 - camera.pos.y;
+    pos_y += screen.height / 2 - camera.pos.y;
     i32 left = pos_x - bitmap.width / 2;
     i32 right = pos_x + bitmap.width / 2;
     i32 bottom = pos_y - bitmap.height / 2;
     i32 top = pos_y + bitmap.height / 2;
 
-    if (!(bottom > screen.height || top < 0 || right < 0 || left > screen.width))
+    if (left < 0)
+        left = 0;
+    if (right > screen.width)
+        right = screen.width;
+    if (bottom < 0)
+        bottom = 0;
+    if (top > screen.height)
+        top = screen.height;
+
+    i32 width = right - left;
+    i32 height = top - bottom;
+
+    for (i32 y = 0; y < top - bottom; y++)
     {
-        if (left < 0)
-            left = 0;
-        if (right > screen.width)
-            right = screen.width;
-        if (bottom < 0)
-            bottom = 0;
-        if (top > screen.height)
-            top = screen.height;
-
-        i32 width = right - left;
-        i32 height = top - bottom;
-
-        for (i32 y = 0; y < top - bottom; y++)
+        for (i32 x = 0; x < right - left; x++)
         {
-            for (i32 x = 0; x < right - left; x++)
-            {
-                i32 screen_x = left + x;
-                i32 screen_y = bottom + y;
+            i32 screen_x = left + x;
+            i32 screen_y = bottom + y;
 
-                i32 texture_x = x + (left - pos_x);
-                i32 texure_y = y + (bottom - pos_y);
+            i32 texture_x = x + (left - pos_x);
+            i32 texure_y = y + (bottom - pos_y);
 
-                u32 texel = bitmap.pixels[bitmap.width * texure_y + texture_x];
-                screen.pixels[screen_y * screen.width + screen_x] = texel;
-            }
+            u32 texel = bitmap.pixels[bitmap.width * texure_y + texture_x];
+            screen.pixels[screen_y * screen.width + screen_x] = texel;
         }
     }
 }
@@ -152,172 +176,128 @@ bool initialized = false;
 
 void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 {
-    if (gameObject->speed.y > 0)
+    Game_Object *ourObject = gameObject;
+    bool jump = false;
+
+    f32 speedLength = length(ourObject->speed);
+
+    if (speedLength)
     {
-        i32 foo = 0;
-    }
+        bool collisionHappened = false;
 
-    V2 fullSpeed = gameObject->speed;
-
-    V2 speedLeft = fullSpeed;
-
-    V2 speedChange = unit(gameObject->speed);
-
-    if (length(fullSpeed) > length(speedChange))
-    {
-        gameObject->speed = {0, 0};
-    }
-
-    bool collisionXHappened = false;
-    bool collisionYHappened = false;
-
-    do
-    {
-        if (!collisionXHappened)
+        i32 ratioIndex = 1;
+        while (speedLength / ratioIndex > TILE_SIZE_PIXELS)
         {
-            if (fullSpeed.x > speedChange.x && fullSpeed.x > 0)
-            {
-                if (speedLeft.x < speedChange.x)
-                {
-                    gameObject->speed.x = speedLeft.x;
-                    speedLeft.x = 0;
-                }
-                else
-                {
-                    gameObject->speed.x = speedChange.x;
-                    speedLeft.x -= speedChange.x;
-                }
-            }
-            if (fullSpeed.x < speedChange.x && fullSpeed.x < 0)
-            {
-                if (speedLeft.x > speedChange.x)
-                {
-                    gameObject->speed.x = speedLeft.x;
-                    speedLeft.x = 0;
-                }
-                else
-                {
-                    gameObject->speed.x = speedChange.x;
-                    speedLeft.x -= speedChange.x;
-                }
-            }
-        }
-        if (!collisionYHappened)
-        {
-            if (fullSpeed.y > speedChange.y && fullSpeed.y > 0)
-            {
-                if (speedLeft.y < speedChange.y)
-                {
-                    gameObject->speed.y = speedLeft.y;
-                    speedLeft.y = 0;
-                }
-                else
-                {
-                    gameObject->speed.y = speedChange.y;
-                    speedLeft.y -= speedChange.y;
-                }
-            }
-            if (fullSpeed.y < speedChange.y && fullSpeed.y < 0)
-            {
-                if (speedLeft.y > speedChange.y)
-                {
-                    gameObject->speed.y = speedLeft.y;
-                    speedLeft.y = 0;
-                }
-                else
-                {
-                    gameObject->speed.y = speedChange.y;
-                    speedLeft.y -= speedChange.y;
-                }
-            }
+            ratioIndex++;
         }
 
-        //стороны объекта
-        i32 objLeft = gameObject->pos.x - (gameObject->size.x / 2);
-        i32 objRight = gameObject->pos.x + (gameObject->size.x / 2);
-        i32 objBottom = gameObject->pos.y - (gameObject->size.y / 2);
-        i32 objTop = gameObject->pos.y + (gameObject->size.y / 2);
+        f32 ratioChange = (speedLength / ratioIndex) / speedLength;
 
-        V2 objTilePos = {roundf((gameObject->pos.x + gameObject->speed.x) / TILE_SIZE_PIXELS), roundf((gameObject->pos.y + gameObject->speed.y) / TILE_SIZE_PIXELS)};
+        f32 ratio = ratioChange;
+        V2 speedUnit = unit(ourObject->speed);
 
-        //проверка столкновений с тайлами
-        for (i32 x = (i32)objTilePos.x - 2; x < (i32)objTilePos.x + 2; x++)
+        while (ratio <= 1)
         {
-            for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
+            V2 speedPart = speedUnit * ratio * speedLength;
+
+            //стороны объекта
+            i32 objLeft = ourObject->pos.x - (ourObject->size.x / 2);
+            i32 objRight = ourObject->pos.x + (ourObject->size.x / 2);
+            i32 objBottom = ourObject->pos.y - (ourObject->size.y / 2);
+            i32 objTop = ourObject->pos.y + (ourObject->size.y / 2);
+
+            V2 objTilePos = {roundf((ourObject->pos.x + speedPart.x) / TILE_SIZE_PIXELS),
+                             roundf((ourObject->pos.y + speedPart.y) / TILE_SIZE_PIXELS)};
+
+            //проверка столкновений с тайлами
+            for (i32 x = (i32)objTilePos.x - 2; x < (i32)objTilePos.x + 2; x++)
             {
-                i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
-                Tile tile = tiles[tileIndex];
-                if (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER)
+                for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
                 {
-                    i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                    i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
-                    i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                    i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
-
-                    if (gameObject->speed.x != 0 && !collisionXHappened)
+                    i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
+                    Tile tile = tiles[tileIndex];
+                    if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
                     {
+                        i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                        i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+                        i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                        i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+
                         i32 objSide;
                         i32 tileSide;
-                        if (gameObject->speed.x > 0)
-                        {
-                            objSide = objRight;
-                            tileSide = tileLeft;
-                        }
-                        else
-                        {
-                            objSide = objLeft;
-                            tileSide = tileRight;
-                        }
 
-                        if (
-                            !(objRight + gameObject->speed.x <= tileLeft ||
-                              objLeft + gameObject->speed.x >= tileRight ||
-                              objTop <= tileBottom ||
-                              objBottom >= tileTop))
+                        if (speedPart.x != 0)
                         {
-                            gameObject->speed.x = 0;
-                            collisionXHappened = true;
-                            gameObject->pos.x -= objSide - tileSide;
-                        }
-                    }
-
-                    if (gameObject->speed.y != 0 && !collisionYHappened)
-                    {
-                        i32 objSide;
-                        i32 tileSide;
-                        if (gameObject->speed.y > 0)
-                        {
-                            objSide = objTop;
-                            tileSide = tileBottom;
-                        }
-                        else
-                        {
-                            objSide = objBottom;
-                            tileSide = tileTop;
-                        }
-
-                        if (
-                            !(objTop + gameObject->speed.y <= tileBottom ||
-                              objBottom + gameObject->speed.y >= tileTop ||
-                              objRight <= tileLeft ||
-                              objLeft >= tileRight))
-                        {
-                            gameObject->speed.y = 0;
-                            collisionYHappened = true;
-                            gameObject->pos.y -= objSide - tileSide;
-                            if (input.space.went_down && tileSide == tileTop)
+                            if (speedPart.x > 0)
                             {
-                                //21
-                                gameObject->speed.y += 21 * 60;
-                                collisionYHappened = false;
+                                objSide = objRight;
+                                tileSide = tileLeft;
+                            }
+                            else
+                            {
+                                objSide = objLeft;
+                                tileSide = tileRight;
+                            }
+
+                            if (
+                                !(objRight + speedPart.x <= tileLeft ||
+                                  objLeft + speedPart.x >= tileRight ||
+                                  objTop <= tileBottom ||
+                                  objBottom >= tileTop))
+                            {
+                                ourObject->speed.x = 0;
+                                speedPart.x = 0;
+                                speedUnit.x = 0;
+                                ourObject->pos.x -= objSide - tileSide;
+                                collisionHappened = true;
+                            }
+                        }
+
+                        if (speedPart.y != 0)
+                        {
+                            if (speedPart.y > 0)
+                            {
+                                objSide = objTop;
+                                tileSide = tileBottom;
+                            }
+                            else
+                            {
+                                objSide = objBottom;
+                                tileSide = tileTop;
+                            }
+
+                            if (
+                                !(objTop + speedPart.y <= tileBottom ||
+                                  objBottom + speedPart.y >= tileTop ||
+                                  objRight <= tileLeft ||
+                                  objLeft >= tileRight))
+                            {
+                                ourObject->speed.y = 0;
+                                speedPart.y = 0;
+                                speedUnit.y = 0;
+
+                                ourObject->pos.y -= objSide - tileSide;
+
+                                collisionHappened = true;
+                                if (input.space.went_down && tileSide == tileTop)
+                                {
+                                    jump = true;
+                                }
                             }
                         }
                     }
                 }
             }
+            ratio += ratioChange;
         }
-        gameObject->pos += gameObject->speed;
-    } while (length(gameObject->speed) != 0 && length(fullSpeed) > length(speedChange));
+        gameObject->pos = ourObject->pos;
+        gameObject->pos += ourObject->speed;
+
+        if (jump)
+        {
+            gameObject->speed.y += 21;
+        }
+    }
 }
 
 void game_update(Bitmap screen, Input input)
@@ -513,7 +493,7 @@ void game_update(Bitmap screen, Input input)
                             player = {0};
                             player.pos = {(f32)tileX * TILE_SIZE_PIXELS,
                                           (f32)tileY * TILE_SIZE_PIXELS};
-                            player.size = {42, 42};
+                            player.size = {42, 52};
                         }
                         if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
                         {
@@ -536,12 +516,12 @@ void game_update(Bitmap screen, Input input)
 
     //accel
     //0.95
-    f32 accelConst = 2;
+    f32 accelConst = 0.75;
     f32 frictionConst = 0.95;
     f32 gravity = -0.75;
     //-0.75
 
-    player.speed += {(input.right.is_down - input.left.is_down) * accelConst, (input.up.is_down - input.down.is_down) * accelConst};
+    player.speed += {(input.right.is_down - input.left.is_down) * accelConst, 0};
 
     //friction
     player.speed *= frictionConst;
@@ -580,7 +560,7 @@ void game_update(Bitmap screen, Input input)
         Tile tile = tile_map[tileIndex];
         if (tile.type == Tile_Type_WALL)
         {
-            color = 0xFFFFFF00;
+            color = 0xAAFFFF00;
         }
         if (tile.type == Tile_Type_ENTER || tile.type == Tile_Type_EXIT)
         {
@@ -594,5 +574,6 @@ void game_update(Bitmap screen, Input input)
     }
 
     //drawPlayer
-    draw_rect(screen, camera, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
+    draw_bitmap(screen, camera, player.pos.x, player.pos.y, imgPlayerIdle);
+    // draw_rect(screen, camera, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
 }
