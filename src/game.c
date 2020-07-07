@@ -2,10 +2,11 @@
 #include "math.h"
 #include "game_math.c"
 
+//fps
 f64 target_time_per_frame = 1.0f / 60.0f;
 f32 dt = (f32)target_time_per_frame;
 
-//input
+//ввод
 typedef struct
 {
     bool is_down;
@@ -27,7 +28,7 @@ typedef union {
     Button buttons[BUTTON_COUNT];
 } Input;
 
-//getBitmap
+//получение картинки
 typedef struct
 {
     u32 *pixels;
@@ -35,12 +36,9 @@ typedef struct
     i32 height;
 } Bitmap;
 
-//считывание изображений
 Bitmap win32_read_bmp(char *file_name);
 
-Bitmap imgPlayerIdle = win32_read_bmp("../data/test.bmp");
-
-//camera
+//камера
 typedef struct
 {
     V2 pos;
@@ -60,7 +58,7 @@ typedef union {
 } ARGB;
 
 //drawing
-void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height, u32 color)
+void draw_rect(Bitmap screen, i32 x, i32 y, i32 width, i32 height, u32 color)
 {
     x += screen.width / 2 - camera.pos.x;
     y += screen.height / 2 - camera.pos.y;
@@ -103,7 +101,7 @@ void draw_rect(Bitmap screen, Camera camera, i32 x, i32 y, i32 width, i32 height
     }
 }
 
-void draw_bitmap(Bitmap screen, Camera camera, i32 pos_x, i32 pos_y, Bitmap bitmap)
+void draw_bitmap(Bitmap screen, i32 pos_x, i32 pos_y, Bitmap bitmap)
 {
     pos_x += screen.width / 2 - camera.pos.x;
     pos_y += screen.height / 2 - camera.pos.y;
@@ -124,22 +122,34 @@ void draw_bitmap(Bitmap screen, Camera camera, i32 pos_x, i32 pos_y, Bitmap bitm
     i32 width = right - left;
     i32 height = top - bottom;
 
-    for (i32 y = 0; y < top - bottom; y++)
+    for (i32 y = 0; y < height; y++)
     {
-        for (i32 x = 0; x < right - left; x++)
+        for (i32 x = 0; x < width; x++)
         {
             i32 screen_x = left + x;
             i32 screen_y = bottom + y;
 
-            i32 texture_x = x + (left - pos_x);
-            i32 texure_y = y + (bottom - pos_y);
+            i32 texture_x = x + (left - (pos_x - bitmap.width / 2));
+            i32 texure_y = y + (bottom - (pos_y - bitmap.height / 2));
 
-            u32 texel = bitmap.pixels[bitmap.width * texure_y + texture_x];
-            screen.pixels[screen_y * screen.width + screen_x] = texel;
+            ARGB newColor;
+            newColor.argb = bitmap.pixels[bitmap.width * texure_y + texture_x];
+            f32 alpha = (f32)newColor.a / 0xFF;
+
+            ARGB color;
+            color.argb = screen.pixels[screen_y * screen.width + screen_x];
+
+            color.r = newColor.r * alpha + color.r * (1 - alpha);
+            color.g = newColor.g * alpha + color.g * (1 - alpha);
+            color.b = newColor.b * alpha + color.b * (1 - alpha);
+            color.a = 0xFF;
+
+            screen.pixels[screen_y * screen.width + screen_x] = color.argb;
         }
     }
 }
 
+//тайлы
 typedef enum
 {
     Tile_Type_NONE,
@@ -149,32 +159,117 @@ typedef enum
     Tile_Type_EXIT,
 } Tile_Type;
 
-typedef struct
-{
-    V2 pos;
-    Tile_Type type;
-} Tile;
-
 #define TILE_SIZE_PIXELS 64
 #define CHUNK_SIZE_X 10
 #define CHUNK_SIZE_Y 8
 #define CHUNK_COUNT_X 4
 #define CHUNK_COUNT_Y 4
 
-Tile *tile_map = NULL;
+Tile_Type *tile_map = NULL;
+
+V2 getTilePos(i32 index)
+{
+    //index = y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + x;
+    f32 y = floor(index / (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)));
+    f32 x = index - y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2));
+    V2 result = {x, y};
+    return result;
+}
+
+//сущности
+typedef enum
+{
+    PLAYER,
+} Game_Object_Type;
+
+typedef enum
+{
+    RIGHT,
+    LEFT,
+} Direction;
 
 typedef struct
 {
+    Game_Object_Type type;
+
+    bool exists;
+
     V2 pos;
     V2 size;
     V2 speed;
+
+    bool goLeft;
+    bool goRight;
+    bool jump;
+
+    Bitmap sprite;
+    i32 movedThroughPixels;
+    Direction lookingDirection;
 } Game_Object;
 
-Game_Object player;
+i32 gameObjectCount = 0;
+Game_Object gameObjects[512];
+
+Game_Object *addGameObject(Game_Object_Type type, V2 pos)
+{
+    Game_Object gameObject = {
+        type,
+
+        true,
+
+        pos,
+        {0, 0},
+        {0, 0},
+
+        false,
+        false,
+        false,
+
+        NULL,
+        0,
+        1,
+    };
+
+    if (type == PLAYER)
+    {
+        gameObject.size = {34, 52};
+    }
+
+    i32 slotIndex = gameObjectCount;
+
+    for (i32 objectIndex = 0; objectIndex < gameObjectCount; objectIndex++)
+    {
+        if (gameObjects[objectIndex].exists == false)
+        {
+            slotIndex = objectIndex;
+            break;
+        }
+    }
+
+    if (slotIndex == gameObjectCount)
+    {
+        gameObjectCount++;
+    }
+
+    gameObjects[slotIndex] = gameObject;
+
+    return &gameObjects[slotIndex];
+}
+
+//вставляем картинки
+Bitmap imgPlayerRightIdle;
+Bitmap imgPlayerRightHit;
+Bitmap imgPlayerRightJump;
+Bitmap imgPlayerRightStep[8];
+Bitmap imgPlayerLeftIdle;
+Bitmap imgPlayerLeftHit;
+Bitmap imgPlayerLeftJump;
+Bitmap imgPlayerLeftStep[8];
 
 bool initialized = false;
 
-void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
+//движение сущностей
+void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
 {
     Game_Object *ourObject = gameObject;
     bool jump = false;
@@ -183,7 +278,8 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 
     if (speedLength)
     {
-        bool collisionHappened = false;
+        bool collisionXHappened = false;
+        bool collisionYHappened = false;
 
         i32 ratioIndex = 1;
         while (speedLength / ratioIndex > TILE_SIZE_PIXELS)
@@ -215,13 +311,14 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
                 for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
                 {
                     i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
-                    Tile tile = tiles[tileIndex];
-                    if (tile.type && (tile.type == Tile_Type_WALL || tile.type == Tile_Type_BORDER))
+                    Tile_Type tile = tiles[tileIndex];
+                    V2 tilePos = getTilePos(tileIndex);
+                    if (tile && (tile == Tile_Type_WALL || tile == Tile_Type_BORDER))
                     {
-                        i32 tileLeft = tile.pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                        i32 tileRight = tile.pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
-                        i32 tileBottom = tile.pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
-                        i32 tileTop = tile.pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+                        i32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                        i32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+                        i32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                        i32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
 
                         i32 objSide;
                         i32 tileSide;
@@ -240,16 +337,28 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
                             }
 
                             if (
-                                !(objRight + speedPart.x <= tileLeft ||
-                                  objLeft + speedPart.x >= tileRight ||
+                                !(objRight + speedPart.x < tileLeft ||
+                                  objLeft + speedPart.x > tileRight ||
                                   objTop <= tileBottom ||
                                   objBottom >= tileTop))
                             {
+                                if (gameObject->type == PLAYER)
+                                {
+                                    if (gameObject->speed.x > 0.5)
+                                    {
+                                        gameObject->sprite = imgPlayerRightHit;
+                                    }
+                                    if (gameObject->speed.x < -0.5)
+                                    {
+                                        gameObject->sprite = imgPlayerLeftHit;
+                                    }
+                                }
+
                                 ourObject->speed.x = 0;
                                 speedPart.x = 0;
                                 speedUnit.x = 0;
                                 ourObject->pos.x -= objSide - tileSide;
-                                collisionHappened = true;
+                                collisionXHappened = true;
                             }
                         }
 
@@ -278,10 +387,22 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
 
                                 ourObject->pos.y -= objSide - tileSide;
 
-                                collisionHappened = true;
-                                if (input.space.went_down && tileSide == tileTop)
+                                collisionYHappened = true;
+                                if (gameObject->jump && tileSide == tileTop)
                                 {
                                     jump = true;
+                                }
+
+                                if (gameObject->type == PLAYER && tileSide == tileBottom)
+                                {
+                                    if (gameObject->lookingDirection == RIGHT)
+                                    {
+                                        gameObject->sprite = imgPlayerRightHit;
+                                    }
+                                    if (gameObject->lookingDirection == LEFT)
+                                    {
+                                        gameObject->sprite = imgPlayerLeftHit;
+                                    }
                                 }
                             }
                         }
@@ -293,10 +414,137 @@ void moveGameObject(Tile *tiles, Game_Object *gameObject, Input input)
         gameObject->pos = ourObject->pos;
         gameObject->pos += ourObject->speed;
 
+        if (!collisionYHappened && gameObject->type == PLAYER)
+        {
+            if (gameObject->lookingDirection == RIGHT)
+            {
+                gameObject->sprite = imgPlayerRightJump;
+            }
+            if (gameObject->lookingDirection == LEFT)
+            {
+                gameObject->sprite = imgPlayerLeftJump;
+            }
+            gameObject->size.y = 49;
+        }
+
         if (jump)
         {
-            gameObject->speed.y += 21;
+            gameObject->speed.y += 26;
         }
+    }
+}
+
+void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
+{
+    if (gameObject->type == PLAYER)
+    {
+        gameObject->size.y = 52;
+
+        //движение игрока
+        gameObject->goLeft = input.left.is_down;
+        gameObject->goRight = input.right.is_down;
+        gameObject->jump = input.space.went_down;
+
+        //константы скорости
+        //0.75
+        f32 accelConst = 1.85;
+        //0.95
+        f32 frictionConst = 0.90;
+        //-0.75
+        f32 gravity = -1.80;
+
+        gameObject->speed += {(gameObject->goRight - gameObject->goLeft) * accelConst, 0};
+
+        //трение
+        gameObject->speed *= frictionConst;
+
+        //гравитация
+        gameObject->speed.y += gravity;
+
+        //спрайты персонажа
+        if (gameObject->speed.x > 0)
+        {
+            gameObject->lookingDirection = RIGHT;
+        }
+        if (gameObject->speed.x < 0)
+        {
+            gameObject->lookingDirection = LEFT;
+        }
+
+        if (gameObject->lookingDirection == RIGHT)
+        {
+            gameObject->sprite = imgPlayerRightIdle;
+        }
+        if (gameObject->lookingDirection == LEFT)
+        {
+            gameObject->sprite = imgPlayerLeftIdle;
+        }
+
+        if (gameObject->speed.x > 1 || gameObject->speed.x < -1)
+        {
+            gameObject->movedThroughPixels += gameObject->speed.x;
+        }
+        else
+        {
+            gameObject->movedThroughPixels = 0;
+        }
+
+        if (gameObject->speed.x > 1 && gameObject->lookingDirection == RIGHT)
+        {
+            i8 step = (i32)floor(gameObject->movedThroughPixels / 15);
+            while (step > 7)
+            {
+                step -= 8;
+            }
+            while (step < 0)
+            {
+                step += 8;
+            }
+            gameObject->sprite = imgPlayerRightStep[step];
+        }
+
+        if (gameObject->speed.x < -1 && gameObject->lookingDirection == LEFT)
+        {
+            i8 step = (i32)floor(gameObject->movedThroughPixels / 15);
+            while (step > 7)
+            {
+                step -= 8;
+            }
+            while (step < 0)
+            {
+                step += 8;
+            }
+            gameObject->sprite = imgPlayerLeftStep[7 - step];
+        }
+
+        //столкновения и движение
+        moveGameObject(tile_map, gameObject);
+
+        //камера
+        camera.pos = gameObject->pos;
+
+        if (!(gameObject->pos.x - screen.width / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300))
+        {
+            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300 + screen.width / 2;
+        }
+
+        if (!(gameObject->pos.x + screen.width / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300))
+        {
+            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300 - screen.width / 2;
+        }
+
+        if (!(gameObject->pos.y - screen.height / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240))
+        {
+            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240 + screen.height / 2;
+        }
+
+        if (!(gameObject->pos.y + screen.height / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240))
+        {
+            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240 - screen.height / 2;
+        }
+
+        //drawPlayer
+        draw_bitmap(screen, gameObject->pos.x, gameObject->pos.y + 6, gameObject->sprite);
     }
 }
 
@@ -304,16 +552,41 @@ void game_update(Bitmap screen, Input input)
 {
     V2 mapSize = {CHUNK_SIZE_X * (CHUNK_COUNT_X + 2), CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2)};
 
-    //only one time
+    //выполняется один раз
     if (!initialized)
     {
         initialized = true;
 
-        tile_map = (Tile *)malloc(sizeof(Tile) * mapSize.x * mapSize.y);
+        //загружаем картинки
+        imgPlayerRightIdle = win32_read_bmp("../data/lexaRightIdle.bmp");
+        imgPlayerRightHit = win32_read_bmp("../data/lexaRightHit.bmp");
+        imgPlayerRightJump = win32_read_bmp("../data/lexaRightJump.bmp");
+        imgPlayerRightStep[0] = win32_read_bmp("../data/lexaRightStep1.bmp");
+        imgPlayerRightStep[1] = win32_read_bmp("../data/lexaRightStep2.bmp");
+        imgPlayerRightStep[2] = win32_read_bmp("../data/lexaRightStep3.bmp");
+        imgPlayerRightStep[3] = win32_read_bmp("../data/lexaRightStep4.bmp");
+        imgPlayerRightStep[4] = win32_read_bmp("../data/lexaRightStep5.bmp");
+        imgPlayerRightStep[5] = win32_read_bmp("../data/lexaRightStep6.bmp");
+        imgPlayerRightStep[6] = win32_read_bmp("../data/lexaRightStep7.bmp");
+        imgPlayerRightStep[7] = win32_read_bmp("../data/lexaRightStep8.bmp");
+        imgPlayerLeftIdle = win32_read_bmp("../data/lexaLeftIdle.bmp");
+        imgPlayerLeftHit = win32_read_bmp("../data/lexaLeftHit.bmp");
+        imgPlayerLeftJump = win32_read_bmp("../data/lexaLeftJump.bmp");
+        imgPlayerLeftStep[0] = win32_read_bmp("../data/lexaLeftStep1.bmp");
+        imgPlayerLeftStep[1] = win32_read_bmp("../data/lexaLeftStep2.bmp");
+        imgPlayerLeftStep[2] = win32_read_bmp("../data/lexaLeftStep3.bmp");
+        imgPlayerLeftStep[3] = win32_read_bmp("../data/lexaLeftStep4.bmp");
+        imgPlayerLeftStep[4] = win32_read_bmp("../data/lexaLeftStep5.bmp");
+        imgPlayerLeftStep[5] = win32_read_bmp("../data/lexaLeftStep6.bmp");
+        imgPlayerLeftStep[6] = win32_read_bmp("../data/lexaLeftStep7.bmp");
+        imgPlayerLeftStep[7] = win32_read_bmp("../data/lexaLeftStep8.bmp");
+
+        tile_map = (Tile_Type *)malloc(sizeof(Tile_Type) * mapSize.x * mapSize.y);
 
         //making chunks
         char *chunkStrings[(CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2)];
 
+        //путь через тайлы
         V2 enterChunkPos = {randomInt(1, CHUNK_COUNT_X), 1};
         V2 chunkPos = enterChunkPos;
         V2 endChunkPos = {randomInt(1, CHUNK_COUNT_X), CHUNK_COUNT_Y};
@@ -468,7 +741,7 @@ void game_update(Bitmap screen, Input input)
 
         char *chunk_string;
 
-        //start at last row
+        //заполняем чанки
         for (i32 chunkIndexY = 0; chunkIndexY < CHUNK_COUNT_Y + 2; chunkIndexY++)
         {
             for (i32 chunkIndexX = 0; chunkIndexX < CHUNK_COUNT_X + 2; chunkIndexX++)
@@ -490,10 +763,7 @@ void game_update(Bitmap screen, Input input)
                         {
                             type = Tile_Type_ENTER;
                             //addPlayer
-                            player = {0};
-                            player.pos = {(f32)tileX * TILE_SIZE_PIXELS,
-                                          (f32)tileY * TILE_SIZE_PIXELS};
-                            player.size = {42, 52};
+                            addGameObject(PLAYER, {(f32)tileX * TILE_SIZE_PIXELS, (f32)tileY * TILE_SIZE_PIXELS});
                         }
                         if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
                         {
@@ -503,77 +773,43 @@ void game_update(Bitmap screen, Input input)
                         {
                             type = Tile_Type_BORDER;
                         }
-                        tile_map[index].pos = {(f32)tileX, (f32)tileY};
-                        tile_map[index].type = type;
+                        tile_map[index] = type;
                     }
                 }
             }
         }
     }
 
-    //clearRect
-    draw_rect(screen, camera, camera.pos.x, camera.pos.y, screen.width + 5, screen.height + 5, 0xFF000000);
+    //очистка экрана
+    draw_rect(screen, camera.pos.x, camera.pos.y, screen.width + 5, screen.height + 5, 0xFFFF8800);
 
-    //accel
-    //0.95
-    f32 accelConst = 0.75;
-    f32 frictionConst = 0.95;
-    f32 gravity = -0.75;
-    //-0.75
-
-    player.speed += {(input.right.is_down - input.left.is_down) * accelConst, 0};
-
-    //friction
-    player.speed *= frictionConst;
-
-    //gravity
-    player.speed.y += gravity;
-
-    moveGameObject(tile_map, &player, input);
-
-    camera.pos = player.pos;
-
-    if (!(player.pos.x - screen.width / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300))
+    //обновление сущностей
+    for (i32 objectIndex = 0; objectIndex < gameObjectCount; objectIndex++)
     {
-        camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 300 + screen.width / 2;
-    }
-
-    if (!(player.pos.x + screen.width / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300))
-    {
-        camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 300 - screen.width / 2;
-    }
-
-    if (!(player.pos.y - screen.height / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240))
-    {
-        camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 240 + screen.height / 2;
-    }
-
-    if (!(player.pos.y + screen.height / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240))
-    {
-        camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 240 - screen.height / 2;
+        if (gameObjects[objectIndex].exists == true)
+        {
+            updateGameObject(&gameObjects[objectIndex], input, screen);
+        }
     }
 
     //drawTile
     for (i32 tileIndex = 0; tileIndex < mapSize.x * mapSize.y; tileIndex++)
     {
-        u32 color = 0xFF000000;
-        Tile tile = tile_map[tileIndex];
-        if (tile.type == Tile_Type_WALL)
+        u32 color = 0x00000000;
+        Tile_Type tile = tile_map[tileIndex];
+        V2 tilePos = getTilePos(tileIndex);
+        if (tile == Tile_Type_WALL)
         {
-            color = 0xAAFFFF00;
+            color = 0xFFFFFF00;
         }
-        if (tile.type == Tile_Type_ENTER || tile.type == Tile_Type_EXIT)
+        if (tile == Tile_Type_ENTER || tile == Tile_Type_EXIT)
         {
             color = 0xFFFF0000;
         }
-        if (tile.type == Tile_Type_BORDER)
+        if (tile == Tile_Type_BORDER)
         {
             color = 0xFF0000FF;
         }
-        draw_rect(screen, camera, tile.pos.x * TILE_SIZE_PIXELS, tile.pos.y * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
+        draw_rect(screen, tilePos.x * TILE_SIZE_PIXELS, tilePos.y * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, color);
     }
-
-    //drawPlayer
-    draw_bitmap(screen, camera, player.pos.x, player.pos.y, imgPlayerIdle);
-    // draw_rect(screen, camera, player.pos.x, player.pos.y, player.size.x, player.size.y, 0xFFFF0000);
 }
