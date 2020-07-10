@@ -105,6 +105,7 @@ void draw_bitmap(Bitmap screen, i32 pos_x, i32 pos_y, Bitmap bitmap)
 {
     pos_x += screen.width / 2 - camera.pos.x;
     pos_y += screen.height / 2 - camera.pos.y;
+
     i32 left = pos_x - bitmap.width / 2;
     i32 right = pos_x + bitmap.width / 2;
     i32 bottom = pos_y - bitmap.height / 2;
@@ -209,7 +210,6 @@ typedef struct
 
     bool goLeft;
     bool goRight;
-    bool jump;
 
     Bitmap sprite;
     i32 movedThroughPixels;
@@ -231,7 +231,6 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
         {0, 0},
         {0, 0},
 
-        false,
         false,
         false,
 
@@ -278,6 +277,7 @@ Bitmap imgPlayerLeftHit;
 Bitmap imgPlayerLeftJump;
 Bitmap imgPlayerLeftStep[8];
 Bitmap imgPlayerLeftHanging;
+Bitmap imgTilePlate;
 
 bool initialized = false;
 
@@ -397,6 +397,8 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                                     {
                                         ourObject->condition = HANGING;
                                         ourObject->speed.y = 0;
+                                        speedPart.y = 0;
+                                        speedUnit.y = 0;
                                         ourObject->pos.y = tilePos.y * TILE_SIZE_PIXELS;
                                         collisionYHappened = true;
                                     }
@@ -415,7 +417,6 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
         if (!collisionYHappened && gameObject->condition != HANGING)
         {
             gameObject->condition = FALLING;
-            gameObject->size.y = 49;
         }
     }
 }
@@ -424,43 +425,73 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
 {
     if (gameObject->type == PLAYER)
     {
-        gameObject->size.y = 52;
-
         //движение игрока
         gameObject->goLeft = input.left.is_down;
         gameObject->goRight = input.right.is_down;
-        gameObject->jump = input.space.went_down;
 
         //константы скорости
         //0.75
-        f32 accelConst = 1.85;
+        f32 accelConst = 3.2;
         //0.95
-        f32 frictionConst = 0.90;
+        f32 frictionConst = 0.80;
         //-0.75
-        f32 gravity = -1.80;
+        f32 gravity = -2.45;
 
-        gameObject->speed += {(gameObject->goRight - gameObject->goLeft) * accelConst, 0};
+        if (gameObject->condition != HANGING)
+        {
+            //скорость по x
+            gameObject->speed += {(gameObject->goRight - gameObject->goLeft) * accelConst, 0};
+
+            //гравитация
+            gameObject->speed.y += gravity;
+        }
+
+        //прыжок
+        if (input.space.went_down && gameObject->condition != FALLING)
+        {
+            if (!(gameObject->condition == HANGING && input.down.is_down))
+            {
+                gameObject->speed.y += 45;
+            }
+            gameObject->condition = FALLING;
+        }
 
         //трение
         gameObject->speed *= frictionConst;
 
-        //гравитация
-        if (gameObject->condition != HANGING)
-        {
-            gameObject->speed.y += gravity;
-        }
-
         //спрайты персонажа
 
         //направление
-        if (gameObject->speed.x > 0 && !(gameObject->condition == HANGING && gameObject->lookingDirection == RIGHT))
+        if (gameObject->speed.x > 0)
         {
             gameObject->lookingDirection = RIGHT;
         }
-        if (gameObject->speed.x < 0 && !(gameObject->condition == HANGING && gameObject->lookingDirection == LEFT))
+        if (gameObject->speed.x < 0)
         {
             gameObject->lookingDirection = LEFT;
         }
+
+        //состояние нормальное
+        if (gameObject->condition != HANGING)
+        {
+            gameObject->condition = IDLE;
+        }
+
+        //состояние движится
+        if ((gameObject->goLeft || gameObject->goRight) && gameObject->condition != HANGING)
+        {
+
+            gameObject->movedThroughPixels += gameObject->speed.x;
+
+            gameObject->condition = MOOVING;
+        }
+        else
+        {
+            gameObject->movedThroughPixels = 0;
+        }
+
+        //столкновения и движение
+        moveGameObject(tile_map, gameObject);
 
         if (gameObject->condition == IDLE)
         {
@@ -505,28 +536,6 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             }
         }
 
-        //столкновения и движение
-        moveGameObject(tile_map, gameObject);
-
-        //состояние нормальное
-        if (gameObject->condition != HANGING)
-        {
-            gameObject->condition = IDLE;
-        }
-
-        //состояние движится
-        if (gameObject->speed.x > 1 || gameObject->speed.x < -1)
-        {
-
-            gameObject->movedThroughPixels += gameObject->speed.x;
-
-            gameObject->condition = MOOVING;
-        }
-        else
-        {
-            gameObject->movedThroughPixels = 0;
-        }
-
         if (gameObject->condition == GOT_HIT)
         {
             if (gameObject->lookingDirection == RIGHT)
@@ -561,12 +570,6 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->sprite = imgPlayerLeftHanging;
             }
-        }
-
-        if (input.space.went_down && gameObject->condition != FALLING)
-        {
-            gameObject->speed.y += 27;
-            gameObject->condition = FALLING;
         }
 
         //камера
@@ -631,6 +634,7 @@ void game_update(Bitmap screen, Input input)
         imgPlayerLeftStep[5] = win32_read_bmp("../data/lexaLeftStep6.bmp");
         imgPlayerLeftStep[6] = win32_read_bmp("../data/lexaLeftStep7.bmp");
         imgPlayerLeftStep[7] = win32_read_bmp("../data/lexaLeftStep8.bmp");
+        imgTilePlate = win32_read_bmp("../data/tilePlate.bmp");
 
         tile_map = (Tile_Type *)malloc(sizeof(Tile_Type) * mapSize.x * mapSize.y);
 
