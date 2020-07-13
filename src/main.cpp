@@ -96,8 +96,7 @@ Bitmap win32_read_bmp(char *file_name)
     // AA RR GG BB
     Bitmap result;
     result.pixels = pixels;
-    result.width = info->width;
-    result.height = info->height;
+    result.size = {(f32)info->width, (f32)info->height};
 
     return result;
 }
@@ -203,8 +202,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     Bitmap game_screen;
     game_screen.pixels = pixels;
-    game_screen.width = window_width;
-    game_screen.height = window_height;
+    game_screen.size = {(f32)window_width, (f32)window_height};
 
     Input input = {0};
 
