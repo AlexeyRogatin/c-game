@@ -34,6 +34,7 @@ typedef struct
 {
     u32 *pixels;
     V2 size;
+    i32 pitch;
 } Bitmap;
 
 Bitmap win32_read_bmp(char *file_name);
@@ -159,6 +160,7 @@ void drawItem(Bitmap screen, Drawing drawing)
 
         pos.x += screen.size.x / 2 - camera.pos.x;
         pos.y += screen.size.y / 2 - camera.pos.y;
+
         i32 left = pos.x - size.x / 2;
         i32 right = pos.x + size.x / 2;
         i32 bottom = pos.y - size.y / 2;
@@ -184,9 +186,9 @@ void drawItem(Bitmap screen, Drawing drawing)
                 ARGB color;
                 color.argb = screen.pixels[y * (i32)screen.size.x + x];
 
-                color.r = newColor.r * alpha + color.r * (1 - alpha);
-                color.g = newColor.g * alpha + color.g * (1 - alpha);
-                color.b = newColor.b * alpha + color.b * (1 - alpha);
+                color.r = newColor.r + color.r * (1 - alpha);
+                color.g = newColor.g + color.g * (1 - alpha);
+                color.b = newColor.b + color.b * (1 - alpha);
                 color.a = 0xFF;
 
                 screen.pixels[y * (i32)screen.size.x + x] = color.argb;
@@ -201,77 +203,73 @@ void drawItem(Bitmap screen, Drawing drawing)
         pos.x += screen.size.x / 2 - camera.pos.x;
         pos.y += screen.size.y / 2 - camera.pos.y;
 
-        i32 leftOnScreen = pos.x - size.x / 2;
-        i32 rightOnScreen = pos.x + size.x / 2;
-        i32 bottomOnScreen = pos.y - size.y / 2;
-        i32 topOnScreen = pos.y + size.y / 2;
+        f32 leftOnScreen = floorf(pos.x - size.x / 2);
+        f32 rightOnScreen = ceilf(pos.x + size.x / 2);
+        f32 bottomOnScreen = floorf(pos.y - size.y / 2);
+        f32 topOnScreen = ceilf(pos.y + size.y / 2);
 
-        if (!(rightOnScreen < 0 || leftOnScreen > screen.size.x || topOnScreen < 0 || bottomOnScreen > screen.size.y))
+        if (leftOnScreen < 0)
+            leftOnScreen = 0;
+        if (rightOnScreen > screen.size.x)
+            rightOnScreen = screen.size.x;
+        if (bottomOnScreen < 0)
+            bottomOnScreen = 0;
+        if (topOnScreen > screen.size.y)
+            topOnScreen = screen.size.y;
+
+        i32 widthOnScreen = rightOnScreen - leftOnScreen;
+        i32 heightOnScreen = topOnScreen - bottomOnScreen;
+
+        f32 screenPixelOnBitmapWidth = (bitmap.size.x) / size.x;
+        f32 screenPixelOnBitmapHeight = (bitmap.size.y) / size.y;
+
+        for (i32 y = 0; y < heightOnScreen; y++)
         {
-
-            if (leftOnScreen < 0)
-                leftOnScreen = 0;
-            if (rightOnScreen > screen.size.x)
-                rightOnScreen = screen.size.x;
-            if (bottomOnScreen < 0)
-                bottomOnScreen = 0;
-            if (topOnScreen > screen.size.y)
-                topOnScreen = screen.size.y;
-
-            i32 widthOnScreen = rightOnScreen - leftOnScreen;
-            i32 heightOnScreen = topOnScreen - bottomOnScreen;
-
-            f32 screenPixelOnBitmapWidth = (f32)(bitmap.size.x) / (f32)size.x;
-            f32 screenPixelOnBitmapHeight = (f32)(bitmap.size.y) / (f32)size.y;
-
-            for (i32 y = 1; y < heightOnScreen - 1; y++)
+            for (i32 x = 0; x < widthOnScreen; x++)
             {
-                for (i32 x = 1; x < widthOnScreen - 1; x++)
-                {
-                    i32 screen_x = leftOnScreen + x;
-                    i32 screen_y = bottomOnScreen + y;
+                i32 screen_x = leftOnScreen + x;
+                i32 screen_y = bottomOnScreen + y;
 
-                    f32 texture_x = (x + (leftOnScreen - (pos.x - size.x / 2))) * screenPixelOnBitmapWidth;
-                    f32 texture_y = (y + (bottomOnScreen - (pos.y - size.y / 2))) * screenPixelOnBitmapHeight;
+                f32 texture_x = (x + (leftOnScreen - floorf(pos.x - size.x / 2))) * screenPixelOnBitmapWidth;
+                f32 texture_y = (y + (bottomOnScreen - floorf(pos.y - size.y / 2))) * screenPixelOnBitmapHeight;
 
-                    f32 f_x = texture_x - (i32)texture_x;
-                    f32 f_y = texture_y - (i32)texture_y;
+                f32 f_x = texture_x - (i32)texture_x;
+                f32 f_y = texture_y - (i32)texture_y;
 
-                    ARGB texel_a, texel_b, texel_c, texel_d, texel_ab, texel_cd, newColor;
+                ARGB texel_a, texel_b, texel_c, texel_d, texel_ab, texel_cd, newColor;
 
-                    texel_a.argb = bitmap.pixels[(i32)bitmap.size.x * (i32)texture_y + (i32)texture_x];
-                    texel_b.argb = bitmap.pixels[(i32)bitmap.size.x * (i32)texture_y + (i32)texture_x + 1];
-                    texel_c.argb = bitmap.pixels[(i32)bitmap.size.x * ((i32)texture_y + 1) + (i32)texture_x];
-                    texel_d.argb = bitmap.pixels[(i32)bitmap.size.x * ((i32)texture_y + 1) + ((i32)texture_x + 1)];
+                texel_a.argb = bitmap.pixels[bitmap.pitch * (i32)texture_y + (i32)texture_x];
+                texel_b.argb = bitmap.pixels[bitmap.pitch * (i32)texture_y + (i32)texture_x + 1];
+                texel_c.argb = bitmap.pixels[bitmap.pitch * ((i32)texture_y + 1) + (i32)texture_x];
+                texel_d.argb = bitmap.pixels[bitmap.pitch * ((i32)texture_y + 1) + ((i32)texture_x + 1)];
 
-                    texel_ab.a = texel_a.a * (1 - f_x) + texel_b.a * f_x;
-                    texel_ab.r = texel_a.r * (1 - f_x) + texel_b.r * f_x;
-                    texel_ab.g = texel_a.g * (1 - f_x) + texel_b.g * f_x;
-                    texel_ab.b = texel_a.b * (1 - f_x) + texel_b.b * f_x;
+                texel_ab.a = texel_a.a * (1 - f_x) + texel_b.a * f_x;
+                texel_ab.r = texel_a.r * (1 - f_x) + texel_b.r * f_x;
+                texel_ab.g = texel_a.g * (1 - f_x) + texel_b.g * f_x;
+                texel_ab.b = texel_a.b * (1 - f_x) + texel_b.b * f_x;
 
-                    texel_cd.a = texel_c.a * (1 - f_x) + texel_d.a * f_x;
-                    texel_cd.r = texel_c.r * (1 - f_x) + texel_d.r * f_x;
-                    texel_cd.g = texel_c.g * (1 - f_x) + texel_d.g * f_x;
-                    texel_cd.b = texel_c.b * (1 - f_x) + texel_d.b * f_x;
+                texel_cd.a = texel_c.a * (1 - f_x) + texel_d.a * f_x;
+                texel_cd.r = texel_c.r * (1 - f_x) + texel_d.r * f_x;
+                texel_cd.g = texel_c.g * (1 - f_x) + texel_d.g * f_x;
+                texel_cd.b = texel_c.b * (1 - f_x) + texel_d.b * f_x;
 
-                    newColor.a = texel_ab.a * (1 - f_y) + texel_cd.a * f_y;
-                    newColor.r = texel_ab.r * (1 - f_y) + texel_cd.r * f_y;
-                    newColor.g = texel_ab.g * (1 - f_y) + texel_cd.g * f_y;
-                    newColor.b = texel_ab.b * (1 - f_y) + texel_cd.b * f_y;
+                newColor.a = texel_ab.a * (1 - f_y) + texel_cd.a * f_y;
+                newColor.r = texel_ab.r * (1 - f_y) + texel_cd.r * f_y;
+                newColor.g = texel_ab.g * (1 - f_y) + texel_cd.g * f_y;
+                newColor.b = texel_ab.b * (1 - f_y) + texel_cd.b * f_y;
 
-                    //transparency
-                    f32 alpha = (f32)newColor.a / 0xFF;
+                //transparency
+                f32 alpha = (f32)newColor.a / 0xFF;
 
-                    ARGB color;
-                    color.argb = screen.pixels[screen_y * (i32)screen.size.x + screen_x];
+                ARGB color;
+                color.argb = screen.pixels[screen_y * (i32)screen.size.x + screen_x];
 
-                    color.r = newColor.r * alpha + color.r * (1 - alpha);
-                    color.g = newColor.g * alpha + color.g * (1 - alpha);
-                    color.b = newColor.b * alpha + color.b * (1 - alpha);
-                    color.a = 0xFF;
+                color.r = newColor.r + color.r * (1 - alpha);
+                color.g = newColor.g + color.g * (1 - alpha);
+                color.b = newColor.b + color.b * (1 - alpha);
+                color.a = 0xFF;
 
-                    screen.pixels[screen_y * (i32)screen.size.x + screen_x] = color.argb;
-                }
+                screen.pixels[screen_y * (i32)screen.size.x + screen_x] = color.argb;
             }
         }
     }
@@ -1136,7 +1134,7 @@ void game_update(Bitmap screen, Input input)
         }
         if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
         {
-            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{(TILE_SIZE_PIXELS + 2) * 3, (TILE_SIZE_PIXELS + 2) * 3}, imgTilePlate, LAYER_BACKGROUND);
+            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3}, imgTilePlate, LAYER_CLEAR);
         }
     }
 

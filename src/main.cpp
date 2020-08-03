@@ -93,10 +93,23 @@ Bitmap win32_read_bmp(char *file_name)
 
     u32 *pixels = (u32 *)(file.data + header->data_offset);
 
+    for (i32 i = 0; i < info->width * info->height; i++)
+    {
+        ARGB pixel;
+        pixel.argb = pixels[i];
+        f32 alpha = pixel.a / 0xFF;
+        pixel.r *= alpha;
+        pixel.g *= alpha;
+        pixel.b *= alpha;
+        pixels[i] = pixel.argb;
+    }
+
     // AA RR GG BB
     Bitmap result;
-    result.pixels = pixels;
-    result.size = {(f32)info->width, (f32)info->height};
+    result.pixels = pixels + info->width + 1;
+    result.size = {(f32)info->width - 2, (f32)info->height - 2};
+
+    result.pitch = info->width;
 
     return result;
 }
