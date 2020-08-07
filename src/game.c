@@ -106,9 +106,10 @@ Bitmap imgTilePlate = win32_read_bmp("../data/tilePlate.bmp");
 typedef struct
 {
     V2 pos;
+    V2 neededPos;
 } Camera;
 
-Camera camera = {{0, 0}};
+Camera camera = {{0, 0},{0, 0},};
 
 typedef union {
     struct
@@ -395,6 +396,8 @@ typedef struct
     i32 movedThroughPixels;
     Direction lookingDirection;
     Condition condition;
+
+    i32 lookingKeyHoldTimer;
 } Game_Object;
 
 i32 gameObjectCount = 0;
@@ -422,6 +425,8 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
         0,
         1,
         IDLE,
+
+        addTimer(0),
     };
 
     if (type == PLAYER)
@@ -646,7 +651,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
         f32 gravity = -4;
 
         //прыжок
-        if (timers[gameObject->jump] > 0 && timers[gameObject->canJump] > 0)
+        if (timers[gameObject->jump] > 0 && timers[gameObject->canJump] > 0 && gameObject->condition != CROUCHING_IDLE &&  gameObject->condition != CROUCHING_MOOVING)
         {
             if (!(gameObject->condition == HANGING && input.down.is_down))
             {
@@ -765,7 +770,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->sprite = imgPlayerLeftCrouchIdle;
             }
-            gameObject->hitBox = {58, 30};
+            gameObject->hitBox = {44, 30};
         }
 
         if (gameObject->condition == MOOVING)
@@ -829,7 +834,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 }
                 gameObject->sprite = imgPlayerLeftCrouchStep[7 - step];
             }
-            gameObject->hitBox = {58, 30};
+            gameObject->hitBox = {44, 30};
         }
 
         if (gameObject->condition == FALLING)
@@ -860,30 +865,44 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
         }
 
         //камера
-        camera.pos = gameObject->pos;
+
+        camera.neededPos = gameObject->pos;
 
         if (!(gameObject->pos.x - screen.size.x / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
         {
-            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + screen.size.x / 2;
+            camera.neededPos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + screen.size.x / 2;
         }
 
         if (!(gameObject->pos.x + screen.size.x / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
         {
-            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - screen.size.x / 2;
+            camera.neededPos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - screen.size.x / 2;
         }
 
         if (!(gameObject->pos.y - screen.size.y / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
         {
-            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + screen.size.y / 2;
+            camera.neededPos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + screen.size.y / 2;
         }
 
         if (!(gameObject->pos.y + screen.size.y / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
         {
-            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - screen.size.y / 2;
+            camera.neededPos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - screen.size.y / 2;
         }
 
-        // static f32 sizeX = 1;
-        // sizeX += 0.01f;
+        V2 distanceFromPlayer = camera.neededPos - camera.pos;
+
+        if(length(distanceFromPlayer)) {
+            i32 foo;
+        }
+
+        f32 cameraSpeed = length(distanceFromPlayer) * length(distanceFromPlayer) / 32;
+
+        V2 cameraChange = unit(distanceFromPlayer) * cameraSpeed;
+
+        if(length(distanceFromPlayer) < cameraSpeed) {
+            cameraChange = distanceFromPlayer;
+        }
+
+        camera.pos +=cameraChange;
 
         //drawPlayer
         draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, gameObject->sprite, LAYER_PLAYER);
@@ -1086,7 +1105,10 @@ void game_update(Bitmap screen, Input input)
                         {
                             type = Tile_Type_ENTER;
                             //addPlayer
-                            addGameObject(PLAYER, {(f32)tileX * TILE_SIZE_PIXELS, (f32)tileY * TILE_SIZE_PIXELS});
+                            V2 spawnPos = {(f32)tileX * TILE_SIZE_PIXELS, (f32)tileY * TILE_SIZE_PIXELS};
+                            addGameObject(PLAYER, spawnPos);
+                            camera.pos = spawnPos; 
+                            camera.neededPos = spawnPos;
                         }
                         if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
                         {
@@ -1132,10 +1154,10 @@ void game_update(Bitmap screen, Input input)
         {
             draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0xFF0000FF, LAYER_NORMAL);
         }
-        if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
-        {
-            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3}, imgTilePlate, LAYER_CLEAR);
-        }
+        // if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
+        // {
+        //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3}, imgTilePlate, LAYER_CLEAR);
+        // }
     }
 
     //сортируем qrawQueue
