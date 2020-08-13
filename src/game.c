@@ -106,10 +106,9 @@ Bitmap imgTilePlate = win32_read_bmp("../data/tilePlate.bmp");
 typedef struct
 {
     V2 pos;
-    V2 neededPos;
 } Camera;
 
-Camera camera = {{0, 0},{0, 0},};
+Camera camera = {{0, 0},};
 
 typedef union {
     struct
@@ -383,7 +382,6 @@ typedef struct
 
     V2 pos;
     V2 hitBox;
-    V2 recentHitBox;
     V2 speed;
 
     bool goLeft;
@@ -413,7 +411,6 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
         pos,
         {0, 0},
         {0, 0},
-        {0, 0},
 
         false,
         false,
@@ -432,7 +429,6 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
     if (type == PLAYER)
     {
         gameObject.hitBox = {44, 60};
-        gameObject.recentHitBox = {44, 60};
     }
 
     i32 slotIndex = gameObjectCount;
@@ -484,15 +480,10 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
         V2 speedPart = speedUnit * ratio * speedLength;
 
         //стороны объекта
-        i32 objLeft = ourObject->pos.x - (ourObject->hitBox.x / 2);
-        i32 objRight = ourObject->pos.x + (ourObject->hitBox.x / 2);
-        i32 objBottom = ourObject->pos.y - (ourObject->hitBox.y / 2);
-        i32 objTop = ourObject->pos.y + (ourObject->hitBox.y / 2);
-
-        i32 recentObjLeft = ourObject->pos.x - (ourObject->recentHitBox.x / 2);
-        i32 recentObjRight = ourObject->pos.x + (ourObject->recentHitBox.x / 2);
-        i32 recentObjBottom = ourObject->pos.y - (ourObject->recentHitBox.y / 2);
-        i32 recentObjTop = ourObject->pos.y + (ourObject->recentHitBox.y / 2);
+        f32 objLeft = ourObject->pos.x - (ourObject->hitBox.x / 2);
+        f32 objRight = ourObject->pos.x + (ourObject->hitBox.x / 2);
+        f32 objBottom = ourObject->pos.y - (ourObject->hitBox.y / 2);
+        f32 objTop = ourObject->pos.y + (ourObject->hitBox.y / 2);
 
         V2 objTilePos = {roundf((ourObject->pos.x + speedPart.x) / TILE_SIZE_PIXELS),
                          roundf((ourObject->pos.y + speedPart.y) / TILE_SIZE_PIXELS)};
@@ -512,7 +503,7 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                     i32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
                     i32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
 
-                    i32 objSide;
+                    f32 objSide;
                     i32 tileSide;
 
                     if (speedUnit.y != 0)
@@ -529,14 +520,14 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                         }
 
                         if (
-                            !(recentObjTop + speedPart.y <= tileBottom ||
-                              recentObjBottom + speedPart.y >= tileTop ||
-                              recentObjRight <= tileLeft ||
-                              recentObjLeft >= tileRight))
+                            !(objTop + speedPart.y <= tileBottom ||
+                              objBottom + speedPart.y >= tileTop ||
+                              objRight <= tileLeft ||
+                              objLeft >= tileRight))
                         {
-                            gameObject->speed.y = unit(gameObject->speed).y;
                             ourObject->speed.y = 0;
                             speedUnit.y = 0;
+                            speedPart.y = 0;
 
                             ourObject->pos.y -= objSide - tileSide;
 
@@ -569,15 +560,16 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                         }
 
                         if (
-                            !(recentObjRight + speedPart.x <= tileLeft ||
-                              recentObjLeft + speedPart.x >= tileRight ||
-                              recentObjTop <= tileBottom ||
-                              recentObjBottom >= tileTop))
+                            !(objRight + speedPart.x <= tileLeft ||
+                              objLeft + speedPart.x >= tileRight ||
+                              objTop <= tileBottom ||
+                              objBottom >= tileTop))
                         {
 
-                            gameObject->speed.x = unit(gameObject->speed).x;
                             ourObject->speed.x = 0;
                             speedUnit.x = 0;
+                            speedPart.x = 0;
+                            
                             ourObject->pos.x -= objSide - tileSide;
                             collisionXHappened = true;
 
@@ -590,16 +582,16 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                                 {
                                     ourObject->condition = HANGING;
 
-                                    gameObject->speed.y = unit(gameObject->speed).y;
                                     ourObject->speed.y = 0;
                                     speedUnit.y = 0;
+                                    speedPart.y = 0;
 
                                     ourObject->pos.y = tilePos.y * TILE_SIZE_PIXELS;
                                     collisionYHappened = true;
                                 }
 
                                 //помощь в карабкании
-                                if (objBottom < tileTop && objBottom + 12 > tileTop)
+                                if (objBottom < tileTop && objBottom + 14 > tileTop)
                                 {
                                     ourObject->speed.y += 5;
                                 }
@@ -617,8 +609,61 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
     gameObject->canJump = ourObject->canJump;
 }
 
-void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
-{
+void changeHitBox(Game_Object *gameObject, V2 hitBox) {
+    V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
+                         roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
+    
+    i32 tileCountX = ceilf((hitBox.x - gameObject->hitBox.x)/ TILE_SIZE_PIXELS);
+    i32 tileCountY = ceilf((hitBox.y - gameObject->hitBox.y) / TILE_SIZE_PIXELS);
+
+    gameObject->pos.y += -gameObject->hitBox.y / 2 + hitBox.y / 2;
+
+    for(i32 y = objTilePos.y - tileCountY; y <= objTilePos.y + tileCountY;y ++) {
+        for(i32 x = objTilePos.x - tileCountX; x <= objTilePos.x + tileCountX;x ++) {
+            i32 tileIndex = y*(CHUNK_COUNT_X + 2) * CHUNK_SIZE_X + x;
+            Tile_Type tile = tile_map[tileIndex];
+
+            if(tile == Tile_Type_WALL || tile == Tile_Type_BORDER) {
+
+                V2 tilePos = getTilePos(tileIndex);
+
+                f32 recentObjTop = gameObject->pos.y + gameObject->hitBox.y/2;
+                f32 recentObjBottom = gameObject->pos.y - gameObject->hitBox.y/2;
+                f32 recentObjRight = gameObject->pos.x + gameObject->hitBox.x/2;
+                f32 recentObjLeft = gameObject->pos.x - gameObject->hitBox.x/2;
+
+                f32 objTop = gameObject->pos.y + hitBox.y/2;
+                f32 objBottom = gameObject->pos.y - hitBox.y/2;
+                f32 objRight = gameObject->pos.x + hitBox.x/2;
+                f32 objLeft = gameObject->pos.x - hitBox.x/2;
+
+                f32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS/2;
+                f32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS/2;
+                f32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS/2;
+                f32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS/2;
+
+                if(recentObjLeft >= tileRight && objLeft <= tileRight) {
+                    gameObject->pos.x -= objLeft - tileRight;
+                }
+
+                if(recentObjRight <= tileLeft && objRight >= tileLeft) {
+                    gameObject->pos.x -= objRight - tileLeft;
+                }
+
+                if(recentObjBottom >= tileTop && objBottom <= tileTop) {
+                    gameObject->pos.y -= objBottom - tileTop;
+                }
+
+                if(recentObjTop <= tileBottom && objTop >= tileBottom) {
+                    gameObject->pos.y -= objTop - tileBottom;
+                }
+            }
+        }
+    }
+    gameObject->hitBox = hitBox;
+}
+
+void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
     if (gameObject->type == PLAYER)
     {
         //движение игрока
@@ -684,17 +729,6 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             //гравитация
             gameObject->speed.y += gravity;
         }
-        else
-        {
-            if (gameObject->lookingDirection == RIGHT)
-            {
-                gameObject->speed.x = 1;
-            }
-            if (gameObject->lookingDirection == LEFT)
-            {
-                gameObject->speed.x = -1;
-            }
-        }
 
         //трение
         gameObject->speed *= frictionConst;
@@ -744,8 +778,6 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             gameObject->movedThroughPixels = 0;
         }
 
-        gameObject->recentHitBox = gameObject->hitBox;
-
         //состояния
         if (gameObject->condition == IDLE)
         {
@@ -757,7 +789,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->sprite = imgPlayerLeftIdle;
             }
-            gameObject->hitBox = {44, 60};
+            changeHitBox(gameObject, V2{44,60});
         }
 
         if (gameObject->condition == CROUCHING_IDLE)
@@ -770,7 +802,8 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->sprite = imgPlayerLeftCrouchIdle;
             }
-            gameObject->hitBox = {44, 30};
+
+            changeHitBox(gameObject, V2{44,30});
         }
 
         if (gameObject->condition == MOOVING)
@@ -802,7 +835,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 }
                 gameObject->sprite = imgPlayerLeftStep[7 - step];
             }
-            gameObject->hitBox = {44, 60};
+            changeHitBox(gameObject, V2{44,60});
         }
 
         if (gameObject->condition == CROUCHING_MOOVING)
@@ -834,7 +867,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 }
                 gameObject->sprite = imgPlayerLeftCrouchStep[7 - step];
             }
-            gameObject->hitBox = {44, 30};
+            changeHitBox(gameObject, V2{44,30});
         }
 
         if (gameObject->condition == FALLING)
@@ -847,7 +880,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->sprite = imgPlayerLeftJump;
             }
-            gameObject->hitBox = {44, 56};
+            changeHitBox(gameObject, V2{44,54});
         }
 
         if (gameObject->condition == HANGING)
@@ -861,48 +894,32 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 gameObject->sprite = imgPlayerLeftHanging;
             }
             timers[gameObject->canJump] = 5;
-            gameObject->hitBox = {44, 60};
+            changeHitBox(gameObject, V2{44,60});
         }
 
         //камера
 
-        camera.neededPos = gameObject->pos;
+        camera.pos = gameObject->pos;
 
         if (!(gameObject->pos.x - screen.size.x / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
         {
-            camera.neededPos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + screen.size.x / 2;
+            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + screen.size.x / 2;
         }
 
         if (!(gameObject->pos.x + screen.size.x / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
         {
-            camera.neededPos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - screen.size.x / 2;
+            camera.pos.x = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - screen.size.x / 2;
         }
 
         if (!(gameObject->pos.y - screen.size.y / 2 > -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
         {
-            camera.neededPos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + screen.size.y / 2;
+            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + screen.size.y / 2;
         }
 
         if (!(gameObject->pos.y + screen.size.y / 2 < -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
         {
-            camera.neededPos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - screen.size.y / 2;
+            camera.pos.y = -TILE_SIZE_PIXELS / 2 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - screen.size.y / 2;
         }
-
-        V2 distanceFromPlayer = camera.neededPos - camera.pos;
-
-        if(length(distanceFromPlayer)) {
-            i32 foo;
-        }
-
-        f32 cameraSpeed = length(distanceFromPlayer) * length(distanceFromPlayer) / 32;
-
-        V2 cameraChange = unit(distanceFromPlayer) * cameraSpeed;
-
-        if(length(distanceFromPlayer) < cameraSpeed) {
-            cameraChange = distanceFromPlayer;
-        }
-
-        camera.pos +=cameraChange;
 
         //drawPlayer
         draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, gameObject->sprite, LAYER_PLAYER);
@@ -1108,7 +1125,6 @@ void game_update(Bitmap screen, Input input)
                             V2 spawnPos = {(f32)tileX * TILE_SIZE_PIXELS, (f32)tileY * TILE_SIZE_PIXELS};
                             addGameObject(PLAYER, spawnPos);
                             camera.pos = spawnPos; 
-                            camera.neededPos = spawnPos;
                         }
                         if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
                         {
