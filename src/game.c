@@ -156,19 +156,14 @@ void drawItem(Bitmap screen, Drawing drawing)
 
     if (drawing.type == DRAWING_TYPE_RECT)
     {
-        u32 color = drawing.color;
+        f32 left = floor(pos.x - size.x / 2);
+        f32 right = ceil(pos.x + size.x / 2);
+        f32 bottom = floor(pos.y - size.y / 2);
+        f32 top = ceil(pos.y + size.y / 2);
 
-        pos.x += screen.size.x / 2 - camera.pos.x;
-        pos.y += screen.size.y / 2 - camera.pos.y;
-
-        i32 left = pos.x - size.x / 2;
-        i32 right = pos.x + size.x / 2;
-        i32 bottom = pos.y - size.y / 2;
-        i32 top = pos.y + size.y / 2;
-
-        ARGB newColor;
-        newColor.argb = color;
-        f32 alpha = (f32)newColor.a / 0xFF;
+        ARGB rectColor;
+        rectColor.argb = drawing.color;
+        f32 alpha = (f32)rectColor.a / 0xFF;
 
         if (left < 0)
             left = 0;
@@ -179,19 +174,19 @@ void drawItem(Bitmap screen, Drawing drawing)
         if (top > screen.size.y)
             top = screen.size.y;
 
-        for (i32 y = bottom; y < top; y++)
+        for (i32 y = floor(bottom); y < ceil(top); y++)
         {
-            for (i32 x = left; x < right; x++)
+            for (i32 x = floor(left); x < ceil(right); x++)
             {
-                ARGB color;
-                color.argb = screen.pixels[y * (i32)screen.size.x + x];
+                ARGB recentColor;
+                recentColor.argb = screen.pixels[y * (i32)screen.size.x + x];
 
-                color.r = newColor.r + color.r * (1 - alpha);
-                color.g = newColor.g + color.g * (1 - alpha);
-                color.b = newColor.b + color.b * (1 - alpha);
-                color.a = 0xFF;
+                recentColor.r = rectColor.r + recentColor.r * (1 - alpha);
+                recentColor.g = rectColor.g + recentColor.g * (1 - alpha);
+                recentColor.b = rectColor.b + recentColor.b * (1 - alpha);
+                recentColor.a = 0xFF;
 
-                screen.pixels[y * (i32)screen.size.x + x] = color.argb;
+                screen.pixels[y * (i32)screen.size.x + x] = recentColor.argb;
             }
         }
     }
@@ -200,13 +195,10 @@ void drawItem(Bitmap screen, Drawing drawing)
     {
         Bitmap bitmap = drawing.bitmap;
 
-        pos.x += screen.size.x / 2 - camera.pos.x;
-        pos.y += screen.size.y / 2 - camera.pos.y;
-
-        f32 leftOnScreen = floorf(pos.x - size.x / 2);
-        f32 rightOnScreen = ceilf(pos.x + size.x / 2);
-        f32 bottomOnScreen = floorf(pos.y - size.y / 2);
-        f32 topOnScreen = ceilf(pos.y + size.y / 2);
+        i32 leftOnScreen = floorf(pos.x - size.x / 2);
+        i32 rightOnScreen = ceilf(pos.x + size.x / 2);
+        i32 bottomOnScreen = floorf(pos.y - size.y / 2);
+        i32 topOnScreen = ceilf(pos.y + size.y / 2);
 
         if (leftOnScreen < 0)
             leftOnScreen = 0;
@@ -401,6 +393,25 @@ typedef struct
 i32 gameObjectCount = 0;
 Game_Object gameObjects[512];
 
+typedef enum {
+    Side_RIGHT,
+    Side_LEFT,
+    Side_BOTTOM,
+    Side_TOP,
+} Side;
+
+typedef struct {
+    bool happened;
+    i32 tileIndex;
+    i32 tileType;
+    Side tileSide;
+} Collision;
+
+typedef struct {
+    Collision X;
+    Collision Y;
+} Collisions;
+
 Game_Object *addGameObject(Game_Object_Type type, V2 pos)
 {
     Game_Object gameObject = {
@@ -455,7 +466,7 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
 bool initialized = false;
 
 //движение сущностей
-void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
+Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
 {
     Game_Object *ourObject = gameObject;
 
@@ -463,6 +474,13 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
 
     bool collisionXHappened = false;
     bool collisionYHappened = false;
+
+    Collisions collisions;
+
+    //y
+    collisions.X.happened = false;
+    //x
+    collisions.Y.happened = false;
 
     i32 ratioIndex = 1;
     while (speedLength / ratioIndex > TILE_SIZE_PIXELS)
@@ -533,17 +551,17 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
 
                             collisionYHappened = true;
 
-                            if (tileSide == tileBottom)
-                            {
-                                timers[ourObject->canIncreaseJump] = 0;
+                            Collision thisCollision;
+                            thisCollision.happened = true;
+                            thisCollision.tileIndex = tileIndex;
+                            if(tileSide == tileBottom) {
+                                thisCollision.tileSide = Side_BOTTOM;
+                            } else {
+                                thisCollision.tileSide = Side_TOP;
                             }
-                        }
-                    }
 
-                    if (collisionYHappened && tileSide == tileTop && ourObject->condition != HANGING)
-                    {
-                        ourObject->condition = IDLE;
-                        timers[ourObject->canJump] = 3;
+                            collisions.Y = thisCollision;
+                        }
                     }
 
                     if (speedUnit.x != 0)
@@ -573,29 +591,16 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
                             ourObject->pos.x -= objSide - tileSide;
                             collisionXHappened = true;
 
-                            i32 upTileIndex = (y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
-
-                            if (tile_map[upTileIndex] == Tile_Type_NONE)
-                            {
-                                //весит
-                                if (ourObject->type == PLAYER && ourObject->speed.y < 0 && ourObject->pos.y >= tilePos.y * TILE_SIZE_PIXELS && ourObject->pos.y + ourObject->speed.y <= tilePos.y * TILE_SIZE_PIXELS)
-                                {
-                                    ourObject->condition = HANGING;
-
-                                    ourObject->speed.y = 0;
-                                    speedUnit.y = 0;
-                                    speedPart.y = 0;
-
-                                    ourObject->pos.y = tilePos.y * TILE_SIZE_PIXELS;
-                                    collisionYHappened = true;
-                                }
-
-                                //помощь в карабкании
-                                if (objBottom < tileTop && objBottom + 14 > tileTop)
-                                {
-                                    ourObject->speed.y += 5;
-                                }
+                            Collision thisCollision;
+                            thisCollision.happened = true;
+                            thisCollision.tileIndex = tileIndex;
+                            if(tileSide == tileLeft) {
+                                thisCollision.tileSide = Side_LEFT;
+                            } else {
+                                thisCollision.tileSide = Side_RIGHT;
                             }
+
+                            collisions.X = thisCollision;
                         }
                     }
                 }
@@ -605,18 +610,29 @@ void moveGameObject(Tile_Type *tiles, Game_Object *gameObject)
     }
     gameObject->pos = ourObject->pos;
     gameObject->pos += ourObject->speed;
-    gameObject->condition = ourObject->condition;
-    gameObject->canJump = ourObject->canJump;
+
+    return collisions;
 }
 
-void changeHitBox(Game_Object *gameObject, V2 hitBox) {
+//changePos принимает три значения: -1, 0, 1. 
+//-1 хитбокс перемещается к низу
+//0 xитбокс не перемещается
+//1 хитбокс перемещается к верху
+void changeHitBox(Game_Object *gameObject, V2 hitBox, i8 changePos) {
     V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
                          roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
     
     i32 tileCountX = ceilf((hitBox.x - gameObject->hitBox.x)/ TILE_SIZE_PIXELS);
     i32 tileCountY = ceilf((hitBox.y - gameObject->hitBox.y) / TILE_SIZE_PIXELS);
 
-    gameObject->pos.y += -gameObject->hitBox.y / 2 + hitBox.y / 2;
+    if(changePos) {
+        if(changePos == -1) {
+            gameObject->pos.y += -gameObject->hitBox.y / 2 + hitBox.y / 2;
+        }
+        if(changePos == 1) {
+            gameObject->pos.y += gameObject->hitBox.y / 2 - hitBox.y / 2;
+        }
+    }
 
     for(i32 y = objTilePos.y - tileCountY; y <= objTilePos.y + tileCountY;y ++) {
         for(i32 x = objTilePos.x - tileCountX; x <= objTilePos.x + tileCountX;x ++) {
@@ -666,21 +682,23 @@ void changeHitBox(Game_Object *gameObject, V2 hitBox) {
 void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
     if (gameObject->type == PLAYER)
     {
+        //предпологаемое состояние
+        Condition condition;
+
         //движение игрока
         gameObject->goLeft = input.left.is_down;
         gameObject->goRight = input.right.is_down;
 
         if (input.space.went_down)
         {
-            timers[gameObject->jump] = 6;
+            timers[gameObject->jump] = 5;
         }
 
         //константы скорости
         f32 accelConst;
         if (input.shift.is_down)
         {
-            //0.75
-            accelConst = 3;
+            accelConst = 2.8;
         }
         else
         {
@@ -690,26 +708,22 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
         {
             accelConst = 0.5;
         }
-        //0.95
         f32 frictionConst = 0.80;
-        //-0.75
         f32 gravity = -4;
 
         //прыжок
-        if (timers[gameObject->jump] > 0 && timers[gameObject->canJump] > 0 && gameObject->condition != CROUCHING_IDLE &&  gameObject->condition != CROUCHING_MOOVING)
+        if (timers[gameObject->jump] > 0 && timers[gameObject->canJump] > 0)
         {
             if (!(gameObject->condition == HANGING && input.down.is_down))
             {
                 timers[gameObject->canIncreaseJump] = 13;
             }
 
+            gameObject->speed.y = 0;
             timers[gameObject->jump] = 0;
+            timers[gameObject->canJump] = 0;
+            changeHitBox(gameObject,{44,60},-1);
             gameObject->condition = FALLING;
-        }
-
-        if (gameObject->speed.y < 0)
-        {
-            timers[gameObject->canIncreaseJump] = 0;
         }
 
         if (timers[gameObject->canIncreaseJump] > 0 && input.space.is_down)
@@ -717,6 +731,11 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             gameObject->speed.y += timers[gameObject->canIncreaseJump] * 0.92;
         }
         else
+        {
+            timers[gameObject->canIncreaseJump] = 0;
+        }
+
+        if (gameObject->speed.y < 0)
         {
             timers[gameObject->canIncreaseJump] = 0;
         }
@@ -744,33 +763,65 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
         }
 
         //состояние падает
-        if (gameObject->condition != HANGING)
-        {
-            gameObject->condition = FALLING;
-        }
+        condition = FALLING;
 
         //столкновения и движение
-        moveGameObject(tile_map, gameObject);
+        Collisions collisions = checkCollision(tile_map, gameObject);
+
+        //нельзя прыгать выше и состояние стоит
+        if (collisions.Y.happened)
+        {
+            if(collisions.Y.tileSide == Side_BOTTOM) {
+                timers[gameObject->canIncreaseJump] = 0;
+            } else {
+                condition = IDLE;
+                timers[gameObject->canJump] = 4;
+            }
+        }
+
+        V2 collidedXTilePos = getTilePos(collisions.X.tileIndex);
+        V2 collidedYTilePos = getTilePos(collisions.Y.tileIndex);
+
+        i32 upTileIndex = (collidedXTilePos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collidedXTilePos.x;
+
+        if (collisions.X.happened && tile_map[upTileIndex] == Tile_Type_NONE)
+        {
+            //весит
+            if (gameObject->speed.y < 0 && gameObject->pos.y > collidedXTilePos.y * TILE_SIZE_PIXELS && gameObject->pos.y + gameObject->speed.y <= collidedXTilePos.y * TILE_SIZE_PIXELS)
+            {
+                gameObject->condition = HANGING;
+
+                gameObject->speed = {0,0};
+
+                gameObject->pos.y = collidedXTilePos.y * TILE_SIZE_PIXELS;
+            }
+
+            //помощь в карабкании
+            if (gameObject->speed.y <=0 && gameObject->pos.y - gameObject->hitBox.y / 2 > collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS/2 - 15)
+            {
+                gameObject->speed.y = 15;
+            }
+        }
 
         //состояние ползком
-        if (gameObject->condition == IDLE && input.down.is_down)
+        if (condition == IDLE && input.down.is_down)
         {
-            gameObject->condition = CROUCHING_IDLE;
+            condition = CROUCHING_IDLE;
         }
 
         //состояние движится
-        if ((gameObject->speed.x > 1 || gameObject->speed.x < -1) && (gameObject->condition == IDLE || gameObject->condition == CROUCHING_IDLE))
+        if ((gameObject->speed.x > 1 || gameObject->speed.x < -1) && (condition == IDLE || condition == CROUCHING_IDLE))
         {
 
             gameObject->movedThroughPixels += gameObject->speed.x;
 
-            if (gameObject->condition == IDLE)
+            if (condition == IDLE)
             {
-                gameObject->condition = MOOVING;
+                condition = MOOVING;
             }
             else
             {
-                gameObject->condition = CROUCHING_MOOVING;
+                condition = CROUCHING_MOOVING;
             }
         }
         else
@@ -778,7 +829,11 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             gameObject->movedThroughPixels = 0;
         }
 
-        //состояния
+        //что делают состояния
+        if(gameObject->condition != HANGING) {
+            gameObject->condition = condition;
+        }
+
         if (gameObject->condition == IDLE)
         {
             if (gameObject->lookingDirection == RIGHT)
@@ -789,7 +844,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             {
                 gameObject->sprite = imgPlayerLeftIdle;
             }
-            changeHitBox(gameObject, V2{44,60});
+            changeHitBox(gameObject, V2{44,60}, -1);
         }
 
         if (gameObject->condition == CROUCHING_IDLE)
@@ -803,7 +858,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 gameObject->sprite = imgPlayerLeftCrouchIdle;
             }
 
-            changeHitBox(gameObject, V2{44,30});
+            changeHitBox(gameObject, V2{44,30}, -1);
         }
 
         if (gameObject->condition == MOOVING)
@@ -835,7 +890,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 }
                 gameObject->sprite = imgPlayerLeftStep[7 - step];
             }
-            changeHitBox(gameObject, V2{44,60});
+            changeHitBox(gameObject, V2{44,60}, -1);
         }
 
         if (gameObject->condition == CROUCHING_MOOVING)
@@ -867,7 +922,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 }
                 gameObject->sprite = imgPlayerLeftCrouchStep[7 - step];
             }
-            changeHitBox(gameObject, V2{44,30});
+            changeHitBox(gameObject, V2{44,30}, -1);
         }
 
         if (gameObject->condition == FALLING)
@@ -880,7 +935,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             {
                 gameObject->sprite = imgPlayerLeftJump;
             }
-            changeHitBox(gameObject, V2{44,54});
+            changeHitBox(gameObject, V2{44,55}, 1);
         }
 
         if (gameObject->condition == HANGING)
@@ -894,7 +949,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 gameObject->sprite = imgPlayerLeftHanging;
             }
             timers[gameObject->canJump] = 5;
-            changeHitBox(gameObject, V2{44,60});
+            changeHitBox(gameObject, V2{44,60}, 0);
         }
 
         //камера
@@ -922,6 +977,10 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
         }
 
         //drawPlayer
+
+        //хитбокс
+        // draw_rect(gameObject->pos,gameObject->hitBox,0xFFFFFFFF,LAYER_FORGROUND);
+
         draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, gameObject->sprite, LAYER_PLAYER);
 
         // //drawPlayer
@@ -1187,6 +1246,8 @@ void game_update(Bitmap screen, Input input)
         {
             if (draw_queue[drawingIndex].layer == layer)
             {
+                draw_queue[drawingIndex].pos.x += screen.size.x / 2 - camera.pos.x;
+                draw_queue[drawingIndex].pos.y += screen.size.y / 2 - camera.pos.y;
                 new_draw_queue[new_draw_queue_size] = draw_queue[drawingIndex];
                 new_draw_queue_size++;
             }
