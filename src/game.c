@@ -2,6 +2,8 @@
 #include "math.h"
 #include "game_math.c"
 
+#define PI 3.14159265
+
 //fps
 f64 target_time_per_frame = 1.0f / 60.0f;
 f32 dt = (f32)target_time_per_frame;
@@ -111,6 +113,7 @@ typedef struct
 Camera camera = {{0, 0},};
 
 typedef union {
+    u32 argb;
     struct
     {
         u8 b;
@@ -118,7 +121,6 @@ typedef union {
         u8 r;
         u8 a;
     };
-    u32 argb;
 } ARGB;
 
 typedef enum
@@ -141,6 +143,7 @@ typedef struct
     Drawing_type type;
     V2 pos;
     V2 size;
+    f32 angle;
     u32 color;
     Bitmap bitmap;
     Layer layer;
@@ -149,131 +152,173 @@ typedef struct
 Drawing draw_queue[4096];
 i32 draw_queue_size = 0;
 
+void clear_screen(Bitmap screen) {
+    for(i32 i = 0; i < screen.size.x * screen.size.y; i++) {
+        screen.pixels[i] = 0xFF000000;
+    }
+}
+
+typedef struct {
+    ARGB a, b, c, d;
+} Bilinear_Sample;
+
+Bilinear_Sample get_bilinear_sample(Bitmap bitmap, i32 x, i32 y) {
+    ARGB a = {bitmap.pixels[y * bitmap.pitch + x]};
+    ARGB b = {bitmap.pixels[y * bitmap.pitch + x + 1]};
+    ARGB c = {bitmap.pixels[(y + 1) * bitmap.pitch + x]};
+    ARGB d = {bitmap.pixels[(y + 1) * bitmap.pitch + x + 1]};
+
+    Bilinear_Sample result = {a,b,c,d};
+    return result;
+}
+
+ARGB lerp(ARGB a, ARGB b, f32 f) {
+    ARGB result; 
+    result.r = a.r * (1 - f) + b.r * f;
+    result.g = a.g * (1 - f) + b.g * f;
+    result.b = a.b * (1 - f) + b.b * f;
+    result.a = a.a * (1 - f) + b.a * f;
+    return result;
+}
+
+ARGB bilinear_blend(Bilinear_Sample sample, f32 x_f, f32 y_f) {
+    ARGB ab = lerp(sample.a,sample.b, x_f);
+    ARGB cd = lerp(sample.c,sample.d, x_f);
+    ARGB abcd = lerp(ab,cd, y_f);
+    return abcd;
+}
+
 void drawItem(Bitmap screen, Drawing drawing)
 {
-    V2 pos = drawing.pos;
-    V2 size = drawing.size;
-
     if (drawing.type == DRAWING_TYPE_RECT)
     {
-        f32 left = floor(pos.x - size.x / 2);
-        f32 right = ceil(pos.x + size.x / 2);
-        f32 bottom = floor(pos.y - size.y / 2);
-        f32 top = ceil(pos.y + size.y / 2);
+        V2 x_axis = rotateVector({drawing.size.x,0}, drawing.angle);
+        V2 y_axis = rotateVector({0,drawing.size.y}, drawing.angle);
 
-        ARGB rectColor;
-        rectColor.argb = drawing.color;
-        f32 alpha = (f32)rectColor.a / 0xFF;
+        V2 origin = drawing.pos - x_axis/2 - y_axis/2;
 
-        if (left < 0)
-            left = 0;
-        if (right > screen.size.x)
-            right = screen.size.x;
-        if (bottom < 0)
-            bottom = 0;
-        if (top > screen.size.y)
-            top = screen.size.y;
+        f32 x_axis_length = drawing.size.x;
+        f32 y_axis_length = drawing.size.y;
 
-        for (i32 y = floor(bottom); y < ceil(top); y++)
-        {
-            for (i32 x = floor(left); x < ceil(right); x++)
-            {
-                ARGB recentColor;
-                recentColor.argb = screen.pixels[y * (i32)screen.size.x + x];
+        V2 vertices[] = {
+            origin,
+            origin + x_axis,
+            origin + y_axis,
+            origin + x_axis + y_axis,
+        };
 
-                recentColor.r = rectColor.r + recentColor.r * (1 - alpha);
-                recentColor.g = rectColor.g + recentColor.g * (1 - alpha);
-                recentColor.b = rectColor.b + recentColor.b * (1 - alpha);
-                recentColor.a = 0xFF;
+        V2 min = {INFINITY, INFINITY};
+        V2 max = {-INFINITY, -INFINITY};
 
-                screen.pixels[y * (i32)screen.size.x + x] = recentColor.argb;
+        for (i32 vertex_index = 0; vertex_index < 4; vertex_index++) {
+            V2 vertex = vertices[vertex_index];
+            if (vertex.x < min.x) min.x = vertex.x;
+            if (vertex.y < min.y) min.y = vertex.y;
+            if (vertex.x > max.x) max.x = vertex.x;
+            if (vertex.y > max.y) max.y = vertex.y;
+        }
+
+        if(min.x < 0) min.x = 0;
+        if(min.y < 0) min.y = 0;
+        if(max.x > screen.size.x) max.x = screen.size.x;
+        if(max.y > screen.size.y) max.y = screen.size.y;
+
+        for (i32 y = floor(min.y); y < ceil(max.y); y++) {
+            for (i32 x = floor(min.x); x < ceil(max.x); x++) {
+                V2 pixel_coords = {(f32)x,(f32)y};
+                V2 d = pixel_coords - origin;
+
+                f32 dot_x = dot(d, x_axis) / x_axis_length;
+                f32 dot_y = dot(d, y_axis) / y_axis_length;
+
+                if (dot_x >= 0 && dot_x < x_axis_length && dot_y >= 0 && dot_y < y_axis_length) {
+                    screen.pixels[y * (i32)screen.size.x + x] = drawing.color;
+                }
             }
         }
     }
 
     if (drawing.type == DRAWING_TYPE_BITMAP)
     {
-        Bitmap bitmap = drawing.bitmap;
+        V2 x_axis = rotateVector({drawing.size.x,0}, drawing.angle);
+        V2 y_axis = rotateVector({0,drawing.size.y}, drawing.angle);
 
-        i32 leftOnScreen = floorf(pos.x - size.x / 2);
-        i32 rightOnScreen = ceilf(pos.x + size.x / 2);
-        i32 bottomOnScreen = floorf(pos.y - size.y / 2);
-        i32 topOnScreen = ceilf(pos.y + size.y / 2);
+        V2 origin = drawing.pos - x_axis/2 - y_axis/2;
 
-        if (leftOnScreen < 0)
-            leftOnScreen = 0;
-        if (rightOnScreen > screen.size.x)
-            rightOnScreen = screen.size.x;
-        if (bottomOnScreen < 0)
-            bottomOnScreen = 0;
-        if (topOnScreen > screen.size.y)
-            topOnScreen = screen.size.y;
+        f32 x_axis_length = drawing.size.x;
+        f32 y_axis_length = drawing.size.y;
 
-        i32 widthOnScreen = rightOnScreen - leftOnScreen;
-        i32 heightOnScreen = topOnScreen - bottomOnScreen;
+        V2 vertices[] = {
+            origin,
+            origin + x_axis,
+            origin + y_axis,
+            origin + x_axis + y_axis,
+        };
 
-        f32 screenPixelOnBitmapWidth = (bitmap.size.x) / size.x;
-        f32 screenPixelOnBitmapHeight = (bitmap.size.y) / size.y;
+        V2 min = {INFINITY, INFINITY};
+        V2 max = {-INFINITY, -INFINITY};
 
-        for (i32 y = 0; y < heightOnScreen; y++)
-        {
-            for (i32 x = 0; x < widthOnScreen; x++)
-            {
-                i32 screen_x = leftOnScreen + x;
-                i32 screen_y = bottomOnScreen + y;
+        for (i32 vertex_index = 0; vertex_index < 4; vertex_index++) {
+            V2 vertex = vertices[vertex_index];
+            if (vertex.x < min.x) min.x = vertex.x;
+            if (vertex.y < min.y) min.y = vertex.y;
+            if (vertex.x > max.x) max.x = vertex.x;
+            if (vertex.y > max.y) max.y = vertex.y;
+        }
 
-                f32 texture_x = (x + (leftOnScreen - floorf(pos.x - size.x / 2))) * screenPixelOnBitmapWidth;
-                f32 texture_y = (y + (bottomOnScreen - floorf(pos.y - size.y / 2))) * screenPixelOnBitmapHeight;
+        if(min.x < 0) min.x = 0;
+        if(min.y < 0) min.y = 0;
+        if(max.x > screen.size.x) max.x = screen.size.x;
+        if(max.y > screen.size.y) max.y = screen.size.y;
 
-                f32 f_x = texture_x - (i32)texture_x;
-                f32 f_y = texture_y - (i32)texture_y;
+        for (i32 y = floor(min.y); y < ceil(max.y); y++) {
+            for (i32 x = floor(min.x); x < ceil(max.x); x++) {
+                V2 pixel_coords = {(f32)x,(f32)y};
+                V2 d = pixel_coords - origin;
 
-                ARGB texel_a, texel_b, texel_c, texel_d, texel_ab, texel_cd, newColor;
+                f32 dot_x = dot(d, x_axis) / x_axis_length;
+                f32 dot_y = dot(d, y_axis) / y_axis_length;
 
-                texel_a.argb = bitmap.pixels[bitmap.pitch * (i32)texture_y + (i32)texture_x];
-                texel_b.argb = bitmap.pixels[bitmap.pitch * (i32)texture_y + (i32)texture_x + 1];
-                texel_c.argb = bitmap.pixels[bitmap.pitch * ((i32)texture_y + 1) + (i32)texture_x];
-                texel_d.argb = bitmap.pixels[bitmap.pitch * ((i32)texture_y + 1) + ((i32)texture_x + 1)];
+                if (dot_x >= 0 && dot_x < x_axis_length && dot_y >= 0 && dot_y < y_axis_length) {
+                    f32 u = dot_x / x_axis_length;
+                    f32 v = dot_y / y_axis_length;
+                    
+                    f32 tex_x = u * drawing.bitmap.size.x;
+                    f32 tex_y = v * drawing.bitmap.size.y;
 
-                texel_ab.a = texel_a.a * (1 - f_x) + texel_b.a * f_x;
-                texel_ab.r = texel_a.r * (1 - f_x) + texel_b.r * f_x;
-                texel_ab.g = texel_a.g * (1 - f_x) + texel_b.g * f_x;
-                texel_ab.b = texel_a.b * (1 - f_x) + texel_b.b * f_x;
+                    i32 x_int = (i32)tex_x;
+                    i32 y_int = (i32)tex_y;
 
-                texel_cd.a = texel_c.a * (1 - f_x) + texel_d.a * f_x;
-                texel_cd.r = texel_c.r * (1 - f_x) + texel_d.r * f_x;
-                texel_cd.g = texel_c.g * (1 - f_x) + texel_d.g * f_x;
-                texel_cd.b = texel_c.b * (1 - f_x) + texel_d.b * f_x;
+                    f32 x_f = tex_x - x_int;
+                    f32 y_f = tex_y - y_int;
 
-                newColor.a = texel_ab.a * (1 - f_y) + texel_cd.a * f_y;
-                newColor.r = texel_ab.r * (1 - f_y) + texel_cd.r * f_y;
-                newColor.g = texel_ab.g * (1 - f_y) + texel_cd.g * f_y;
-                newColor.b = texel_ab.b * (1 - f_y) + texel_cd.b * f_y;
+                    ARGB pixel = {screen.pixels[y*(i32)screen.size.x + x]};
+                    Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, x_int, y_int);
+                    ARGB blended_sample = bilinear_blend(sample, x_f, y_f);
+                    ARGB result;
 
-                //transparency
-                f32 alpha = (f32)newColor.a / 0xFF;
+                    f32 alpha = (0xFF - blended_sample.a) / 255.0f;
+                    
+                    result.r = blended_sample.r + pixel.r * alpha;
+                    result.g = blended_sample.g + pixel.g * alpha;
+                    result.b = blended_sample.b + pixel.b * alpha;
+                    result.a = 0xFF;
 
-                ARGB color;
-                color.argb = screen.pixels[screen_y * (i32)screen.size.x + screen_x];
-
-                color.r = newColor.r + color.r * (1 - alpha);
-                color.g = newColor.g + color.g * (1 - alpha);
-                color.b = newColor.b + color.b * (1 - alpha);
-                color.a = 0xFF;
-
-                screen.pixels[screen_y * (i32)screen.size.x + screen_x] = color.argb;
+                    screen.pixels[y * (i32)screen.size.x + x] = result.argb;
+                }
             }
         }
     }
 }
 
 //drawing
-void draw_rect(V2 pos, V2 size, u32 color, Layer layer)
+void draw_rect(V2 pos, V2 size, f32 angle, u32 color, Layer layer)
 {
     Drawing drawing;
     drawing.type = DRAWING_TYPE_RECT;
     drawing.pos = pos;
     drawing.size = size;
+    drawing.angle = angle;
     drawing.color = color;
     drawing.bitmap = imgNone;
     drawing.layer = layer;
@@ -282,12 +327,13 @@ void draw_rect(V2 pos, V2 size, u32 color, Layer layer)
     draw_queue_size++;
 }
 
-void draw_bitmap(V2 pos, V2 size, Bitmap bitmap, Layer layer)
+void draw_bitmap(V2 pos, V2 size, f32 angle, Bitmap bitmap, Layer layer)
 {
     Drawing drawing;
     drawing.type = DRAWING_TYPE_BITMAP;
     drawing.pos = pos;
     drawing.size = size;
+    drawing.angle = angle;
     drawing.color = NULL;
     drawing.bitmap = bitmap;
     drawing.layer = layer;
@@ -981,7 +1027,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
         //хитбокс
         // draw_rect(gameObject->pos,gameObject->hitBox,0xFFFFFFFF,LAYER_FORGROUND);
 
-        draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, gameObject->sprite, LAYER_PLAYER);
+        draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, 0, gameObject->sprite, LAYER_PLAYER);
 
         // //drawPlayer
         // draw_bitmap(gameObject->pos + V2{0, 7} - V2{100, 0}, gameObject->sprite.size * 2, gameObject->sprite, LAYER_PLAYER);
@@ -1201,7 +1247,7 @@ void game_update(Bitmap screen, Input input)
     }
 
     //очистка экрана
-    draw_rect(camera.pos, screen.size * 1.1, 0xFFFFAA00, LAYER_CLEAR);
+    clear_screen(screen);
 
     //обновление сущностей
     for (i32 objectIndex = 0; objectIndex < gameObjectCount; objectIndex++)
@@ -1219,20 +1265,20 @@ void game_update(Bitmap screen, Input input)
         V2 tilePos = getTilePos(tileIndex);
         if (tile == Tile_Type_WALL)
         {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0xFFFFFF00, LAYER_NORMAL);
+            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0, 0xFFFFFF00, LAYER_NORMAL);
         }
         if (tile == Tile_Type_ENTER || tile == Tile_Type_EXIT)
         {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0xFFFF0000, LAYER_BACKGROUND);
+            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0, 0xFFFF0000, LAYER_BACKGROUND);
         }
         if (tile == Tile_Type_BORDER)
         {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0xFF0000FF, LAYER_NORMAL);
+            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0, 0xFF0000FF, LAYER_NORMAL);
         }
-        // if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
-        // {
-        //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3}, imgTilePlate, LAYER_CLEAR);
-        // }
+        if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
+        {
+            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3},0, imgTilePlate, LAYER_CLEAR);
+        }
     }
 
     //сортируем qrawQueue
