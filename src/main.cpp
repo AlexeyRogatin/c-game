@@ -90,26 +90,41 @@ Bitmap win32_read_bmp(char *file_name)
     File_Buffer file = win32_read_entire_file(file_name);
     Bmp_Header *header = (Bmp_Header *)file.data;
     Bmp_Info *info = (Bmp_Info *)(file.data + sizeof(Bmp_Header));
-
     u32 *pixels = (u32 *)(file.data + header->data_offset);
 
-    for (i32 i = 0; i < info->width * info->height; i++)
-    {
-        ARGB pixel;
-        pixel.argb = pixels[i];
-        f32 alpha = pixel.a / 0xFF;
-        pixel.r *= alpha;
-        pixel.g *= alpha;
-        pixel.b *= alpha;
-        pixels[i] = pixel.argb;
+    u32 *newPixels = (u32 *)malloc(sizeof(u32) * (info->width+2) * (info->height + 2));
+
+    for (i32 i = 0; i < (info->width+2); i++ ) {
+        newPixels[i] = 0x00000000;
+        newPixels[(info->height + 1) * (info->width + 2) + i] = 0x00000000;
+    }
+
+    for (i32 i = 0; i < (info->height+2); i++ ) {
+        newPixels[i * (info->width + 2)] = 0x00000000;
+        newPixels[i * (info->width + 2) + info->width + 1] = 0x00000000;
+    }
+
+    for (i32 y = 0; y < info->height; y++) {
+        for (i32 x = 0; x < info->width; x++) {
+            ARGB pixel;
+            pixel.argb = pixels[y * info->width + x];
+            f32 alpha = pixel.a / 0xFF;
+            pixel.r *= alpha;
+            pixel.g *= alpha;
+            pixel.b *= alpha;
+
+            newPixels[(y+1) * (info->width + 2) + x + 1] = pixel.argb;
+        }
     }
 
     // AA RR GG BB
     Bitmap result;
-    result.pixels = pixels + info->width + 1;
-    result.size = {(f32)info->width - 2, (f32)info->height - 2};
+    result.pixels = newPixels + info->width + 2 + 1;
+    result.size = {(f32)info->width, (f32)info->height};
 
-    result.pitch = info->width;
+    result.pitch = info->width + 2;
+
+    free(file.data);
 
     return result;
 }

@@ -42,6 +42,8 @@ typedef struct
 Bitmap win32_read_bmp(char *file_name);
 
 //вставляем картинки
+Bitmap imgTest = win32_read_bmp("../data/test.bmp");
+
 Bitmap imgNone = win32_read_bmp("../data/none.bmp");
 
 Bitmap imgPlayerRightIdle = win32_read_bmp("../data/lexaRightIdle.bmp");
@@ -51,26 +53,22 @@ Bitmap imgPlayerRightJump = win32_read_bmp("../data/lexaRightJump.bmp");
 Bitmap imgPlayerRightHanging = win32_read_bmp("../data/lexaRightWall.bmp");
 Bitmap imgPlayerRightLookingUp = win32_read_bmp("../data/lexaRightLookingUp.bmp");
 
-Bitmap imgPlayerRightStep[8] = {
+Bitmap imgPlayerRightStep[6] = {
     win32_read_bmp("../data/lexaRightStep1.bmp"),
     win32_read_bmp("../data/lexaRightStep2.bmp"),
     win32_read_bmp("../data/lexaRightStep3.bmp"),
     win32_read_bmp("../data/lexaRightStep4.bmp"),
     win32_read_bmp("../data/lexaRightStep5.bmp"),
     win32_read_bmp("../data/lexaRightStep6.bmp"),
-    win32_read_bmp("../data/lexaRightStep7.bmp"),
-    win32_read_bmp("../data/lexaRightStep8.bmp"),
 };
 
-Bitmap imgPlayerRightCrouchStep[8] = {
+Bitmap imgPlayerRightCrouchStep[6] = {
     win32_read_bmp("../data/lexaRightCrouchStep1.bmp"),
     win32_read_bmp("../data/lexaRightCrouchStep2.bmp"),
     win32_read_bmp("../data/lexaRightCrouchStep3.bmp"),
     win32_read_bmp("../data/lexaRightCrouchStep4.bmp"),
     win32_read_bmp("../data/lexaRightCrouchStep5.bmp"),
     win32_read_bmp("../data/lexaRightCrouchStep6.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep7.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep8.bmp"),
 };
 
 Bitmap imgPlayerLeftIdle = win32_read_bmp("../data/lexaLeftIdle.bmp");
@@ -80,26 +78,22 @@ Bitmap imgPlayerLeftJump = win32_read_bmp("../data/lexaLeftJump.bmp");
 Bitmap imgPlayerLeftHanging = win32_read_bmp("../data/lexaLeftWall.bmp");
 Bitmap imgPlayerLeftLookingUp = win32_read_bmp("../data/lexaLeftLookingUp.bmp");
 
-Bitmap imgPlayerLeftStep[8] = {
+Bitmap imgPlayerLeftStep[6] = {
     win32_read_bmp("../data/lexaLeftStep1.bmp"),
     win32_read_bmp("../data/lexaLeftStep2.bmp"),
     win32_read_bmp("../data/lexaLeftStep3.bmp"),
     win32_read_bmp("../data/lexaLeftStep4.bmp"),
     win32_read_bmp("../data/lexaLeftStep5.bmp"),
     win32_read_bmp("../data/lexaLeftStep6.bmp"),
-    win32_read_bmp("../data/lexaLeftStep7.bmp"),
-    win32_read_bmp("../data/lexaLeftStep8.bmp"),
 };
 
-Bitmap imgPlayerLeftCrouchStep[8] = {
+Bitmap imgPlayerLeftCrouchStep[6] = {
     win32_read_bmp("../data/lexaLeftCrouchStep1.bmp"),
     win32_read_bmp("../data/lexaLeftCrouchStep2.bmp"),
     win32_read_bmp("../data/lexaLeftCrouchStep3.bmp"),
     win32_read_bmp("../data/lexaLeftCrouchStep4.bmp"),
     win32_read_bmp("../data/lexaLeftCrouchStep5.bmp"),
     win32_read_bmp("../data/lexaLeftCrouchStep6.bmp"),
-    win32_read_bmp("../data/lexaLeftCrouchStep7.bmp"),
-    win32_read_bmp("../data/lexaLeftCrouchStep8.bmp"),
 };
 
 Bitmap imgTilePlate = win32_read_bmp("../data/tilePlate.bmp");
@@ -149,12 +143,12 @@ typedef struct
     Layer layer;
 } Drawing;
 
-Drawing draw_queue[4096];
+Drawing draw_queue[1024 * 8];
 i32 draw_queue_size = 0;
 
 void clear_screen(Bitmap screen) {
     for(i32 i = 0; i < screen.size.x * screen.size.y; i++) {
-        screen.pixels[i] = 0xFF000000;
+        screen.pixels[i] = 0xFFFF8800;
     }
 }
 
@@ -279,7 +273,8 @@ void drawItem(Bitmap screen, Drawing drawing)
                 f32 dot_x = dot(d, x_axis) / x_axis_length;
                 f32 dot_y = dot(d, y_axis) / y_axis_length;
 
-                if (dot_x >= 0 && dot_x < x_axis_length && dot_y >= 0 && dot_y < y_axis_length) {
+                if (dot_x >= 0 && dot_x <= x_axis_length && dot_y >= 0 && dot_y <= y_axis_length) {
+
                     f32 u = dot_x / x_axis_length;
                     f32 v = dot_y / y_axis_length;
                     
@@ -293,16 +288,32 @@ void drawItem(Bitmap screen, Drawing drawing)
                     f32 y_f = tex_y - y_int;
 
                     ARGB pixel = {screen.pixels[y*(i32)screen.size.x + x]};
-                    Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, x_int, y_int);
-                    ARGB blended_sample = bilinear_blend(sample, x_f, y_f);
+                    
+                    // Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, x_int, y_int);
+                    // ARGB blended_sample = bilinear_blend(sample, x_f, y_f);
+                    // ARGB result;
+
+                    // f32 alpha = (0xFF - blended_sample.a) / 255.0f;
+                    
+                    // result.r = blended_sample.r + pixel.r * alpha;
+                    // result.g = blended_sample.g + pixel.g * alpha;
+                    // result.b = blended_sample.b + pixel.b * alpha;
+                    // result.a = 0xFF;
+
+                    // screen.pixels[y * (i32)screen.size.x + x] = result.argb;
+
+                    ARGB sample = {drawing.bitmap.pixels[y_int * drawing.bitmap.pitch + x_int]};
+
                     ARGB result;
 
-                    f32 alpha = (0xFF - blended_sample.a) / 255.0f;
+                    f32 alpha = (0xFF - sample.a) / 255.0f;
                     
-                    result.r = blended_sample.r + pixel.r * alpha;
-                    result.g = blended_sample.g + pixel.g * alpha;
-                    result.b = blended_sample.b + pixel.b * alpha;
+                    result.r = sample.r + pixel.r * alpha;
+                    result.g = sample.g + pixel.g * alpha;
+                    result.b = sample.b + pixel.b * alpha;
                     result.a = 0xFF;
+
+                    
 
                     screen.pixels[y * (i32)screen.size.x + x] = result.argb;
                 }
@@ -322,7 +333,7 @@ void draw_rect(V2 pos, V2 size, f32 angle, u32 color, Layer layer)
     drawing.color = color;
     drawing.bitmap = imgNone;
     drawing.layer = layer;
-    assert(draw_queue_size < 4096);
+    assert(draw_queue_size < 1024 * 8);
     draw_queue[draw_queue_size] = drawing;
     draw_queue_size++;
 }
@@ -337,7 +348,7 @@ void draw_bitmap(V2 pos, V2 size, f32 angle, Bitmap bitmap, Layer layer)
     drawing.color = NULL;
     drawing.bitmap = bitmap;
     drawing.layer = layer;
-    assert(draw_queue_size < 4096);
+    assert(draw_queue_size < 1024 * 8);
     draw_queue[draw_queue_size] = drawing;
     draw_queue_size++;
 }
@@ -372,7 +383,7 @@ typedef enum
     Tile_Type_EXIT,
 } Tile_Type;
 
-#define TILE_SIZE_PIXELS 76
+#define TILE_SIZE_PIXELS 80
 #define CHUNK_SIZE_X 10
 #define CHUNK_SIZE_Y 8
 #define CHUNK_COUNT_X 4
@@ -485,7 +496,7 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
 
     if (type == PLAYER)
     {
-        gameObject.hitBox = {44, 60};
+        gameObject.hitBox = {32, 56};
     }
 
     i32 slotIndex = gameObjectCount;
@@ -755,26 +766,26 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             accelConst = 0.5;
         }
         f32 frictionConst = 0.80;
-        f32 gravity = -4;
+        f32 gravity = -4.5;
 
         //прыжок
         if (timers[gameObject->jump] > 0 && timers[gameObject->canJump] > 0)
         {
             if (!(gameObject->condition == HANGING && input.down.is_down))
             {
-                timers[gameObject->canIncreaseJump] = 13;
+                timers[gameObject->canIncreaseJump] = 25;
             }
 
             gameObject->speed.y = 0;
             timers[gameObject->jump] = 0;
             timers[gameObject->canJump] = 0;
-            changeHitBox(gameObject,{44,60},-1);
+            // changeHitBox(gameObject,{64,64},-1);
             gameObject->condition = FALLING;
         }
 
         if (timers[gameObject->canIncreaseJump] > 0 && input.space.is_down)
         {
-            gameObject->speed.y += timers[gameObject->canIncreaseJump] * 0.92;
+            gameObject->speed.y += timers[gameObject->canIncreaseJump] * 0.392;
         }
         else
         {
@@ -840,6 +851,8 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 gameObject->speed = {0,0};
 
                 gameObject->pos.y = collidedXTilePos.y * TILE_SIZE_PIXELS;
+
+                timers[gameObject->canIncreaseJump] = 0;
             }
 
             //помощь в карабкании
@@ -890,7 +903,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             {
                 gameObject->sprite = imgPlayerLeftIdle;
             }
-            changeHitBox(gameObject, V2{44,60}, -1);
+            // changeHitBox(gameObject, V2{64,64}, -1);
         }
 
         if (gameObject->condition == CROUCHING_IDLE)
@@ -904,7 +917,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
                 gameObject->sprite = imgPlayerLeftCrouchIdle;
             }
 
-            changeHitBox(gameObject, V2{44,30}, -1);
+            // changeHitBox(gameObject, V2{64,64}, -1);
         }
 
         if (gameObject->condition == MOOVING)
@@ -912,13 +925,13 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             if (gameObject->lookingDirection == RIGHT)
             {
                 i8 step = (i32)floor(gameObject->movedThroughPixels / 15);
-                while (step > 7)
+                while (step > 5)
                 {
-                    step -= 8;
+                    step -= 6;
                 }
                 while (step < 0)
                 {
-                    step += 8;
+                    step += 6;
                 }
                 gameObject->sprite = imgPlayerRightStep[step];
             }
@@ -926,17 +939,17 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             if (gameObject->lookingDirection == LEFT)
             {
                 i8 step = (i32)floor(gameObject->movedThroughPixels / 15);
-                while (step > 7)
+                while (step > 5)
                 {
-                    step -= 8;
+                    step -= 6;
                 }
                 while (step < 0)
                 {
-                    step += 8;
+                    step += 6;
                 }
-                gameObject->sprite = imgPlayerLeftStep[7 - step];
+                gameObject->sprite = imgPlayerLeftStep[5 - step];
             }
-            changeHitBox(gameObject, V2{44,60}, -1);
+            // changeHitBox(gameObject, V2{64,64}, -1);
         }
 
         if (gameObject->condition == CROUCHING_MOOVING)
@@ -944,13 +957,13 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             if (gameObject->lookingDirection == RIGHT)
             {
                 i8 step = (i32)floor(gameObject->movedThroughPixels / 7);
-                while (step > 7)
+                while (step > 5)
                 {
-                    step -= 8;
+                    step -= 6;
                 }
                 while (step < 0)
                 {
-                    step += 8;
+                    step += 6;
                 }
                 gameObject->sprite = imgPlayerRightCrouchStep[step];
             }
@@ -958,17 +971,17 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             if (gameObject->lookingDirection == LEFT)
             {
                 i8 step = (i32)floor(gameObject->movedThroughPixels / 7);
-                while (step > 7)
+                while (step > 5)
                 {
-                    step -= 8;
+                    step -= 6;
                 }
                 while (step < 0)
                 {
-                    step += 8;
+                    step += 6;
                 }
-                gameObject->sprite = imgPlayerLeftCrouchStep[7 - step];
+                gameObject->sprite = imgPlayerLeftCrouchStep[5 - step];
             }
-            changeHitBox(gameObject, V2{44,30}, -1);
+            // changeHitBox(gameObject, V2{64,64}, -1);
         }
 
         if (gameObject->condition == FALLING)
@@ -981,7 +994,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             {
                 gameObject->sprite = imgPlayerLeftJump;
             }
-            changeHitBox(gameObject, V2{44,55}, 1);
+            // changeHitBox(gameObject, V2{64,64}, 1);
         }
 
         if (gameObject->condition == HANGING)
@@ -992,10 +1005,13 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
             }
             if (gameObject->lookingDirection == LEFT)
             {
+
+
+
                 gameObject->sprite = imgPlayerLeftHanging;
             }
             timers[gameObject->canJump] = 5;
-            changeHitBox(gameObject, V2{44,60}, 0);
+            // changeHitBox(gameObject, V2{64,64}, 0);
         }
 
         //камера
@@ -1025,9 +1041,9 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen) {
         //drawPlayer
 
         //хитбокс
-        // draw_rect(gameObject->pos,gameObject->hitBox,0xFFFFFFFF,LAYER_FORGROUND);
+        // draw_rect(gameObject->pos,gameObject->hitBox,0,0xFFFFFFFF,LAYER_FORGROUND);
 
-        draw_bitmap(gameObject->pos + V2{0, (gameObject->sprite.size.y - gameObject->hitBox.y) / 2 - 2}, gameObject->sprite.size, 0, gameObject->sprite, LAYER_PLAYER);
+        draw_bitmap(gameObject->pos + V2{0,(TILE_SIZE_PIXELS - gameObject->hitBox.y)/2}, gameObject->sprite.size * 5, 0, gameObject->sprite, LAYER_PLAYER);
 
         // //drawPlayer
         // draw_bitmap(gameObject->pos + V2{0, 7} - V2{100, 0}, gameObject->sprite.size * 2, gameObject->sprite, LAYER_PLAYER);
@@ -1263,6 +1279,8 @@ void game_update(Bitmap screen, Input input)
     {
         Tile_Type tile = tile_map[tileIndex];
         V2 tilePos = getTilePos(tileIndex);
+        // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0,imgTilePlate,LAYER_BACKGROUND);
+
         if (tile == Tile_Type_WALL)
         {
             draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0, 0xFFFFFF00, LAYER_NORMAL);
@@ -1275,14 +1293,10 @@ void game_update(Bitmap screen, Input input)
         {
             draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS},0, 0xFF0000FF, LAYER_NORMAL);
         }
-        if (((i32)tilePos.x + 1) % 3 == 0 && ((i32)tilePos.y + 1) % 3 == 0)
-        {
-            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS * 3, TILE_SIZE_PIXELS * 3},0, imgTilePlate, LAYER_CLEAR);
-        }
     }
 
     //сортируем qrawQueue
-    Drawing new_draw_queue[4096];
+    Drawing new_draw_queue[1024 * 8];
     i32 new_draw_queue_size = 0;
     Layer layer = (Layer)0;
 
