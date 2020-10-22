@@ -18,6 +18,7 @@ typedef u8 byte;
 #define true 1
 #define false 0
 
+//вызывает ошибку при условии
 #define assert(cond) \
     if (!(cond))     \
         *(int *)NULL = 12;
@@ -59,6 +60,7 @@ File_Buffer win32_read_entire_file(char *file_name)
     return result;
 }
 
+//pack убирает промежутки между данными в struct
 #pragma pack(push, 1)
 
 typedef struct
@@ -92,20 +94,24 @@ Bitmap win32_read_bmp(char *file_name)
     Bmp_Info *info = (Bmp_Info *)(file.data + sizeof(Bmp_Header));
     u32 *pixels = (u32 *)(file.data + header->data_offset);
 
-    u32 *newPixels = (u32 *)malloc(sizeof(u32) * (info->width+2) * (info->height + 2));
+    u32 *newPixels = (u32 *)malloc(sizeof(u32) * (info->width + 2) * (info->height + 2));
 
-    for (i32 i = 0; i < (info->width+2); i++ ) {
+    for (i32 i = 0; i < (info->width + 2); i++)
+    {
         newPixels[i] = 0x00000000;
         newPixels[(info->height + 1) * (info->width + 2) + i] = 0x00000000;
     }
 
-    for (i32 i = 0; i < (info->height+2); i++ ) {
+    for (i32 i = 0; i < (info->height + 2); i++)
+    {
         newPixels[i * (info->width + 2)] = 0x00000000;
         newPixels[i * (info->width + 2) + info->width + 1] = 0x00000000;
     }
 
-    for (i32 y = 0; y < info->height; y++) {
-        for (i32 x = 0; x < info->width; x++) {
+    for (i32 y = 0; y < info->height; y++)
+    {
+        for (i32 x = 0; x < info->width; x++)
+        {
             ARGB pixel;
             pixel.argb = pixels[y * info->width + x];
             f32 alpha = pixel.a / 0xFF;
@@ -113,7 +119,7 @@ Bitmap win32_read_bmp(char *file_name)
             pixel.g *= alpha;
             pixel.b *= alpha;
 
-            newPixels[(y+1) * (info->width + 2) + x + 1] = pixel.argb;
+            newPixels[(y + 1) * (info->width + 2) + x + 1] = pixel.argb;
         }
     }
 
