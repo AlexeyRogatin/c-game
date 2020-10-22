@@ -490,6 +490,7 @@ typedef struct
 {
     Collision X;
     Collision Y;
+    bool expandedCollision;
 } Collisions;
 
 Game_Object *addGameObject(Game_Object_Type type, V2 pos)
@@ -555,6 +556,7 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
 {
     Game_Object *ourObject = gameObject;
 
+    i8 speedDirection = -gameObject->lookingDirection * 2 - 1;
     f32 speedLength = length(ourObject->speed);
 
     bool collisionXHappened = false;
@@ -562,10 +564,9 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
 
     Collisions collisions;
 
-    //y
     collisions.X.happened = false;
-    //x
     collisions.Y.happened = false;
+    collisions.expandedCollision = false;
 
     i32 ratioIndex = 1;
     while (speedLength / ratioIndex > TILE_SIZE_PIXELS)
@@ -665,13 +666,11 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
                             tileSide = tileRight;
                         }
 
-                        if (
-                            !(objRight + speedPart.x <= tileLeft ||
-                              objLeft + speedPart.x >= tileRight ||
-                              objTop <= tileBottom ||
-                              objBottom >= tileTop))
+                        if (!((objRight + speedPart.x <= tileLeft) ||
+                              (objLeft + speedPart.x >= tileRight) ||
+                              (objTop <= tileBottom) ||
+                              (objBottom >= tileTop)))
                         {
-
                             ourObject->speed.x = 0;
                             speedUnit.x = 0;
                             speedPart.x = 0;
@@ -692,7 +691,27 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
                             }
 
                             collisions.X = thisCollision;
+                            collisions.expandedCollision = false;
                         }
+                    }
+                    //столкновение удлинённое (для подвешенного состояния)
+                    if (!collisions.X.happened &&
+                        !((objRight + speedPart.x + speedDirection <= tileLeft) ||
+                          (objLeft + speedPart.x + speedDirection >= tileRight) ||
+                          (objTop <= tileBottom) ||
+                          (objBottom >= tileTop)))
+                    {
+                        thisCollision.tileIndex = tileIndex;
+                        if (tileSide == tileLeft)
+                        {
+                            thisCollision.tileSide = Side_LEFT;
+                        }
+                        else
+                        {
+                            thisCollision.tileSide = Side_RIGHT;
+                        }
+
+                        collisions.expandedCollision = true;
                     }
                 }
             }
@@ -923,11 +942,11 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
 
         i32 upTileIndex = (collidedXTilePos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collidedXTilePos.x;
 
-        if (collisions.X.happened && tile_map[upTileIndex] == Tile_Type_NONE)
+        if ((collisions.X.happened || collisions.expandedCollision) && tile_map[upTileIndex] == Tile_Type_NONE)
         {
             //состояние весит
-            if (gameObject->speed.y < 0 && gameObject->pos.y + 5 > collidedXTilePos.y * TILE_SIZE_PIXELS &&
-                gameObject->pos.y + gameObject->speed.y <= collidedXTilePos.y * TILE_SIZE_PIXELS)
+            if (gameObject->speed.y < 0 && gameObject->pos.y + 3 > collidedXTilePos.y * TILE_SIZE_PIXELS &&
+                gameObject->pos.y + gameObject->speed.y - 2 <= collidedXTilePos.y * TILE_SIZE_PIXELS)
             {
                 supposedCond = Condition_HANGING;
 
