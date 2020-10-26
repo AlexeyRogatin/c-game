@@ -416,6 +416,12 @@ V2 getTilePos(i32 index)
     return result;
 }
 
+i32 getIndex(V2 coords)
+{
+    i32 index = coords.y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + coords.x;
+    return index;
+}
+
 //сущности
 typedef enum
 {
@@ -937,6 +943,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             gameObject->movedThroughPixels = 0;
         }
 
+        //функции коллизии
         V2 collidedXTilePos = getTilePos(collisions.X.tileIndex);
         V2 collidedYTilePos = getTilePos(collisions.Y.tileIndex);
 
@@ -963,6 +970,22 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             {
                 gameObject->pos += unit({collidedXTilePos.x * TILE_SIZE_PIXELS - gameObject->pos.x, 0});
                 gameObject->pos.y = collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 + gameObject->hitBox.y / 2;
+            }
+        }
+
+        //переход на стенку
+        if (supposedCond == Condition_CROUCHING_IDLE || supposedCond == Condition_CROUCHING_MOOVING)
+        {
+            V2 tilePos = collidedYTilePos - V2{(f32)gameObject->lookingDirection * 2 - 1, 0};
+            if (tile_map[getIndex(tilePos)] == Tile_Type_NONE &&
+                ((gameObject->pos.x + gameObject->speed.x + gameObject->hitBox.x / 2 <= tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) && (gameObject->pos.x + gameObject->hitBox.x / 2 > tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) ||
+                 (gameObject->pos.x + gameObject->speed.x - gameObject->hitBox.x / 2 >= tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2) && (gameObject->pos.x - gameObject->hitBox.x / 2 < tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)))
+            {
+                gameObject->pos.y = tilePos.y * TILE_SIZE_PIXELS - 2;
+                gameObject->pos.x = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (gameObject->lookingDirection * 2 - 1) + gameObject->hitBox.x / 2 * -(gameObject->lookingDirection * 2 - 1);
+                supposedCond = Condition_HANGING;
+                gameObject->lookingDirection = (Direction)((-(gameObject->lookingDirection * 2 - 1) + 1) / 2);
+                gameObject->speed = {0, 0};
             }
         }
 
@@ -1125,7 +1148,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
         //drawPlayer
 
         //хитбокс
-        // draw_rect(gameObject->pos,gameObject->hitBox,0,0xFFFFFFFF,LAYER_FORGROUND);
+        // draw_rect(gameObject->pos, gameObject->hitBox, 0, 0xFFFFFFFF, LAYER_FORGROUND);
 
         draw_bitmap(gameObject->pos + V2{0, (TILE_SIZE_PIXELS - gameObject->hitBox.y) / 2}, V2{gameObject->sprite.size.x * -(gameObject->lookingDirection * 2 - 1), gameObject->sprite.size.y} * 5, 0, gameObject->sprite, LAYER_PLAYER);
 
