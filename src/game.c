@@ -556,7 +556,7 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
 {
     Game_Object *ourObject = gameObject;
 
-    i8 speedDirection = -gameObject->lookingDirection * 2 - 1;
+    i8 speedDirection = -(gameObject->lookingDirection * 2 - 1);
     f32 speedLength = length(ourObject->speed);
 
     bool collisionXHappened = false;
@@ -701,14 +701,14 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
                           (objTop <= tileBottom) ||
                           (objBottom >= tileTop)))
                     {
-                        thisCollision.tileIndex = tileIndex;
+                        collisions.X.tileIndex = tileIndex;
                         if (tileSide == tileLeft)
                         {
-                            thisCollision.tileSide = Side_LEFT;
+                            collisions.X.tileSide = Side_LEFT;
                         }
                         else
                         {
-                            thisCollision.tileSide = Side_RIGHT;
+                            collisions.X.tileSide = Side_RIGHT;
                         }
 
                         collisions.expandedCollision = true;
