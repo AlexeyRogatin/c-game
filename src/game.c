@@ -868,12 +868,17 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             timers[gameObject->canIncreaseJump] = 0;
         }
 
-        if ((gameObject->condition != Condition_HANGING && gameObject->condition != Condition_HANGING_LOOKING_DOWN && gameObject->condition != Condition_HANGING_LOOKING_UP))
+        if (gameObject->condition != Condition_HANGING && gameObject->condition != Condition_HANGING_LOOKING_DOWN && gameObject->condition != Condition_HANGING_LOOKING_UP)
         {
             //скорость по x
             gameObject->speed += {(gameObject->goRight - gameObject->goLeft) * accelConst, 0};
 
             //гравитация
+            gameObject->speed.y += gravity;
+        }
+
+        if ((gameObject->condition == Condition_HANGING || gameObject->condition == Condition_HANGING_LOOKING_DOWN || gameObject->condition == Condition_HANGING_LOOKING_UP) && timers[gameObject->animationTimer] > 0)
+        {
             gameObject->speed.y += gravity;
         }
 
@@ -981,11 +986,13 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 ((gameObject->pos.x + gameObject->speed.x + gameObject->hitBox.x / 2 <= tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) && (gameObject->pos.x + gameObject->hitBox.x / 2 > tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) ||
                  (gameObject->pos.x + gameObject->speed.x - gameObject->hitBox.x / 2 >= tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2) && (gameObject->pos.x - gameObject->hitBox.x / 2 < tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)))
             {
-                gameObject->pos.y = tilePos.y * TILE_SIZE_PIXELS - 2;
+                // gameObject->pos.y = tilePos.y * TILE_SIZE_PIXELS - 2;
                 gameObject->pos.x = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (gameObject->lookingDirection * 2 - 1) + gameObject->hitBox.x / 2 * -(gameObject->lookingDirection * 2 - 1);
                 supposedCond = Condition_HANGING;
                 gameObject->lookingDirection = (Direction)((-(gameObject->lookingDirection * 2 - 1) + 1) / 2);
                 gameObject->speed = {0, 0};
+                gameObject->condition = Condition_IDLE;
+                timers[gameObject->animationTimer] = 5;
             }
         }
 
