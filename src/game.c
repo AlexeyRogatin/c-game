@@ -80,7 +80,48 @@ Bitmap imgPlayerCrouchStep[6] = {
     win32_read_bmp("../data/lexaRightCrouchStep6.bmp"),
 };
 
-Bitmap imgTilePlate = win32_read_bmp("../data/tilePlate.bmp");
+Bitmap imgBackGround = win32_read_bmp("../data/tilePlate.bmp");
+
+Bitmap imgBricks[12] = {
+    win32_read_bmp("../data/wall1.bmp"),
+    win32_read_bmp("../data/wall2.bmp"),
+    win32_read_bmp("../data/wall3.bmp"),
+    win32_read_bmp("../data/wall4.bmp"),
+    win32_read_bmp("../data/wall5.bmp"),
+    win32_read_bmp("../data/wall6.bmp"),
+    win32_read_bmp("../data/wall7.bmp"),
+    win32_read_bmp("../data/wall8.bmp"),
+    win32_read_bmp("../data/wall9.bmp"),
+    win32_read_bmp("../data/wall10.bmp"),
+    win32_read_bmp("../data/wall11.bmp"),
+    win32_read_bmp("../data/wall12.bmp"),
+};
+
+Bitmap imgStone = win32_read_bmp("../data/stone.bmp");
+Bitmap imgMarbleFloor[4] = {
+    win32_read_bmp("../data/floor14.bmp"),
+    win32_read_bmp("../data/floor15.bmp"),
+    win32_read_bmp("../data/floor16.bmp"),
+    win32_read_bmp("../data/floor17.bmp"),
+};
+
+Bitmap imgTiledFloor[4] = {
+    win32_read_bmp("../data/floor18.bmp"),
+    win32_read_bmp("../data/floor19.bmp"),
+    win32_read_bmp("../data/floor20.bmp"),
+    win32_read_bmp("../data/floor21.bmp"),
+};
+
+Bitmap imgWall[8] = {
+    win32_read_bmp("../data/wall_bottom.bmp"),
+    win32_read_bmp("../data/wall_bottom_0.bmp"),
+    win32_read_bmp("../data/wall_bottom_1.bmp"),
+    win32_read_bmp("../data/wall_bottom_2.bmp"),
+    win32_read_bmp("../data/wall.bmp"),
+    win32_read_bmp("../data/wall_0.bmp"),
+    win32_read_bmp("../data/wall_1.bmp"),
+    win32_read_bmp("../data/wall_2.bmp"),
+};
 
 //камера
 typedef struct
@@ -90,6 +131,7 @@ typedef struct
 } Camera;
 
 Camera camera = {
+    {0, 0},
     {0, 0},
 };
 
@@ -138,7 +180,7 @@ void clear_screen(Bitmap screen)
 {
     for (i32 i = 0; i < screen.size.x * screen.size.y; i++)
     {
-        screen.pixels[i] = 0xFFFF8800;
+        screen.pixels[i] = 0xFF0D400F;
     }
 }
 
@@ -393,11 +435,22 @@ void updateTimers()
 typedef enum
 {
     Tile_Type_NONE,
+    Tile_Type_BRICK,
+    Tile_Type_MARBLE_FLOOR,
+    Tile_Type_TILED_FLOOR,
     Tile_Type_WALL,
+    Tile_Type_STONE,
     Tile_Type_BORDER,
     Tile_Type_ENTER,
     Tile_Type_EXIT,
 } Tile_Type;
+
+typedef struct
+{
+    Tile_Type type;
+    bool exists;
+    Bitmap sprite;
+} Tile;
 
 #define TILE_SIZE_PIXELS 80
 #define CHUNK_SIZE_X 10
@@ -405,7 +458,7 @@ typedef enum
 #define CHUNK_COUNT_X 4
 #define CHUNK_COUNT_Y 4
 
-Tile_Type *tile_map = NULL;
+Tile *tile_map = NULL;
 
 V2 getTilePos(i32 index)
 {
@@ -558,7 +611,7 @@ Game_Object *addGameObject(Game_Object_Type type, V2 pos)
 bool initialized = false;
 
 //движение сущностей
-Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
+Collisions checkCollision(Tile *tiles, Game_Object *gameObject)
 {
     Game_Object *ourObject = gameObject;
 
@@ -604,9 +657,9 @@ Collisions checkCollision(Tile_Type *tiles, Game_Object *gameObject)
             for (i32 y = (i32)objTilePos.y - 2; y < (i32)objTilePos.y + 2; y++)
             {
                 i32 tileIndex = y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + x;
-                Tile_Type tile = tiles[tileIndex];
+                Tile_Type tile = tiles[tileIndex].type;
                 V2 tilePos = getTilePos(tileIndex);
-                if (tile && (tile == Tile_Type_WALL || tile == Tile_Type_BORDER))
+                if (tile && (tile == Tile_Type_BRICK || tile == Tile_Type_BORDER || tile == Tile_Type_MARBLE_FLOOR || tile == Tile_Type_TILED_FLOOR || tile == Tile_Type_WALL || tile == Tile_Type_STONE))
                 {
                     i32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
                     i32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
@@ -954,7 +1007,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
 
         i32 upTileIndex = (collidedXTilePos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collidedXTilePos.x;
 
-        if ((collisions.X.happened || collisions.expandedCollision) && tile_map[upTileIndex] == Tile_Type_NONE)
+        if ((collisions.X.happened || collisions.expandedCollision) && tile_map[upTileIndex].type == Tile_Type_NONE)
         {
             //состояние весит
             if (gameObject->speed.y < 0 && gameObject->pos.y + 3 > collidedXTilePos.y * TILE_SIZE_PIXELS &&
@@ -969,12 +1022,15 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                 timers[gameObject->canIncreaseJump] = 0;
             }
 
-            //помощь в карабканьи
-            if (gameObject->pos.y - gameObject->hitBox.y / 2 <= collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
-                gameObject->pos.y - gameObject->hitBox.y / 2 + 5 > collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
+            if (collisions.X.happened)
             {
-                gameObject->pos += unit({collidedXTilePos.x * TILE_SIZE_PIXELS - gameObject->pos.x, 0});
-                gameObject->pos.y = collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 + gameObject->hitBox.y / 2;
+                //помощь в карабканьи
+                if (gameObject->pos.y - gameObject->hitBox.y / 2 <= collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
+                    gameObject->pos.y - gameObject->hitBox.y / 2 + 5 > collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
+                {
+                    gameObject->pos += unit({collidedXTilePos.x * TILE_SIZE_PIXELS - gameObject->pos.x, 0});
+                    gameObject->pos.y = collidedXTilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 + gameObject->hitBox.y / 2;
+                }
             }
         }
 
@@ -982,7 +1038,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
         if (supposedCond == Condition_CROUCHING_IDLE || supposedCond == Condition_CROUCHING_MOOVING)
         {
             V2 tilePos = collidedYTilePos - V2{(f32)gameObject->lookingDirection * 2 - 1, 0};
-            if (tile_map[getIndex(tilePos)] == Tile_Type_NONE &&
+            if (tile_map[getIndex(tilePos)].type == Tile_Type_NONE &&
                 ((gameObject->pos.x + gameObject->speed.x + gameObject->hitBox.x / 2 <= tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) && (gameObject->pos.x + gameObject->hitBox.x / 2 > tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) ||
                  (gameObject->pos.x + gameObject->speed.x - gameObject->hitBox.x / 2 >= tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2) && (gameObject->pos.x - gameObject->hitBox.x / 2 < tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)))
             {
@@ -1158,223 +1214,326 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
         // draw_rect(gameObject->pos, gameObject->hitBox, 0, 0xFFFFFFFF, LAYER_FORGROUND);
 
         draw_bitmap(gameObject->pos + V2{0, (TILE_SIZE_PIXELS - gameObject->hitBox.y) / 2}, V2{gameObject->sprite.size.x * -(gameObject->lookingDirection * 2 - 1), gameObject->sprite.size.y} * 5, 0, gameObject->sprite, LAYER_PLAYER);
+    }
+}
 
-        // //drawPlayer
-        // draw_bitmap(gameObject->pos + V2{0, 7} - V2{100, 0}, gameObject->sprite.size * 2, gameObject->sprite, LAYER_PLAYER);
-        // //drawPlayer
-        // draw_bitmap(gameObject->pos + V2{0, 7} + V2{100, 0}, gameObject->sprite.size / 2, gameObject->sprite, LAYER_PLAYER);
+void generateMap(Tile *tile_map)
+{
+    //making chunks
+    char *chunkStrings[(CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2)];
+
+    //путь через тайлы
+    V2 enterChunkPos = {randomInt(1, CHUNK_COUNT_X), 1};
+    V2 chunkPos = enterChunkPos;
+    V2 endChunkPos = {randomInt(1, CHUNK_COUNT_X), CHUNK_COUNT_Y};
+
+    //заполняем чанки
+    for (i32 y = 0; y < CHUNK_COUNT_Y + 2; y++)
+    {
+        for (i32 x = 0; x < CHUNK_COUNT_X + 2; x++)
+        {
+            if (y == 0 || y == CHUNK_COUNT_Y + 1 || x == 0 || x == CHUNK_COUNT_Y + 1)
+            {
+                //чанк-граница
+                chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
+                    "=========="
+                    "=========="
+                    "=========="
+                    "=========="
+                    "=========="
+                    "=========="
+                    "=========="
+                    "==========";
+            }
+            else
+            {
+                //чанк-наполнитель
+                chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
+                    "##########"
+                    "##########"
+                    "##########"
+                    "##########"
+                    "##########"
+                    "##########"
+                    "##########"
+                    "##########";
+            }
+        }
+    }
+
+    i8 direction = randomInt(-1, 1);
+    if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
+    {
+        direction = -direction;
+    }
+
+    while (chunkPos != endChunkPos)
+    {
+        if ((randomFloat(0, 1) < 0.3 || direction == 0) && chunkPos.y < CHUNK_COUNT_Y)
+        {
+            if (chunkPos == enterChunkPos)
+            {
+                //чанк-вход с проходом вниз
+                chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                    "8      8  "
+                    "8        8"
+                    "|        |"
+                    "|    N   |"
+                    "|   TTT  |"
+                    "|        |"
+                    "M8MM   MMM"
+                    "##### ####";
+            }
+            else
+            {
+                //чанк-проход вниз
+                chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                    "          "
+                    "          "
+                    "      TTT|"
+                    "##        "
+                    "   8      "
+                    "     MMM8M"
+                    "|8MM   |##"
+                    "##### ####";
+            }
+            chunkPos.y++;
+
+            bool chance = randomInt(0, 1);
+            if (chance == 0)
+            {
+                direction = 1;
+            }
+            else if (chance == 1)
+            {
+                direction = -1;
+            }
+        }
+        else
+        {
+            if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
+            {
+                direction = 0;
+            }
+
+            if (chunkPos.y == CHUNK_COUNT_Y)
+            {
+                direction = endChunkPos.x - chunkPos.x;
+                if (direction > 0)
+                {
+                    direction = 1;
+                }
+                else
+                {
+                    direction = -1;
+                }
+            }
+
+            if (direction != 0)
+            {
+                if (chunkPos == enterChunkPos)
+                {
+                    //чанк-вход
+                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                        "          "
+                        "          "
+                        "    N     "
+                        "   TTTT   "
+                        "   |####  "
+                        "  #|####8 "
+                        "MMMM####| "
+                        "##########";
+                }
+                else
+                {
+                    //обычный чанк
+                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                        "          "
+                        " TTTTTTT  "
+                        "          "
+                        "          "
+                        "         |"
+                        "   TTT   |"
+                        "M      MMM"
+                        "##########";
+                }
+                chunkPos.x += direction;
+            }
+        }
+        //чанк-выход
+        if (chunkPos == endChunkPos)
+        {
+            chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
+                "          "
+                " 8        "
+                "8         "
+                "      T  8"
+                "          "
+                "     X    "
+                "  TTTTTT  "
+                " ######## ";
+        }
+    }
+
+    char *chunk_string;
+    //заполняем чанки
+    for (i32 chunkIndexY = 0; chunkIndexY < CHUNK_COUNT_Y + 2; chunkIndexY++)
+    {
+        for (i32 chunkIndexX = 0; chunkIndexX < CHUNK_COUNT_X + 2; chunkIndexX++)
+        {
+            chunk_string = chunkStrings[(CHUNK_COUNT_Y + 2 - chunkIndexY - 1) * (CHUNK_COUNT_X + 2) + chunkIndexX];
+            for (i32 y = 0; y < CHUNK_SIZE_Y; y++)
+            {
+                for (i32 x = 0; x < CHUNK_SIZE_X; x++)
+                {
+                    Tile_Type type = Tile_Type_NONE;
+                    switch (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x])
+                    {
+                    case '#':
+                    {
+                        type = Tile_Type_BRICK;
+                        break;
+                    };
+                    case '=':
+                    {
+                        type = Tile_Type_BORDER;
+                        break;
+                    };
+                    case 'N':
+                    {
+                        type = Tile_Type_ENTER;
+                        break;
+                    };
+                    case 'X':
+                    {
+                        type = Tile_Type_EXIT;
+                        break;
+                    };
+                    case 'M':
+                    {
+                        type = Tile_Type_MARBLE_FLOOR;
+                        break;
+                    };
+                    case 'T':
+                    {
+                        type = Tile_Type_TILED_FLOOR;
+                        break;
+                    };
+                    case '8':
+                    {
+                        type = Tile_Type_STONE;
+                        break;
+                    };
+                    case '|':
+                    {
+                        type = Tile_Type_WALL;
+                        break;
+                    };
+                    }
+                    V2 tilePos = {(f32)(x + chunkIndexX * CHUNK_SIZE_X), (f32)(y + chunkIndexY * CHUNK_SIZE_Y)};
+                    i32 index = getIndex(tilePos);
+                    tile_map[index].type = type;
+                }
+            }
+        }
+    }
+
+    //налаживаем свойства тайлов
+    for (i32 index = 0; index < (CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2) * CHUNK_SIZE_X * CHUNK_SIZE_Y; index++)
+    {
+        V2 tilePos = getTilePos(index);
+        Bitmap sprite = imgNone;
+        switch (tile_map[index].type)
+        {
+        case Tile_Type_BRICK:
+        {
+            f32 chance = randomFloat(0, 1);
+            if (chance < 0.95)
+            {
+                sprite = imgBricks[(i32)randomInt(0, 6)];
+            }
+            else
+            {
+                sprite = imgBricks[(i32)randomInt(7, 11)];
+            }
+            break;
+        };
+        case Tile_Type_BORDER:
+        {
+            break;
+        };
+        case Tile_Type_ENTER:
+        {
+            //addPlayer
+            V2 spawnPos = tilePos * TILE_SIZE_PIXELS;
+            addGameObject(PLAYER, spawnPos);
+            camera.pos = spawnPos;
+            camera.target = spawnPos;
+            break;
+        };
+        case Tile_Type_EXIT:
+        {
+            break;
+        };
+        case Tile_Type_MARBLE_FLOOR:
+        {
+            i16 chance = randomInt(0, 3);
+            sprite = imgMarbleFloor[chance];
+            break;
+        };
+        case Tile_Type_TILED_FLOOR:
+        {
+            i16 chance = randomInt(0, 3);
+            sprite = imgTiledFloor[chance];
+            break;
+        };
+        case Tile_Type_STONE:
+        {
+            sprite = imgStone;
+            break;
+        };
+        case Tile_Type_WALL:
+        {
+            Tile_Type upTile = tile_map[getIndex(tilePos + V2{0, 1})].type;
+            Tile_Type downTile = tile_map[getIndex(tilePos + V2{0, -1})].type;
+            Tile_Type leftTile = tile_map[getIndex(tilePos + V2{-1, 0})].type;
+            Tile_Type rightTile = tile_map[getIndex(tilePos + V2{1, 0})].type;
+            i16 wallType = 0;
+            if (downTile == Tile_Type_WALL)
+            {
+                wallType += 4;
+            }
+            if (rightTile == Tile_Type_NONE && leftTile == Tile_Type_NONE)
+            {
+                wallType += 3;
+            }
+            else if (rightTile == Tile_Type_NONE)
+            {
+                wallType += 2;
+            }
+            else if (leftTile == Tile_Type_NONE)
+            {
+                wallType += 1;
+            }
+            sprite = imgWall[wallType];
+            break;
+        };
+        }
+        tile_map[index].exists = true;
+        tile_map[index].sprite = sprite;
     }
 }
 
 void game_update(Bitmap screen, Input input)
 {
-    V2 mapSize = {CHUNK_SIZE_X * (CHUNK_COUNT_X + 2), CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2)};
-
     //выполняется один раз
     if (!initialized)
     {
         initialized = true;
 
-        tile_map = (Tile_Type *)malloc(sizeof(Tile_Type) * mapSize.x * mapSize.y);
+        tile_map = (Tile *)malloc(sizeof(Tile) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) * CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2));
 
-        //making chunks
-        char *chunkStrings[(CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2)];
-
-        //путь через тайлы
-        V2 enterChunkPos = {randomInt(1, CHUNK_COUNT_X), 1};
-        V2 chunkPos = enterChunkPos;
-        V2 endChunkPos = {randomInt(1, CHUNK_COUNT_X), CHUNK_COUNT_Y};
-
-        //заполняем чанки
-        for (i32 y = 0; y < CHUNK_COUNT_Y + 2; y++)
-        {
-            for (i32 x = 0; x < CHUNK_COUNT_X + 2; x++)
-            {
-                if (y == 0 || y == CHUNK_COUNT_Y + 1 || x == 0 || x == CHUNK_COUNT_Y + 1)
-                {
-                    //чанк-граница
-                    chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
-                        "=========="
-                        "=========="
-                        "=========="
-                        "=========="
-                        "=========="
-                        "=========="
-                        "=========="
-                        "==========";
-                }
-                else
-                {
-                    //чанк-наполнитель
-                    chunkStrings[y * (CHUNK_COUNT_X + 2) + x] =
-                        "##########"
-                        "##########"
-                        "##########"
-                        "##########"
-                        "##########"
-                        "##########"
-                        "##########"
-                        "##########";
-                }
-            }
-        }
-
-        i8 direction = randomInt(-1, 1);
-        if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
-        {
-            direction = -direction;
-        }
-
-        while (chunkPos != endChunkPos)
-        {
-            if ((randomFloat(0, 1) < 0.3 || direction == 0) && chunkPos.y < CHUNK_COUNT_Y)
-            {
-                if (chunkPos == enterChunkPos)
-                {
-                    //чанк-вход с проходом вниз
-                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
-                        "#      #  "
-                        "#         "
-                        "          "
-                        "          "
-                        "     N    "
-                        "    ###   "
-                        " #        "
-                        "##### ####";
-                }
-                else
-                {
-                    //чанк-проход вниз
-                    chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
-                        "          "
-                        "          "
-                        "      ####"
-                        "##        "
-                        "   #      "
-                        "   #######"
-                        " #     ###"
-                        "##### ####";
-                }
-                chunkPos.y++;
-
-                bool chance = randomInt(0, 1);
-                if (chance == 0)
-                {
-                    direction = 1;
-                }
-                else if (chance == 1)
-                {
-                    direction = -1;
-                }
-            }
-            else
-            {
-                if ((direction == 1 && chunkPos.x == CHUNK_COUNT_X) || (direction == -1 && chunkPos.x == 1))
-                {
-                    direction = 0;
-                }
-
-                if (chunkPos.y == CHUNK_COUNT_Y)
-                {
-                    direction = endChunkPos.x - chunkPos.x;
-                    if (direction > 0)
-                    {
-                        direction = 1;
-                    }
-                    else
-                    {
-                        direction = -1;
-                    }
-                }
-
-                if (direction != 0)
-                {
-                    if (chunkPos == enterChunkPos)
-                    {
-                        //чанк-вход
-                        chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
-                            "          "
-                            "          "
-                            "    N     "
-                            "   ####   "
-                            "   #####  "
-                            "  ####### "
-                            "   ###### "
-                            "##########";
-                    }
-                    else
-                    {
-                        //обычный чанк
-                        chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
-                            "          "
-                            " #######  "
-                            "          "
-                            "         #"
-                            "          "
-                            "   ###    "
-                            "#      ###"
-                            "##########";
-                    }
-                    chunkPos.x += direction;
-                }
-            }
-            //чанк-выход
-            if (chunkPos == endChunkPos)
-            {
-                chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
-                    "          "
-                    " #        "
-                    "#         "
-                    "         #"
-                    "          "
-                    "     X    "
-                    "  ######  "
-                    " ######## ";
-            }
-        }
-
-        char *chunk_string;
-
-        //заполняем чанки
-        for (i32 chunkIndexY = 0; chunkIndexY < CHUNK_COUNT_Y + 2; chunkIndexY++)
-        {
-            for (i32 chunkIndexX = 0; chunkIndexX < CHUNK_COUNT_X + 2; chunkIndexX++)
-            {
-                chunk_string = chunkStrings[(CHUNK_COUNT_Y + 2 - chunkIndexY - 1) * (CHUNK_COUNT_X + 2) + chunkIndexX];
-                for (i32 y = 0; y < CHUNK_SIZE_Y; y++)
-                {
-                    for (i32 x = 0; x < CHUNK_SIZE_X; x++)
-                    {
-                        i32 tileX = x + chunkIndexX * CHUNK_SIZE_X;
-                        i32 tileY = y + chunkIndexY * CHUNK_SIZE_Y;
-                        i32 index = tileY * mapSize.x + tileX;
-                        Tile_Type type = Tile_Type_NONE;
-                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == '#')
-                        {
-                            type = Tile_Type_WALL;
-                        }
-                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'N')
-                        {
-                            type = Tile_Type_ENTER;
-                            //addPlayer
-                            V2 spawnPos = {(f32)tileX * TILE_SIZE_PIXELS, (f32)tileY * TILE_SIZE_PIXELS};
-                            addGameObject(PLAYER, spawnPos);
-                            camera.pos = spawnPos;
-                            camera.target = spawnPos;
-                        }
-                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == 'X')
-                        {
-                            type = Tile_Type_EXIT;
-                        }
-                        if (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x] == '=')
-                        {
-                            type = Tile_Type_BORDER;
-                        }
-                        tile_map[index] = type;
-                    }
-                }
-            }
-        }
+        generateMap(tile_map);
     }
 
     //очистка экрана
@@ -1392,16 +1551,13 @@ void game_update(Bitmap screen, Input input)
     }
 
     //drawTile
-    for (i32 tileIndex = 0; tileIndex < mapSize.x * mapSize.y; tileIndex++)
+    for (i32 tileIndex = 0; tileIndex < CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) * CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2); tileIndex++)
     {
-        Tile_Type tile = tile_map[tileIndex];
+        Tile_Type tile = tile_map[tileIndex].type;
         V2 tilePos = getTilePos(tileIndex);
         // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, imgTilePlate, LAYER_BACKGROUND);
 
-        if (tile == Tile_Type_WALL)
-        {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFFFF00, LAYER_NORMAL);
-        }
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tileIndex].sprite, LAYER_NORMAL);
         if (tile == Tile_Type_ENTER || tile == Tile_Type_EXIT)
         {
             draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFF0000, LAYER_BACKGROUND);
