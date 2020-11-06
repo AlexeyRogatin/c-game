@@ -283,9 +283,19 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     handle_button(&input.up, key_went_up);
                 }
                 break;
-                case VK_SPACE:
+                case 0x5A:
                 {
-                    handle_button(&input.space, key_went_up);
+                    handle_button(&input.z, key_went_up);
+                }
+                break;
+                case 0x58:
+                {
+                    handle_button(&input.x, key_went_up);
+                }
+                break;
+                case 0x52:
+                {
+                    handle_button(&input.r, key_went_up);
                 }
                 break;
                 case VK_SHIFT:

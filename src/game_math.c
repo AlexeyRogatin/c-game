@@ -84,22 +84,24 @@ f32 randomFloat(f32 start, f32 end)
     f32 result = rand() / (f32)RAND_MAX * (end - start) + start;
     return result;
 };
-f32 randomInt(f32 start, f32 end)
+i32 randomInt(f32 start, f32 end)
 {
     i32 result = round(randomFloat(start, end));
     return result;
 };
 
-V2 rotateVector(V2 vector, f32 angle) {
+V2 rotateVector(V2 vector, f32 angle)
+{
     V2 result = {
         cosf(angle) * vector.x - sinf(angle) * vector.y,
         sinf(angle) * vector.x + cosf(angle) * vector.y,
     };
-    
+
     return result;
 };
 
-f32 angleBetweenPoints(V2 a, V2 b) {
+f32 angleBetweenPoints(V2 a, V2 b)
+{
     f32 tg = (b.y - a.y) / (b.x - a.x);
     f32 result = atan(tg);
     return result;
