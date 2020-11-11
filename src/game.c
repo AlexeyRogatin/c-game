@@ -141,6 +141,8 @@ Bitmap imgTiledFloor[4] = {
     win32_read_bmp("../data/floor8.bmp"),
 };
 
+Bitmap imgEnter = win32_read_bmp("../data/enter.bmp");
+
 Bitmap imgParapet = win32_read_bmp("../data/parapet.bmp");
 
 //камера
@@ -155,6 +157,7 @@ Camera camera = {
     {0, 0},
 };
 
+//drawing
 typedef union
 {
     u32 argb;
@@ -942,7 +945,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
                     timers[jump] = timers[gameObject->hangingAnimationTimer] + 1;
                     timers[gameObject->canIncreaseJump] = 0;
                 }
-                if (input.down.is_down)
+                else if (input.down.is_down)
                 {
                     timers[gameObject->canIncreaseJump] = 0;
                     gameObject->condition = Condition_FALLING;
@@ -1153,6 +1156,7 @@ void updateGameObject(Game_Object *gameObject, Input input, Bitmap screen)
             }
             else if (gameObject->condition == Condition_IDLE)
             {
+                gameObject->speed *= frictionConst;
                 gameObject->sprite = imgPlayerIdle;
             }
             else if (gameObject->condition == Condition_MOOVING)
@@ -1422,7 +1426,7 @@ void generateMap(Tile *tile_map)
                     //обычный чанк
                     chunkStrings[(i32)(chunkPos.y * (CHUNK_COUNT_X + 2) + chunkPos.x)] =
                         " PPPPPPP  "
-                        " TTTTTTT  "
+                        " #######  "
                         "          "
                         "         ="
                         "          "
@@ -1646,28 +1650,33 @@ void game_update(Bitmap screen, Input input)
     //updateTile
     for (i32 tileIndex = 0; tileIndex < CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) * CHUNK_SIZE_Y * (CHUNK_COUNT_Y + 2); tileIndex++)
     {
-        Tile tile = tile_map[tileIndex];
+        Tile *tile = &tile_map[tileIndex];
         V2 tilePos = getTilePos(tileIndex);
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, imgBackGround, LAYER_BACKGROUND);
+        //задник
+        if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
+        {
+            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, imgBackGround, LAYER_BACKGROUND);
+        }
 
-        // if (tile.type != Tile_Type_NONE)
+        // if (tile->type != Tile_Type_NONE)
         // {
         //     draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFFFF00, LAYER_NORMAL);
         // }
 
-        if (tile.type != Tile_Type_NONE)
+        if (tile->type != Tile_Type_NONE)
         {
             draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tileIndex].angle, tile_map[tileIndex].sprite, LAYER_NORMAL);
         }
-        if (tile.type == Tile_Type_ENTER || tile.type == Tile_Type_EXIT)
+        if (tile->type == Tile_Type_ENTER || tile->type == Tile_Type_EXIT)
         {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFF0000, LAYER_BACKGROUND);
+            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tileIndex].angle, imgEnter, LAYER_BACKGROUND);
         }
-        if (tile.type == Tile_Type_PARAPET)
+        if (tile->type == Tile_Type_PARAPET)
         {
-            if (tile_map[getIndex(tilePos - V2{0, -1})].type == Tile_Type_NONE)
+            if (tile_map[getIndex(tilePos + V2{0, -1})].type == Tile_Type_NONE)
             {
-                tile.type = Tile_Type_NONE;
+                tile->type = Tile_Type_NONE;
+                tile->sprite = imgNone;
             }
         }
     }
