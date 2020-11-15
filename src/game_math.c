@@ -106,3 +106,9 @@ f32 angleBetweenPoints(V2 a, V2 b)
     f32 result = atan(tg);
     return result;
 };
+
+f32 distanceBetweenPoints(V2 a, V2 b)
+{
+    f32 result = sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+    return result;
+}
