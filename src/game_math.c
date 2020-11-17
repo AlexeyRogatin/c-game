@@ -79,18 +79,18 @@ V2 unit(V2 a)
     return result;
 };
 
-f32 randomFloat(f32 start, f32 end)
+f32 random_float(f32 start, f32 end)
 {
     f32 result = rand() / (f32)RAND_MAX * (end - start) + start;
     return result;
 };
-i32 randomInt(f32 start, f32 end)
+i32 random_int(f32 start, f32 end)
 {
-    i32 result = round(randomFloat(start, end));
+    i32 result = round(random_float(start, end));
     return result;
 };
 
-V2 rotateVector(V2 vector, f32 angle)
+V2 rotate_vector(V2 vector, f32 angle)
 {
     V2 result = {
         cosf(angle) * vector.x - sinf(angle) * vector.y,
@@ -100,14 +100,14 @@ V2 rotateVector(V2 vector, f32 angle)
     return result;
 };
 
-f32 angleBetweenPoints(V2 a, V2 b)
+f32 angle_between_points(V2 a, V2 b)
 {
     f32 tg = (b.y - a.y) / (b.x - a.x);
     f32 result = atan(tg);
     return result;
 };
 
-f32 distanceBetweenPoints(V2 a, V2 b)
+f32 distance_between_points(V2 a, V2 b)
 {
     f32 result = sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
     return result;
