@@ -303,6 +303,11 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     handle_button(&input.shift, key_went_up);
                 }
                 break;
+                case VK_SPACE:
+                {
+                    handle_button(&input.space, key_went_up);
+                }
+                break;
                 }
             }
             break;
