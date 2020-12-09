@@ -866,6 +866,9 @@ Collisions check_collision(Game_Object *game_object)
     return collisions;
 }
 
+i32 jump_length = 13;
+f32 *jump_added_speed;
+
 void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 {
     f32 friction_const = 0.80;
@@ -909,22 +912,16 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * accel_const, 0};
 
-        //гравитация
-        game_object->speed.y += gravity;
-
-        if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
-        {
-            game_object->speed.x = 0;
-            if (timers[game_object->hanging_animation_timer] <= 0)
-            {
-                game_object->speed.y = 0;
-            }
-        }
-
         //прыжок
         if (game_object->jump && timers[game_object->can_jump] > 0)
         {
-            timers[game_object->can_increase_jump] = 110;
+            timers[game_object->can_increase_jump] = jump_length;
+            jump_added_speed = (f32 *)malloc(sizeof(f32) * jump_length);
+            jump_added_speed[0] = 0;
+            for (i32 i = 1; i < jump_length; i++)
+            {
+                jump_added_speed[i] = (jump_added_speed[i - 1] - gravity) * friction_const;
+            }
             timers[jump] = 0;
             timers[game_object->can_jump] = 0;
             if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
@@ -942,14 +939,30 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
         }
 
-        if (timers[game_object->can_increase_jump] > 0 && input.z.is_down)
+        if (!input.z.is_down && timers[game_object->can_increase_jump] > jump_length / 6)
         {
-            game_object->speed.y += timers[game_object->can_increase_jump] * timers[game_object->can_increase_jump] * timers[game_object->can_increase_jump] * 0.0000058;
+            timers[game_object->can_increase_jump] = ceil(jump_length / 6);
+        }
+
+        if (timers[game_object->can_increase_jump] > 0)
+        {
+            game_object->speed.y = jump_added_speed[timers[game_object->can_increase_jump]];
             game_object->condition = Condition_FALLING;
         }
         else
         {
             timers[game_object->can_increase_jump] = 0;
+            //гравитация
+            game_object->speed.y += gravity;
+
+            if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
+            {
+                game_object->speed.x = 0;
+                if (timers[game_object->hanging_animation_timer] <= 0)
+                {
+                    game_object->speed.y = 0;
+                }
+            }
         }
 
         if (game_object->speed.y < 0)
