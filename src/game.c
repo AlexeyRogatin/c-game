@@ -77,40 +77,40 @@ Bitmap img_None = win32_read_bmp("../data/none.bmp");
 
 Bitmap img_Test = win32_read_bmp("../data/test.bmp");
 
-Bitmap img_PlayerIdle = win32_read_bmp("../data/lexaRightIdle.bmp");
-Bitmap img_PlayerJump = win32_read_bmp("../data/lexaRightJump.bmp");
-Bitmap img_PlayerCrouchIdle = win32_read_bmp("../data/lexaRightCrouchIdle.bmp");
-Bitmap img_PlayerHanging = win32_read_bmp("../data/lexaRightWall.bmp");
-Bitmap img_PlayerHangingUp = win32_read_bmp("../data/lexaRightWallUp.bmp");
-Bitmap img_PlayerHangingDown = win32_read_bmp("../data/lexaRightWallDown.bmp");
-Bitmap img_PlayerLookingUp = win32_read_bmp("../data/lexaRightLookingUp.bmp");
+Bitmap img_PlayerIdle = win32_read_bmp("../data/lexaIdle.bmp");
+Bitmap img_PlayerJump = win32_read_bmp("../data/lexaJump.bmp");
+Bitmap img_PlayerCrouchIdle = win32_read_bmp("../data/lexaCrouchIdle.bmp");
+Bitmap img_PlayerHanging = win32_read_bmp("../data/lexaWall.bmp");
+Bitmap img_PlayerHangingUp = win32_read_bmp("../data/lexaWallUp.bmp");
+Bitmap img_PlayerHangingDown = win32_read_bmp("../data/lexaWallDown.bmp");
+Bitmap img_PlayerLookingUp = win32_read_bmp("../data/lexaLookingUp.bmp");
 
 Bitmap img_PlayerStep[6] = {
-    win32_read_bmp("../data/lexaRightStep1.bmp"),
-    win32_read_bmp("../data/lexaRightStep2.bmp"),
-    win32_read_bmp("../data/lexaRightStep3.bmp"),
-    win32_read_bmp("../data/lexaRightStep4.bmp"),
-    win32_read_bmp("../data/lexaRightStep5.bmp"),
-    win32_read_bmp("../data/lexaRightStep6.bmp"),
+    win32_read_bmp("../data/lexaStep1.bmp"),
+    win32_read_bmp("../data/lexaStep2.bmp"),
+    win32_read_bmp("../data/lexaStep3.bmp"),
+    win32_read_bmp("../data/lexaStep4.bmp"),
+    win32_read_bmp("../data/lexaStep5.bmp"),
+    win32_read_bmp("../data/lexaStep6.bmp"),
 };
 
 Bitmap img_PlayerStartsCrouching[4] = {
-    win32_read_bmp("../data/lexaRightCrouchIdle1.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchIdle2.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchIdle3.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchIdle4.bmp"),
+    win32_read_bmp("../data/lexaCrouchIdle1.bmp"),
+    win32_read_bmp("../data/lexaCrouchIdle2.bmp"),
+    win32_read_bmp("../data/lexaCrouchIdle3.bmp"),
+    win32_read_bmp("../data/lexaCrouchIdle4.bmp"),
 };
 
 Bitmap img_PlayerCrouchStep[6] = {
-    win32_read_bmp("../data/lexaRightCrouchStep1.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep2.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep3.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep4.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep5.bmp"),
-    win32_read_bmp("../data/lexaRightCrouchStep6.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep1.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep2.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep3.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep4.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep5.bmp"),
+    win32_read_bmp("../data/lexaCrouchStep6.bmp"),
 };
 
-Bitmap img_BackGround = win32_read_bmp("../data/backGround2.bmp");
+Bitmap img_BackGround = win32_read_bmp("../data/backGround.bmp");
 
 Bitmap img_Border = win32_read_bmp("../data/border.bmp");
 Bitmap img_TransitionBorder = win32_read_bmp("../data/borderWithTransition.bmp");
@@ -244,11 +244,13 @@ void clear_screen(Bitmap screen, Bitmap darkness)
         screen.pixels[i] = 0xFF0D400F;
     }
 
-    i32 darknessPixelCount = darkness.size.x * darkness.size.y;
     //обновление темноты
-    for (i32 i = 0; i < darknessPixelCount; i++)
+    for (i32 y = 0; y < darkness.size.y; y++)
     {
-        darkness.pixels[i] = 0xF8000000;
+        for (i32 x = 0; x < darkness.size.x; x++)
+        {
+            darkness.pixels[y * darkness.pitch + x] = 0xFA000000;
+        }
     }
 }
 
@@ -462,7 +464,7 @@ Bitmap darkness;
 
 void draw_light(V2 pos, f32 innerRadius, f32 radius)
 {
-    pos += (darkness.size - V2{2, 2}) / 2 - camera.pos;
+    pos += darkness.size / 2 - camera.pos;
 
     V2 min = pos - V2{radius, radius};
     V2 max = pos + V2{radius, radius};
@@ -473,9 +475,9 @@ void draw_light(V2 pos, f32 innerRadius, f32 radius)
         min.x = 0;
     if (min.y < 0)
         min.y = 0;
-    if (max.x > darkness.size.x - interval * 2)
+    if (max.x > darkness.size.x)
         max.x = darkness.size.x;
-    if (max.y > darkness.size.y - interval * 2)
+    if (max.y > darkness.size.y)
         max.y = darkness.size.y;
 
     min.x = floor(min.x);
@@ -1077,8 +1079,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 if (game_object->pos.y - game_object->hit_box.y / 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
                     game_object->pos.y - game_object->hit_box.y / 2 + 4 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
                 {
-                    game_object->pos += unit({collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->pos.x, 0});
-                    game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 + game_object->hit_box.y / 2;
+                    game_object->speed.y = 4;
                 }
             }
         }
@@ -1274,7 +1275,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         draw_bitmap(game_object->pos + V2{0, (TILE_SIZE_PIXELS - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_PLAYER);
 
-        // draw_light(gameObject->pos, -200, 300);
+        draw_light(game_object->pos, -200, 300);
     }
 
     if (game_object->type == Game_Object_ZOMBIE)
@@ -1712,6 +1713,11 @@ void generate_map()
 bool initialized = false;
 void game_update(Bitmap screen, Input input)
 {
+    //очистка экрана
+    clear_screen(screen, darkness);
+    V2 map_size = {(CHUNK_COUNT_X + 2) * CHUNK_SIZE_X, (CHUNK_COUNT_Y + 2) * CHUNK_SIZE_Y};
+    i32 tile_count = map_size.x * map_size.y;
+
     //выполняется один раз
     if (!initialized)
     {
@@ -1722,12 +1728,7 @@ void game_update(Bitmap screen, Input input)
         darkness.pitch = screen.size.x + interval * 2;
         darkness.size = screen.size;
         u32 *pixels = (u32 *)malloc(sizeof(u32) * (darkness.size.x + interval * 2) * (darkness.size.y + interval * 2));
-        i32 pixel_count = (darkness.size.x + interval * 2) * (darkness.size.y + interval * 2);
-        for (i32 i = 0; i < pixel_count; i++)
-        {
-            pixels[i] = 0xFA000000;
-        }
-        darkness.pixels = pixels + (i32)darkness.size.x + 3;
+        darkness.pixels = pixels + (i32)darkness.pitch + interval;
 
         generate_map();
     }
@@ -1736,9 +1737,6 @@ void game_update(Bitmap screen, Input input)
     {
         generate_map();
     }
-
-    V2 map_size = {(CHUNK_COUNT_X + 2) * CHUNK_SIZE_X, (CHUNK_COUNT_Y + 2) * CHUNK_SIZE_Y};
-    i32 tile_count = map_size.x * map_size.y;
 
     //обновление сущностей
     for (i32 object_index = 0; object_index < game_object_count; object_index++)
@@ -1749,8 +1747,11 @@ void game_update(Bitmap screen, Input input)
         }
     }
 
+    camera.pos += (camera.target - camera.pos) * 0.25f;
+
     //прорисовка темноты
-    // draw_bitmap(camera.pos, screen.size + V2{2, 2}, 0, darkness, LAYER_FORGROUND);
+    // f32 intervalx2 = darkness.pitch - darkness.size.x;
+    // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
     //update_tile
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
@@ -1784,11 +1785,6 @@ void game_update(Bitmap screen, Input input)
         //     }
         // }
     }
-
-    camera.pos += (camera.target - camera.pos) * 0.25f;
-
-    //очистка экрана
-    clear_screen(screen, darkness);
 
     //сортируем qrawQueue
     Drawing new_draw_queue[1024 * 8];
