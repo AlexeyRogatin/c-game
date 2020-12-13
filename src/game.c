@@ -875,7 +875,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     f32 jump_length = 20;
     f32 jump_height = TILE_SIZE_PIXELS * 2.1 - global_player->hit_box.y;
 
-    f32 friction_const = 0.80;
+    f32 friction_const = 0.785;
     f32 gravity = -2 * jump_height / (jump_length * jump_length);
     f32 accel_const;
 
@@ -915,64 +915,6 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * accel_const, 0};
-
-        // //прыжок
-        // if (game_object->jump && timers[game_object->can_jump] > 0)
-        // {
-        //     timers[game_object->can_increase_jump] = jump_length;
-        //     jump_added_speed = (f32 *)malloc(sizeof(f32) * jump_length);
-        //     jump_added_speed[0] = 0;
-        //     for (i32 i = 1; i < jump_length; i++)
-        //     {
-        //         jump_added_speed[i] = (jump_added_speed[i - 1] - gravity) * friction_const;
-        //     }
-        //     timers[jump] = 0;
-        //     timers[game_object->can_jump] = 0;
-        //     if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
-        //     {
-        //         if (timers[game_object->hanging_animation_timer] > 0)
-        //         {
-        //             timers[jump] = timers[game_object->hanging_animation_timer] + 1;
-        //             timers[game_object->can_increase_jump] = 0;
-        //         }
-        //         else if (input.down.is_down)
-        //         {
-        //             timers[game_object->can_increase_jump] = 0;
-        //             game_object->condition = Condition_FALLING;
-        //         }
-        //     }
-        // }
-
-        // if (!input.z.is_down && timers[game_object->can_increase_jump] > jump_length / 6)
-        // {
-        //     timers[game_object->can_increase_jump] = ceil(jump_length / 6);
-        // }
-
-        // if (timers[game_object->can_increase_jump] > 0)
-        // {
-        //     game_object->speed.y = jump_added_speed[timers[game_object->can_increase_jump]];
-        //     game_object->condition = Condition_FALLING;
-        // }
-        // else
-        // {
-        //     timers[game_object->can_increase_jump] = 0;
-        //     //гравитация
-        //     game_object->speed.y += gravity;
-
-        //     if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
-        //     {
-        //         game_object->speed.x = 0;
-        //         if (timers[game_object->hanging_animation_timer] <= 0)
-        //         {
-        //             game_object->speed.y = 0;
-        //         }
-        //     }
-        // }
-
-        // if (game_object->speed.y < 0)
-        // {
-        //     timers[game_object->can_increase_jump] = 0;
-        // }
 
         //прыжок
         if (game_object->jump && timers[game_object->can_jump] > 0)
@@ -1119,7 +1061,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 if (game_object->pos.y - game_object->hit_box.y / 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
                     game_object->pos.y - game_object->hit_box.y / 2 + 4 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
                 {
-                    game_object->speed.y = 4;
+                    game_object->speed.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 - (game_object->pos.y - game_object->hit_box.y / 2) + 1;
                 }
             }
         }
@@ -1137,7 +1079,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 game_object->looking_direction = (Direction)((-(game_object->looking_direction * 2 - 1) + 1) / 2);
                 game_object->speed = {0, 0};
                 game_object->condition = Condition_IDLE;
-                timers[game_object->hanging_animation_timer] = 8;
+                timers[game_object->hanging_animation_timer] = 16;
             }
         }
 
