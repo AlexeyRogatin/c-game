@@ -1060,9 +1060,9 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             if (collisions.x.happened)
             {
                 if (game_object->pos.y - game_object->hit_box.y / 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
-                    game_object->pos.y - game_object->hit_box.y / 2 + 4 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
+                    game_object->pos.y - game_object->hit_box.y / 2 + 8 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
                 {
-                    game_object->speed.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 - (game_object->pos.y - game_object->hit_box.y / 2) + 1;
+                    game_object->speed.y = -gravity * (collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 - (game_object->pos.y - game_object->hit_box.y / 2) + 1);
                 }
             }
         }
