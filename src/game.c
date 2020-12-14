@@ -601,7 +601,6 @@ typedef struct
     Bitmap sprite;
 
     //player
-    i32 can_increase_jump;
     i32 can_jump;
 
     i32 looking_key_held_timer;
@@ -657,7 +656,6 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
         img_None,
 
         NULL,
-        NULL,
 
         NULL,
         NULL,
@@ -668,7 +666,6 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
     {
         gameObject.hit_box = {30, 56};
         gameObject.can_jump = add_timer(0);
-        gameObject.can_increase_jump = add_timer(0);
         gameObject.looking_key_held_timer = add_timer(0);
         gameObject.crouching_animation_timer = add_timer(0);
         gameObject.hanging_animation_timer = add_timer(0);
@@ -677,6 +674,7 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
     if (type == Game_Object_ZOMBIE)
     {
         gameObject.hit_box = {30, 56};
+        gameObject.can_jump = add_timer(0);
     }
 
     i32 slot_index = game_object_count;
@@ -872,12 +870,6 @@ Game_Object *global_player;
 
 void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 {
-    f32 jump_length = 20;
-    f32 jump_height = TILE_SIZE_PIXELS * 2.1 - global_player->hit_box.y;
-
-    f32 friction_const = 0.785;
-    f32 gravity = -2 * jump_height / (jump_length * jump_length);
-    f32 accel_const;
 
     if (game_object->type == Game_Object_PLAYER)
     {
@@ -900,18 +892,25 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         game_object->jump = input.z.went_down;
 
         //константы ускорения
+        f32 accel_const;
         if (input.shift.is_down)
         {
             accel_const = 1.6;
         }
         else
         {
-            accel_const = 3.2;
+            accel_const = 3.6;
         }
         if (game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING)
         {
             accel_const = 0.6;
         }
+
+        f32 friction_const = 0.75;
+
+        f32 jump_length = 19;
+        f32 jump_height = TILE_SIZE_PIXELS * 2.2 - global_player->hit_box.y;
+        f32 gravity = -2 * jump_height / (jump_length * jump_length);
 
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * accel_const, 0};
@@ -919,7 +918,6 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прыжок
         if (game_object->jump && timers[game_object->can_jump] > 0)
         {
-            game_object->speed.y = 2 * jump_height / jump_length;
             timers[jump] = 0;
             timers[game_object->can_jump] = 0;
             if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
@@ -931,10 +929,17 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 else if (input.down.is_down)
                 {
                     game_object->condition = Condition_FALLING;
-                    game_object->speed.y = 0;
+                }
+                else
+                {
+                    game_object->speed.y = 2 * jump_height / jump_length;
+                    game_object->condition = Condition_FALLING;
                 }
             }
-            game_object->condition = Condition_FALLING;
+            else
+            {
+                game_object->speed.y = 2 * jump_height / jump_length;
+            }
         }
 
         if (game_object->speed.y > 0 && !input.z.is_down)
@@ -979,17 +984,13 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //состояние падает
         supposed_cond = Condition_FALLING;
 
-        //нельзя прыгать выше и состояние стоит
+        //состояние стоит
         if (collisions.y.happened)
         {
-            if (collisions.y.tile_side == Side_BOTTOM)
-            {
-                timers[game_object->can_increase_jump] = 0;
-            }
-            else
+            if (collisions.y.tile_side == Side_TOP)
             {
                 supposed_cond = Condition_IDLE;
-                timers[game_object->can_jump] = 4;
+                timers[game_object->can_jump] = 5;
             }
         }
 
@@ -1253,7 +1254,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFFFFFF, LAYER_FORGROUND);
+        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFFFFFF, LAYER_FORGROUND);
 
         draw_bitmap(game_object->pos + V2{0, (TILE_SIZE_PIXELS - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_PLAYER);
 
@@ -1262,13 +1263,18 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
     if (game_object->type == Game_Object_ZOMBIE)
     {
-        accel_const = 2.9;
+        f32 accel_const = 2.9;
+        f32 friction_const = 0.8;
+
+        f32 jump_length = 10;
+        f32 jump_height = TILE_SIZE_PIXELS * 2.1 - game_object->hit_box.y;
+        f32 gravity = -2 * jump_height / jump_length / jump_length;
 
         game_object->speed.x += (game_object->go_right - game_object->go_left) * accel_const;
 
         if (timers[game_object->can_jump] >= 0)
         {
-            game_object->speed.y += timers[game_object->can_increase_jump] * timers[game_object->can_increase_jump] * 0.00235;
+            game_object->speed.y = 2 * jump_height / jump_length;
         }
 
         game_object->speed.y += gravity;
@@ -1433,7 +1439,7 @@ void generate_map()
                 chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
                     "          "
                     "          "
-                    "      TTT="
+                    "TT     TT="
                     "##        "
                     "   8      "
                     "     MMM8M"
