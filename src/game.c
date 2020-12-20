@@ -114,6 +114,7 @@ Bitmap img_BackGround = win32_read_bmp("../data/backGround.bmp");
 
 Bitmap img_Border = win32_read_bmp("../data/border.bmp");
 Bitmap img_TransitionBorder = win32_read_bmp("../data/borderWithTransition.bmp");
+Bitmap img_CornerBorder = win32_read_bmp("../data/cornerBorder.bmp");
 
 Bitmap img_Bricks[12] = {
     win32_read_bmp("../data/brick1.bmp"),
@@ -469,7 +470,7 @@ void draw_light(V2 pos, f32 innerRadius, f32 radius)
     V2 min = pos - V2{radius, radius};
     V2 max = pos + V2{radius, radius};
 
-    i32 interval = floor(TILE_SIZE_PIXELS / img_PlayerIdle.size.x);
+    i32 interval = (darkness.pitch - darkness.size.x) / 2;
 
     if (min.x < 0)
         min.x = 0;
@@ -491,23 +492,22 @@ void draw_light(V2 pos, f32 innerRadius, f32 radius)
         {
             f32 distance = distance_between_points(pos, V2{f32(x), f32(y)});
             f32 alpha = (distance - innerRadius) / (radius - innerRadius);
-            if (alpha > 1)
+            if (alpha < 1)
             {
-                alpha = 1;
-            }
-            else if (alpha < 0)
-            {
-                alpha = 0;
-            }
-            for (i32 pY = 0; pY < interval; pY++)
-            {
-                for (i32 pX = 0; pX < interval; pX++)
+                if (alpha < 0)
                 {
-                    i32 index = (y + pY) * darkness.pitch + (x + pX);
-                    ARGB pixel = {darkness.pixels[index]};
-                    pixel.a *= alpha;
+                    alpha = 0;
+                }
+                for (i32 pY = 0; pY < interval; pY++)
+                {
+                    for (i32 pX = 0; pX < interval; pX++)
+                    {
+                        i32 index = (y + pY) * darkness.pitch + (x + pX);
+                        ARGB pixel = {darkness.pixels[index]};
+                        pixel.a *= alpha;
 
-                    darkness.pixels[index] = pixel.argb;
+                        darkness.pixels[index] = pixel.argb;
+                    }
                 }
             }
         }
@@ -632,7 +632,6 @@ typedef struct
     Collision x;
     Collision y;
     bool expanded_collision;
-    V2 speed;
 } Collisions;
 
 Game_Object *add_game_object(Game_Object_Type type, V2 pos)
@@ -861,16 +860,41 @@ Collisions check_collision(Game_Object *game_object)
     }
     game_object->pos = our_object->pos;
 
-    collisions.speed = our_object->speed;
+    game_object->speed = our_object->speed;
 
     return collisions;
+}
+
+bool check_vision_box(V2 obj_pos, V2 vision_vector, V2 vision_size, Game_Object_Type *triggering_objects, i32 triggering_objects_count, bool draw)
+{
+    V2 vision_pos = obj_pos + vision_vector;
+    bool vision_triggered = false;
+    for (i32 game_object_index = 0; game_object_index < game_object_count; game_object_index++)
+    {
+        for (i32 triggers_index = 0; triggers_index < triggering_objects_count; triggers_index++)
+        {
+            Game_Object game_object = game_objects[game_object_index];
+            if (game_object.type == triggering_objects[triggers_index])
+            {
+                if (vision_pos.x - vision_size.x / 2 - game_object.hit_box.x / 2 < game_object.pos.x && vision_pos.x + vision_size.x / 2 + game_object.hit_box.x / 2 > game_object.pos.x &&
+                    vision_pos.y - vision_size.y / 2 - game_object.hit_box.y / 2 < game_object.pos.y && vision_pos.y + vision_size.y / 2 + game_object.hit_box.y / 2 > game_object.pos.y)
+                {
+                    vision_triggered = true;
+                }
+            }
+        }
+    }
+    if (draw)
+    {
+        draw_rect(vision_pos, vision_size, 0, 0xFF00FF00, LAYER_FORGROUND);
+    }
+    return vision_triggered;
 }
 
 Game_Object *global_player;
 
 void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 {
-
     if (game_object->type == Game_Object_PLAYER)
     {
         //предпологаемое состояние
@@ -908,7 +932,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         f32 friction_const = 0.75;
 
-        f32 jump_length = 19;
+        f32 jump_length = 20;
         f32 jump_height = TILE_SIZE_PIXELS * 2.2 - global_player->hit_box.y;
         f32 gravity = -2 * jump_height / (jump_length * jump_length);
 
@@ -1008,7 +1032,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //состояния движения
-        if ((game_object->speed.x > 1 || game_object->speed.x < -1) && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
+        if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
         {
 
             game_object->moved_through_pixels += game_object->speed.x;
@@ -1022,7 +1046,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 supposed_cond = Condition_CROUCHING_MOOVING;
             }
         }
-        else
+
+        if (input.left.went_down || input.right.went_down)
         {
             game_object->moved_through_pixels = 0;
         }
@@ -1037,8 +1062,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
         {
             //состояние весит
-            if (game_object->speed.y < 0 && game_object->pos.y + 1 > collided_x_tile_pos.y * TILE_SIZE_PIXELS &&
-                game_object->pos.y + game_object->speed.y - 1 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS)
+            if (game_object->speed.y < 0 && game_object->pos.y + 2 > collided_x_tile_pos.y * TILE_SIZE_PIXELS &&
+                game_object->pos.y + game_object->speed.y - 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS)
             {
                 supposed_cond = Condition_HANGING;
 
@@ -1057,12 +1082,13 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
 
             //помощь в карабканьи
-            if (collisions.x.happened)
+            f32 needed_speed = -gravity * (collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 - (game_object->pos.y - game_object->hit_box.y / 2)) + 1;
+            if (collisions.x.happened && game_object->speed.y < needed_speed)
             {
                 if (game_object->pos.y - game_object->hit_box.y / 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
                     game_object->pos.y - game_object->hit_box.y / 2 + 8 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
                 {
-                    game_object->speed.y = -gravity * (collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 - (game_object->pos.y - game_object->hit_box.y / 2) + 1);
+                    game_object->speed.y = needed_speed;
                 }
             }
         }
@@ -1263,6 +1289,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
     if (game_object->type == Game_Object_ZOMBIE)
     {
+        //константы скорости
         f32 accel_const = 2.9;
         f32 friction_const = 0.8;
 
@@ -1279,6 +1306,9 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         game_object->speed.y += gravity;
 
+        game_object->speed *= friction_const;
+
+        //направление
         if (!(game_object->go_left && game_object->go_right))
         {
             if (game_object->go_left)
@@ -1291,9 +1321,22 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
         }
 
-        game_object->speed *= friction_const;
-
+        //поведение, связанное с тайлами
         Collisions collisions = check_collision(game_object);
+
+        //состояния
+        if (collisions.y.happened)
+        {
+            game_object->condition = Condition_IDLE;
+            if (fabs(game_object->speed.x) > 1)
+            {
+                game_object->condition = Condition_MOOVING;
+            }
+        }
+        else
+        {
+            game_object->condition = Condition_FALLING;
+        }
 
         V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
         V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
@@ -1316,13 +1359,19 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             //если доходит до края тайла, то разворачивается
             if ((!downleft_tile.solid || left_tile.solid) && game_object->pos.x - game_object->hit_box.x * 0.5 - TILE_SIZE_PIXELS * 0.37 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)
             {
-                game_object->looking_direction = Direction_RIGHT;
+                if (left_tile.solid)
+                {
+                    game_object->looking_direction = Direction_RIGHT;
+                }
                 game_object->go_right = true;
                 game_object->go_left = false;
             }
             if ((!downright_tile.solid || right_tile.solid) && game_object->pos.x + game_object->hit_box.x * 0.5 + TILE_SIZE_PIXELS * 0.37 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
             {
-                game_object->looking_direction = Direction_LEFT;
+                if (right_tile.solid)
+                {
+                    game_object->looking_direction = Direction_LEFT;
+                }
                 game_object->go_right = false;
                 game_object->go_left = true;
             }
@@ -1347,7 +1396,27 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         game_object->pos += game_object->speed;
 
-        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_PLAYER);
+        u16 color = 0xFFFF0000;
+        Game_Object_Type triggers[1];
+        triggers[0] = Game_Object_PLAYER;
+
+        f32 vision_length = TILE_SIZE_PIXELS * 5;
+        V2 obj_tile_pos = V2{roundf(game_object->pos.x / TILE_SIZE_PIXELS), roundf(game_object->pos.y / TILE_SIZE_PIXELS)};
+        for (i32 tile_index = 1; tile_index * TILE_SIZE_PIXELS <= vision_length; tile_index++)
+        {
+            Tile tile = tile_map[get_index(obj_tile_pos + V2{(f32)tile_index * (game_object->looking_direction * 2 - 1), 0})];
+            if (tile.solid)
+            {
+                vision_length = fabs((obj_tile_pos.x + tile_index * (game_object->looking_direction * 2 - 1)) * TILE_SIZE_PIXELS - game_object->pos.x - TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1));
+            }
+        }
+
+        if (check_vision_box(game_object->pos, V2{vision_length / 2 * (f32)(game_object->looking_direction * 2 - 1), 0}, V2{vision_length, 30}, triggers, 1, true))
+        {
+            color = 0xFF00FFFF;
+        }
+
+        draw_rect(game_object->pos, game_object->hit_box, 0, color, LAYER_PLAYER);
     }
 }
 
@@ -1631,10 +1700,13 @@ void generate_map()
             i32 right_tile = get_index(tile_pos + V2{1, 0});
             i32 top_tile = get_index(tile_pos + V2{0, 1});
             i32 bottom_tile = get_index(tile_pos + V2{0, -1});
-            if (tile_pos.x != 0 && tile_map[left_tile].type != Tile_Type_BORDER)
+            i32 bottomright_tile = get_index(tile_pos + V2{1, -1});
+            i32 topright_tile = get_index(tile_pos + V2{1, 1});
+            i32 bottomleft_tile = get_index(tile_pos + V2{-1, -1});
+            i32 topleft_tile = get_index(tile_pos + V2{-1, 1});
+            if (tile_pos.y != 0 && tile_map[bottom_tile].type != Tile_Type_BORDER)
             {
                 sprite = img_TransitionBorder;
-                angle = PI * 1.5;
             }
             else if (tile_pos.x != map_size.x - 1 && tile_map[right_tile].type != Tile_Type_BORDER)
             {
@@ -1646,9 +1718,29 @@ void generate_map()
                 sprite = img_TransitionBorder;
                 angle = PI;
             }
-            else if (tile_pos.y != 0 && tile_map[bottom_tile].type != Tile_Type_BORDER)
+            else if (tile_pos.x != 0 && tile_map[left_tile].type != Tile_Type_BORDER)
             {
                 sprite = img_TransitionBorder;
+                angle = PI * 1.5;
+            }
+            else if (tile_pos.y != 0 && tile_pos.x != map_size.x - 1 && tile_map[bottomright_tile].type != Tile_Type_BORDER)
+            {
+                sprite = img_CornerBorder;
+            }
+            else if (tile_pos.y != map_size.y - 1 && tile_pos.x != map_size.x - 1 && tile_map[topright_tile].type != Tile_Type_BORDER)
+            {
+                sprite = img_CornerBorder;
+                angle = PI * 0.5;
+            }
+            else if (tile_pos.y != map_size.y - 1 && tile_pos.x != 0 && tile_map[topleft_tile].type != Tile_Type_BORDER)
+            {
+                sprite = img_CornerBorder;
+                angle = PI;
+            }
+            else if (tile_pos.y != 0 && tile_pos.x != 0 && tile_map[bottomleft_tile].type != Tile_Type_BORDER)
+            {
+                sprite = img_CornerBorder;
+                angle = PI * 1.5;
             }
             break;
         };
@@ -1737,7 +1829,7 @@ void game_update(Bitmap screen, Input input)
 
     camera.pos += (camera.target - camera.pos) * 0.25f;
 
-    //прорисовка темноты
+    // //прорисовка темноты
     // f32 intervalx2 = darkness.pitch - darkness.size.x;
     // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
@@ -1752,7 +1844,7 @@ void game_update(Bitmap screen, Input input)
             draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFFFF00, LAYER_NORMAL);
         }
 
-        //задник
+        // // задник
         // if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
         // {
         //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND);
