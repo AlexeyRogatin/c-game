@@ -919,20 +919,20 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         f32 accel_const;
         if (input.shift.is_down)
         {
-            accel_const = 1.6;
+            accel_const = 1.9;
         }
         else
         {
-            accel_const = 3.6;
+            accel_const = 3.8;
         }
         if (game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING)
         {
-            accel_const = 0.6;
+            accel_const = 0.85;
         }
 
         f32 friction_const = 0.75;
 
-        f32 jump_length = 20;
+        f32 jump_length = 18;
         f32 jump_height = TILE_SIZE_PIXELS * 2.2 - global_player->hit_box.y;
         f32 gravity = -2 * jump_height / (jump_length * jump_length);
 
@@ -1086,7 +1086,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             if (collisions.x.happened && game_object->speed.y < needed_speed)
             {
                 if (game_object->pos.y - game_object->hit_box.y / 2 <= collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 &&
-                    game_object->pos.y - game_object->hit_box.y / 2 + 8 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
+                    game_object->pos.y - game_object->hit_box.y / 2 + 1 > collided_x_tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2)
                 {
                     game_object->speed.y = needed_speed;
                 }
@@ -1106,7 +1106,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 game_object->looking_direction = (Direction)((-(game_object->looking_direction * 2 - 1) + 1) / 2);
                 game_object->speed = {0, 0};
                 game_object->condition = Condition_IDLE;
-                timers[game_object->hanging_animation_timer] = 16;
+                timers[game_object->hanging_animation_timer] = 15;
             }
         }
 
@@ -1280,9 +1280,9 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFFFFFF, LAYER_FORGROUND);
+        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFFFFFF, LAYER_FORGROUND);
 
-        draw_bitmap(game_object->pos + V2{0, (TILE_SIZE_PIXELS - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_PLAYER);
+        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_PLAYER);
 
         draw_light(game_object->pos, -200, 300);
     }
@@ -1299,7 +1299,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         game_object->speed.x += (game_object->go_right - game_object->go_left) * accel_const;
 
-        if (timers[game_object->can_jump] >= 0)
+        if (game_object->condition != Condition_FALLING && timers[game_object->can_jump] >= 0)
         {
             game_object->speed.y = 2 * jump_height / jump_length;
         }
@@ -1325,7 +1325,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         Collisions collisions = check_collision(game_object);
 
         //состояния
-        if (collisions.y.happened)
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
         {
             game_object->condition = Condition_IDLE;
             if (fabs(game_object->speed.x) > 1)
@@ -1376,7 +1376,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 game_object->go_left = true;
             }
             //если находится на одиночном тайле, то останавливается посередине
-            if (!downleft_tile.solid && !downright_tile.solid)
+            if ((!downleft_tile.solid || left_tile.solid) && (!downright_tile.solid || right_tile.solid))
             {
                 if (game_object->pos.x + TILE_SIZE_PIXELS * 0.37 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
                 {
@@ -1413,7 +1413,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         if (check_vision_box(game_object->pos, V2{vision_length / 2 * (f32)(game_object->looking_direction * 2 - 1), 0}, V2{vision_length, 30}, triggers, 1, true))
         {
-            color = 0xFF00FFFF;
+            timers[game_object->can_jump] = 1;
+            game_object->speed.x += (game_object->looking_direction * 2 - 1) * 35;
         }
 
         draw_rect(game_object->pos, game_object->hit_box, 0, color, LAYER_PLAYER);
@@ -1508,8 +1509,8 @@ void generate_map()
                 chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
                     "          "
                     "          "
-                    "TT     TT="
-                    "##        "
+                    "          "
+                    "##     TT="
                     "   8      "
                     "     MMM8M"
                     "M8MM   8##"
