@@ -923,7 +923,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         f32 friction_const = 0.75;
 
-        f32 jump_length = 18;
+        f32 jump_length = 19;
         f32 jump_height = TILE_SIZE_PIXELS * 2.2 - global_player->hit_box.y;
         f32 gravity = -2 * jump_height / (jump_length * jump_length);
 
@@ -1581,7 +1581,7 @@ void generate_map()
                 "8         "
                 "      T  8"
                 "          "
-                "     X    "
+                " #   X    "
                 "  TTTTTT  "
                 " ######## ";
         }
