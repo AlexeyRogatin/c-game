@@ -776,11 +776,14 @@ Collisions check_collision(Game_Object *game_object)
                           obj_right <= tile_left ||
                           obj_left >= tile_right))
                     {
-                        our_object->speed.y = 0;
                         speed_unit.y = 0;
                         speed_part.y = 0;
 
-                        our_object->pos.y -= obj_side - tile_side;
+                        our_object->speed.y = -obj_side + tile_side;
+
+                        //для углового столкновения
+                        obj_bottom = our_object->pos.y - (our_object->hit_box.y / 2) + our_object->speed.y;
+                        obj_top = our_object->pos.y + (our_object->hit_box.y / 2) + our_object->speed.y;
 
                         collisions.y.happened = true;
                         collisions.y.tile_index = tile_index;
@@ -794,11 +797,6 @@ Collisions check_collision(Game_Object *game_object)
                         }
                     }
                 }
-
-                obj_left = our_object->pos.x - (our_object->hit_box.x / 2);
-                obj_right = our_object->pos.x + (our_object->hit_box.x / 2);
-                obj_bottom = our_object->pos.y - (our_object->hit_box.y / 2);
-                obj_top = our_object->pos.y + (our_object->hit_box.y / 2);
 
                 if (speed_unit.x != 0)
                 {
@@ -818,11 +816,10 @@ Collisions check_collision(Game_Object *game_object)
                           (obj_top <= tile_bottom) ||
                           (obj_bottom >= tile_top)))
                     {
-                        our_object->speed.x = 0;
                         speed_unit.x = 0;
                         speed_part.x = 0;
 
-                        our_object->pos.x -= obj_side - tile_side;
+                        our_object->speed.x = -obj_side + tile_side;
 
                         collisions.x.happened = true;
                         collisions.x.tile_index = tile_index;
@@ -892,7 +889,81 @@ bool check_vision_box(V2 obj_pos, V2 vision_vector, V2 vision_size, Game_Object_
     return vision_triggered;
 }
 
-Game_Object *global_player;
+// //changePos принимает три значения: -1, 0, 1.
+// //-1 хитбокс перемещается к низу
+// //0 xитбокс не перемещается
+// //1 хитбокс перемещается к верху
+// void changeHitBox(Game_Object *gameObject, V2 hitBox, i8 changePos)
+// {
+//     V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
+//                      roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
+
+//     i32 tileCountX = ceilf((hitBox.x - gameObject->hit_box.x) / TILE_SIZE_PIXELS);
+//     i32 tileCountY = ceilf((hitBox.y - gameObject->hit_box.y) / TILE_SIZE_PIXELS);
+
+//     if (changePos)
+//     {
+//         if (changePos == -1)
+//         {
+//             gameObject->pos.y += -gameObject->hit_box.y / 2 + hitBox.y / 2;
+//         }
+//         if (changePos == 1)
+//         {
+//             gameObject->pos.y += gameObject->hit_box.y / 2 - hitBox.y / 2;
+//         }
+//     }
+
+//     for (i32 y = objTilePos.y - tileCountY; y <= objTilePos.y + tileCountY; y++)
+//     {
+//         for (i32 x = objTilePos.x - tileCountX; x <= objTilePos.x + tileCountX; x++)
+//         {
+//             i32 tileIndex = y * (CHUNK_COUNT_X + 2) * CHUNK_SIZE_X + x;
+//             Tile tile = tile_map[tileIndex];
+
+//             if (tile.solid)
+//             {
+
+//                 V2 tilePos = get_tile_pos(tileIndex);
+
+//                 f32 recentObjTop = gameObject->pos.y + gameObject->hit_box.y / 2;
+//                 f32 recentObjBottom = gameObject->pos.y - gameObject->hit_box.y / 2;
+//                 f32 recentObjRight = gameObject->pos.x + gameObject->hit_box.x / 2;
+//                 f32 recentObjLeft = gameObject->pos.x - gameObject->hit_box.x / 2;
+
+//                 f32 objTop = gameObject->pos.y + hitBox.y / 2;
+//                 f32 objBottom = gameObject->pos.y - hitBox.y / 2;
+//                 f32 objRight = gameObject->pos.x + hitBox.x / 2;
+//                 f32 objLeft = gameObject->pos.x - hitBox.x / 2;
+
+//                 f32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+//                 f32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+//                 f32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+//                 f32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+
+//                 if (recentObjLeft >= tileRight && objLeft <= tileRight)
+//                 {
+//                     gameObject->pos.x -= objLeft - tileRight;
+//                 }
+
+//                 if (recentObjRight <= tileLeft && objRight >= tileLeft)
+//                 {
+//                     gameObject->pos.x -= objRight - tileLeft;
+//                 }
+
+//                 if (recentObjBottom >= tileTop && objBottom <= tileTop)
+//                 {
+//                     gameObject->pos.y -= objBottom - tileTop;
+//                 }
+
+//                 if (recentObjTop <= tileBottom && objTop >= tileBottom)
+//                 {
+//                     gameObject->pos.y -= objTop - tileBottom;
+//                 }
+//             }
+//         }
+//     }
+//     gameObject->hit_box = hitBox;
+// }
 
 void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 {
@@ -934,7 +1005,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         f32 friction_const = 0.75;
 
         f32 jump_length = 19;
-        f32 jump_height = TILE_SIZE_PIXELS * 2.2 - global_player->hit_box.y;
+        f32 jump_height = TILE_SIZE_PIXELS * 2.2 - game_object->hit_box.y;
         f32 gravity = -2 * jump_height / (jump_length * jump_length);
 
         //скорость по x
@@ -1064,7 +1135,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
         {
             if (game_object->speed.y < 0 &&
-                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS && game_object->pos.y + game_object->speed.y < collided_x_tile_pos.y * TILE_SIZE_PIXELS)
+                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2 && game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2)
             {
                 supposed_cond = Condition_HANGING;
 
@@ -1094,9 +1165,9 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1) + game_object->hit_box.x / 2 * -(game_object->looking_direction * 2 - 1);
                 supposed_cond = Condition_HANGING;
                 game_object->looking_direction = (Direction)((-(game_object->looking_direction * 2 - 1) + 1) / 2);
-                game_object->speed = {0, 0};
+                game_object->speed.x = 0;
                 game_object->condition = Condition_IDLE;
-                timers[game_object->hanging_animation_timer] = 15;
+                timers[game_object->hanging_animation_timer] = 16;
             }
         }
 
@@ -1164,7 +1235,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
             else if (game_object->condition == Condition_IDLE)
             {
-                game_object->speed *= friction_const;
+                game_object->speed.x *= friction_const;
                 game_object->sprite = img_PlayerIdle;
             }
             else if (game_object->condition == Condition_MOOVING)
@@ -1761,7 +1832,7 @@ void generate_map()
         {
             //addPlayer
             V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS;
-            global_player = add_game_object(Game_Object_PLAYER, spawn_pos);
+            add_game_object(Game_Object_PLAYER, spawn_pos);
             add_game_object(Game_Object_ZOMBIE, spawn_pos);
             camera.pos = spawn_pos;
             camera.target = spawn_pos;
