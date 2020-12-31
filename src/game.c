@@ -148,7 +148,16 @@ Bitmap img_TiledFloor[4] = {
     win32_read_bmp("../data/floor8.bmp"),
 };
 
-Bitmap img_Enter = win32_read_bmp("../data/enter.bmp");
+Bitmap img_Door = win32_read_bmp("../data/door_closed.bmp");
+
+Bitmap img_DoorOpens[6] = {
+    win32_read_bmp("../data/door1.bmp"),
+    win32_read_bmp("../data/door2.bmp"),
+    win32_read_bmp("../data/door3.bmp"),
+    win32_read_bmp("../data/door4.bmp"),
+    win32_read_bmp("../data/door5.bmp"),
+    win32_read_bmp("../data/door6.bmp"),
+};
 
 Bitmap img_Parapet = win32_read_bmp("../data/parapet.bmp");
 
@@ -187,8 +196,10 @@ typedef enum
 {
     LAYER_CLEAR,
     LAYER_BACKGROUND,
-    LAYER_PLAYER,
-    LAYER_NORMAL,
+    LAYER_FBACKGROUND,
+    LAYER_GAME_OBJECT,
+    LAYER_TILE,
+    LAYER_FTILE,
     LAYER_FORGROUND,
 } Layer;
 
@@ -785,9 +796,6 @@ Collisions check_collision(Game_Object *game_object)
                     {
                         our_object->speed.y = -obj_side + tile_side;
 
-                        obj_bottom = our_object->pos.y - (our_object->hit_box.y / 2) + our_object->speed.y;
-                        obj_top = our_object->pos.y + (our_object->hit_box.y / 2) + our_object->speed.y;
-
                         collisions.y.happened = true;
                         collisions.y.tile_index = tile_index;
                         if (tile_side == tile_bottom)
@@ -855,7 +863,6 @@ Collisions check_collision(Game_Object *game_object)
             }
         }
     }
-    game_object->pos = our_object->pos;
 
     game_object->speed = our_object->speed;
 
@@ -1164,7 +1171,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1) + game_object->hit_box.x / 2 * -(game_object->looking_direction * 2 - 1);
                 supposed_cond = Condition_HANGING;
                 game_object->looking_direction = (Direction)((-(game_object->looking_direction * 2 - 1) + 1) / 2);
-                game_object->speed.x = 0;
+                game_object->speed = {0, 0};
                 game_object->condition = Condition_IDLE;
                 timers[game_object->hanging_animation_timer] = 16;
             }
@@ -1340,9 +1347,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFFFFFF, LAYER_FORGROUND);
-
-        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_PLAYER);
+        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
 
         draw_light(game_object->pos, -200, 300);
     }
@@ -1470,7 +1475,12 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             timers[game_object->can_jump] = -1;
         }
 
-        //эыыекты состояний
+        //эффекты состояний
+
+        if (game_object->condition == Condition_IDLE)
+        {
+            game_object->speed.x *= friction_const;
+        }
 
         if (game_object->condition == Condition_FALLING)
         {
@@ -1496,10 +1506,10 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         if (check_vision_box(game_object->pos, V2{vision_length / 2 * (f32)(game_object->looking_direction * 2 - 1), 0}, V2{vision_length, 30}, triggers, 1, true) && timers[game_object->can_jump] < 0 && game_object->condition != Condition_FALLING)
         {
-            timers[game_object->can_jump] = 7;
+            timers[game_object->can_jump] = 1;
         }
 
-        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_PLAYER);
+        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
     }
 }
 
@@ -1836,11 +1846,13 @@ void generate_map()
             camera.pos = spawn_pos;
             camera.target = spawn_pos;
             solid = false;
+            sprite = img_Door;
             break;
         };
         case Tile_Type_EXIT:
         {
             solid = false;
+            sprite = img_Door;
             break;
         };
         case Tile_Type_MARBLE_FLOOR:
@@ -1870,6 +1882,43 @@ void generate_map()
         tile_map[index].sprite = sprite;
         tile_map[index].angle = angle;
         tile_map[index].solid = solid;
+    }
+}
+
+void update_tile(i32 tile_index)
+{
+    Tile *tile = &tile_map[tile_index];
+    V2 tilePos = get_tile_pos(tile_index);
+
+    if (tile->solid)
+    {
+        draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFFFF00, LAYER_TILE);
+    }
+
+    // // задник
+    // if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
+    // {
+    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND);
+    // }
+    // else if (tile->type == Tile_Type_ENTER)
+    // {
+    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_FBACKGROUND);
+    // }
+    // else if (tile->type == Tile_Type_EXIT)
+    // {
+    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_FBACKGROUND);
+    // }
+    // else if (tile->type != Tile_Type_NONE)
+    // {
+    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_TILE);
+    // }
+
+    if (tile->type == Tile_Type_PARAPET)
+    {
+        if (tile_map[get_index(tilePos + V2{0, -1})].type == Tile_Type_NONE)
+        {
+            tile->type = Tile_Type_NONE;
+        }
     }
 }
 
@@ -1916,37 +1965,10 @@ void game_update(Bitmap screen, Input input)
     // f32 intervalx2 = darkness.pitch - darkness.size.x;
     // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
-    //update_tile
+    //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
     {
-        Tile *tile = &tile_map[tile_index];
-        V2 tilePos = get_tile_pos(tile_index);
-
-        if (tile->solid)
-        {
-            draw_rect(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, 0xFFFFFF00, LAYER_NORMAL);
-        }
-
-        // // задник
-        // if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
-        // {
-        //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND);
-        // }
-        // if (tile->type != Tile_Type_NONE)
-        // {
-        //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_NORMAL);
-        // }
-        // if (tile->type == Tile_Type_ENTER || tile->type == Tile_Type_EXIT)
-        // {
-        //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, img_Enter, LAYER_BACKGROUND);
-        // }
-        // if (tile->type == Tile_Type_PARAPET)
-        // {
-        //     if (tile_map[get_index(tilePos + V2{0, -1})].type == Tile_Type_NONE)
-        //     {
-        //         tile->type = Tile_Type_NONE;
-        //     }
-        // }
+        update_tile(tile_index);
     }
 
     //сортируем qrawQueue
@@ -1970,7 +1992,7 @@ void game_update(Bitmap screen, Input input)
 
     draw_queue_size = 0;
 
-    for (i32 i = 0; i < new_draw_queue_size; i++)
+    for (i32 i = 0; i <= new_draw_queue_size; i++)
     {
         draw_item(screen, new_draw_queue[i]);
     }
