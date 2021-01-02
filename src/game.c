@@ -550,7 +550,7 @@ typedef struct
 
 Tile *tile_map = NULL;
 
-V2 index_to_pos(i32 index)
+V2 get_tile_pos(i32 index)
 {
     //index = y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + x;
     f32 y = floor(index / (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)));
@@ -559,34 +559,10 @@ V2 index_to_pos(i32 index)
     return result;
 }
 
-i32 pos_to_index(V2 coords)
+i32 get_index(V2 coords)
 {
     i32 index = coords.y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + coords.x;
     return index;
-}
-
-V2 pixel_to_pos(V2 pos)
-{
-    V2 result = V2{roundf(pos.x / TILE_SIZE_PIXELS), roundf(pos.y / TILE_SIZE_PIXELS)};
-    return result;
-}
-
-V2 pos_to_pixel(V2 pos)
-{
-    V2 result = pos * TILE_SIZE_PIXELS;
-    return result;
-}
-
-Tile index_to_tile(i32 index)
-{
-    Tile result = tile_map[index];
-    return result;
-}
-
-Tile pos_to_tile(V2 pos)
-{
-    Tile result = tile_map[pos_to_index(pos)];
-    return result;
 }
 
 //сущности
@@ -732,107 +708,168 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
     return &game_objects[slot_index];
 }
 
-struct Rect2
-{
-    V2 min;
-    V2 max;
-};
-
-Rect2 get_bbox(Game_Object *o)
-{
-    Rect2 result;
-    result.max.y = o->pos.y + o->hit_box.y / 2;
-    result.min.y = o->pos.y - o->hit_box.y / 2;
-    result.max.x = o->pos.x + o->hit_box.x / 2;
-    result.min.x = o->pos.x - o->hit_box.x / 2;
-
-    return result;
-}
-
-Rect2 get_tile_bbox(V2 tile_pos)
-{
-    Rect2 result;
-    result.max.y = tile_pos.y + TILE_SIZE_PIXELS * 0.5;
-    result.min.y = tile_pos.y - TILE_SIZE_PIXELS * 0.5;
-    result.max.x = tile_pos.x + TILE_SIZE_PIXELS * 0.5;
-    result.min.x = tile_pos.x - TILE_SIZE_PIXELS * 0.5;
-
-    return result;
-}
-
 Collisions check_collision(Game_Object *game_object)
 {
-    Collisions result;
-    result.x.happened = false;
-    result.y.happened = false;
-    result.expanded_collision = false;
+    Game_Object *our_object = game_object;
 
-    Rect2 bbox = get_bbox(game_object);
+    i8 speed_direction = -(our_object->looking_direction * 2 - 1);
 
-    f32 obj_side;
+    Collisions collisions;
 
-    if (game_object->speed.x >= 0)
+    collisions.x.happened = false;
+    collisions.y.happened = false;
+    collisions.expanded_collision = false;
+
+    V2 obj_tile_pos = our_object->pos / TILE_SIZE_PIXELS;
+
+    V2 obj_end_tile_pos = (our_object->pos + our_object->speed) / TILE_SIZE_PIXELS;
+
+    V2 start_tile;
+    V2 finish_tile;
+
+    if (obj_tile_pos.x <= obj_end_tile_pos.x)
     {
-        obj_side = bbox.max.x;
+        start_tile.x = obj_tile_pos.x;
+        finish_tile.x = obj_end_tile_pos.x;
     }
     else
     {
-        obj_side = bbox.min.x;
+        start_tile.x = obj_end_tile_pos.x;
+        finish_tile.x = obj_tile_pos.x;
     }
 
-    if (pos_to_tile(pixel_to_pos(V2{obj_side + game_object->speed.x, bbox.max.y})).solid || pos_to_tile(pixel_to_pos(V2{obj_side + game_object->speed.x, bbox.min.y})).solid)
+    if (obj_tile_pos.y <= obj_end_tile_pos.y)
     {
-        if (game_object->speed.x >= 0)
-        {
-            f32 tile_left = pixel_to_pos(V2{obj_side + game_object->speed.x, bbox.max.y}).x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f;
-            game_object->pos.x = tile_left - game_object->hit_box.x * 0.5f;
-        }
-        else
-        {
-            f32 tile_right = pixel_to_pos(V2{obj_side + game_object->speed.x, bbox.max.y}).x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f;
-            game_object->pos.x = tile_right + game_object->hit_box.x * 0.5f;
-        }
-        game_object->speed.x = 0;
-    }
-
-    game_object->pos.x += game_object->speed.x;
-
-    bbox = get_bbox(game_object);
-
-    if (game_object->speed.y >= 0)
-    {
-        obj_side = bbox.max.y;
+        start_tile.y = obj_tile_pos.y;
+        finish_tile.y = obj_end_tile_pos.y;
     }
     else
     {
-        obj_side = bbox.min.y;
+        start_tile.y = obj_end_tile_pos.y;
+        finish_tile.y = obj_tile_pos.y;
     }
 
-    if (pos_to_tile(pixel_to_pos(V2{bbox.max.x, obj_side + game_object->speed.y})).solid || pos_to_tile(pixel_to_pos(V2{bbox.min.x, obj_side + game_object->speed.y})).solid)
+    start_tile = V2{floorf(start_tile.x - our_object->hit_box.x / 2 / TILE_SIZE_PIXELS), floorf(start_tile.y - our_object->hit_box.y / 2 / TILE_SIZE_PIXELS)};
+    finish_tile = V2{ceilf(finish_tile.x + our_object->hit_box.x / 2 / TILE_SIZE_PIXELS), ceilf(finish_tile.y + our_object->hit_box.y / 2 / TILE_SIZE_PIXELS)};
+
+    //проверка столкновений с тайлами
+    for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
     {
-        if (game_object->speed.y >= 0)
+        for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
         {
-            f32 tile_bottom = pixel_to_pos(V2{bbox.max.x, obj_side + game_object->speed.y}).y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f;
-            game_object->pos.y = tile_bottom - game_object->hit_box.y * 0.5f;
+            V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
+            i32 tile_index = tile_pos.y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + tile_pos.x;
+            Tile tile = tile_map[tile_index];
+            if (tile.type && tile.solid)
+            {
+                i32 tile_left = tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                i32 tile_right = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+                i32 tile_bottom = tile_pos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2;
+                i32 tile_top = tile_pos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2;
+
+                f32 obj_left = our_object->pos.x - (our_object->hit_box.x / 2);
+                f32 obj_right = our_object->pos.x + (our_object->hit_box.x / 2);
+                f32 obj_bottom = our_object->pos.y - (our_object->hit_box.y / 2);
+                f32 obj_top = our_object->pos.y + (our_object->hit_box.y / 2);
+
+                f32 obj_side;
+                i32 tile_side;
+
+                if (our_object->speed.x != 0)
+                {
+                    if (our_object->speed.x > 0)
+                    {
+                        obj_side = obj_right;
+                        tile_side = tile_left;
+                    }
+                    else
+                    {
+                        obj_side = obj_left;
+                        tile_side = tile_right;
+                    }
+
+                    if (!((obj_right + our_object->speed.x <= tile_left) ||
+                          (obj_left + our_object->speed.x >= tile_right) ||
+                          (obj_top <= tile_bottom) ||
+                          (obj_bottom >= tile_top)))
+                    {
+                        our_object->speed.x = -obj_side + tile_side;
+
+                        obj_left += our_object->speed.x;
+                        obj_right += our_object->speed.x;
+
+                        collisions.x.happened = true;
+                        collisions.x.tile_index = tile_index;
+                        if (tile_side == tile_left)
+                        {
+                            collisions.x.tile_side = Side_LEFT;
+                        }
+                        else
+                        {
+                            collisions.x.tile_side = Side_RIGHT;
+                        }
+                    }
+                }
+                //столкновение удлинённое (для подвешенного состояния)
+                if (!collisions.x.happened &&
+                    !((obj_right + our_object->speed.x + speed_direction * 7 <= tile_left) ||
+                      (obj_left + our_object->speed.x + speed_direction * 7 >= tile_right) ||
+                      (obj_top <= tile_bottom) ||
+                      (obj_bottom >= tile_top)))
+                {
+                    collisions.x.tile_index = tile_index;
+                    if (speed_direction == 1)
+                    {
+                        collisions.x.tile_side = Side_LEFT;
+                    }
+                    else
+                    {
+                        collisions.x.tile_side = Side_RIGHT;
+                    }
+
+                    collisions.expanded_collision = true;
+                }
+
+                if (our_object->speed.y != 0)
+                {
+                    if (our_object->speed.y > 0)
+                    {
+                        obj_side = obj_top;
+                        tile_side = tile_bottom;
+                    }
+                    else
+                    {
+                        obj_side = obj_bottom;
+                        tile_side = tile_top;
+                    }
+
+                    if (
+                        !(obj_top + our_object->speed.y <= tile_bottom ||
+                          obj_bottom + our_object->speed.y >= tile_top ||
+                          obj_right <= tile_left ||
+                          obj_left >= tile_right))
+                    {
+                        our_object->speed.y = -obj_side + tile_side;
+
+                        collisions.y.happened = true;
+                        collisions.y.tile_index = tile_index;
+                        if (tile_side == tile_bottom)
+                        {
+                            collisions.y.tile_side = Side_BOTTOM;
+                        }
+                        else
+                        {
+                            collisions.y.tile_side = Side_TOP;
+                        }
+                    }
+                }
+            }
         }
-        else
-        {
-            f32 tile_top = pixel_to_pos(V2{bbox.max.x, obj_side + game_object->speed.y}).y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f;
-            game_object->pos.y = tile_top + game_object->hit_box.y * 0.5f;
-            result.y.tile_side = Side_TOP;
-        }
-        game_object->speed.y = 0;
-        result.y.happened = true;
     }
 
-    game_object->pos.y += game_object->speed.y;
+    game_object->speed = our_object->speed;
 
-    //столкновение
-    //x - произошло, с чем, с какой стороной
-    //y - ...
-    //удлинённое столкновение
-
-    return result;
+    return collisions;
 }
 
 bool check_vision_box(V2 obj_pos, V2 vision_vector, V2 vision_size, Game_Object_Type *triggering_objects, i32 triggering_objects_count, bool draw)
@@ -1097,8 +1134,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //функции движения, связанные с коллизией
-        V2 collided_x_tile_pos = index_to_pos(collisions.x.tile_index);
-        V2 collided_y_tile_pos = index_to_pos(collisions.y.tile_index);
+        V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
+        V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
 
         i32 collision_up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x;
         i32 up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x + (game_object->looking_direction * 2 - 1);
@@ -1130,7 +1167,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
         {
             V2 tile_pos = collided_y_tile_pos - V2{(f32)game_object->looking_direction * 2 - 1, 0};
-            if (!tile_map[pos_to_index(tile_pos)].solid &&
+            if (!tile_map[get_index(tile_pos)].solid &&
                 ((game_object->pos.x + game_object->speed.x + game_object->hit_box.x / 2 <= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) && (ceilf(game_object->pos.x + game_object->hit_box.x / 2) >= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) ||
                  (game_object->pos.x + game_object->speed.x - game_object->hit_box.x / 2 >= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2) && (floorf(game_object->pos.x - game_object->hit_box.x / 2) <= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)))
             {
@@ -1314,7 +1351,6 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
         //хитбокс
         draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
-        draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
 
         draw_light(game_object->pos, -200, 300);
     }
@@ -1381,12 +1417,12 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             //если не заряжает прыжок
             if (timers[game_object->can_jump] < 0)
             {
-                V2 collided_y_tile_pos = index_to_pos(collisions.y.tile_index);
+                V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
 
-                Tile downleft_tile = tile_map[pos_to_index(collided_y_tile_pos + V2{-1, 0})];
-                Tile downright_tile = tile_map[pos_to_index(collided_y_tile_pos + V2{1, 0})];
-                Tile left_tile = tile_map[pos_to_index(collided_y_tile_pos + V2{-1, 1})];
-                Tile right_tile = tile_map[pos_to_index(collided_y_tile_pos + V2{1, 1})];
+                Tile downleft_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 0})];
+                Tile downright_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 0})];
+                Tile left_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 1})];
+                Tile right_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 1})];
                 //если доходит до края тайла, то разворачивается
                 if ((!downleft_tile.solid || left_tile.solid) && game_object->pos.x - game_object->hit_box.x * 0.5 - TILE_SIZE_PIXELS * 0.37 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)
                 {
@@ -1464,7 +1500,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         V2 obj_tile_pos = V2{roundf(game_object->pos.x / TILE_SIZE_PIXELS), roundf(game_object->pos.y / TILE_SIZE_PIXELS)};
         for (i32 tile_index = 1; tile_index * TILE_SIZE_PIXELS <= vision_length; tile_index++)
         {
-            Tile tile = tile_map[pos_to_index(obj_tile_pos + V2{(f32)tile_index * (game_object->looking_direction * 2 - 1), 0})];
+            Tile tile = tile_map[get_index(obj_tile_pos + V2{(f32)tile_index * (game_object->looking_direction * 2 - 1), 0})];
             if (tile.solid)
             {
                 vision_length = fabs((obj_tile_pos.x + tile_index * (game_object->looking_direction * 2 - 1)) * TILE_SIZE_PIXELS - game_object->pos.x - TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1));
@@ -1714,7 +1750,7 @@ void generate_map()
                     };
                     }
                     V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X), (f32)(y + chunk_index_y * CHUNK_SIZE_Y)};
-                    i32 index = pos_to_index(tile_pos);
+                    i32 index = get_index(tile_pos);
                     tile_map[index].type = type;
                 }
             }
@@ -1724,7 +1760,7 @@ void generate_map()
     //налаживаем свойства тайлов
     for (i32 index = 0; index < tile_count; index++)
     {
-        V2 tile_pos = index_to_pos(index);
+        V2 tile_pos = get_tile_pos(index);
         Bitmap sprite = img_None;
         f32 angle = 0;
         bool solid = true;
@@ -1756,14 +1792,14 @@ void generate_map()
         case Tile_Type_BORDER:
         {
             sprite = img_Border;
-            i32 left_tile = pos_to_index(tile_pos + V2{-1, 0});
-            i32 right_tile = pos_to_index(tile_pos + V2{1, 0});
-            i32 top_tile = pos_to_index(tile_pos + V2{0, 1});
-            i32 bottom_tile = pos_to_index(tile_pos + V2{0, -1});
-            i32 bottomright_tile = pos_to_index(tile_pos + V2{1, -1});
-            i32 topright_tile = pos_to_index(tile_pos + V2{1, 1});
-            i32 bottomleft_tile = pos_to_index(tile_pos + V2{-1, -1});
-            i32 topleft_tile = pos_to_index(tile_pos + V2{-1, 1});
+            i32 left_tile = get_index(tile_pos + V2{-1, 0});
+            i32 right_tile = get_index(tile_pos + V2{1, 0});
+            i32 top_tile = get_index(tile_pos + V2{0, 1});
+            i32 bottom_tile = get_index(tile_pos + V2{0, -1});
+            i32 bottomright_tile = get_index(tile_pos + V2{1, -1});
+            i32 topright_tile = get_index(tile_pos + V2{1, 1});
+            i32 bottomleft_tile = get_index(tile_pos + V2{-1, -1});
+            i32 topleft_tile = get_index(tile_pos + V2{-1, 1});
             if (tile_pos.y != 0 && tile_map[bottom_tile].type != Tile_Type_BORDER)
             {
                 sprite = img_TransitionBorder;
@@ -1809,7 +1845,7 @@ void generate_map()
             //addPlayer
             V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS;
             add_game_object(Game_Object_PLAYER, spawn_pos);
-            // add_game_object(Game_Object_ZOMBIE, spawn_pos);
+            add_game_object(Game_Object_ZOMBIE, spawn_pos);
             camera.pos = spawn_pos;
             camera.target = spawn_pos;
             solid = false;
@@ -1855,7 +1891,7 @@ void generate_map()
 void update_tile(i32 tile_index)
 {
     Tile *tile = &tile_map[tile_index];
-    V2 tilePos = index_to_pos(tile_index);
+    V2 tilePos = get_tile_pos(tile_index);
 
     if (tile->solid)
     {
@@ -1882,7 +1918,7 @@ void update_tile(i32 tile_index)
 
     if (tile->type == Tile_Type_PARAPET)
     {
-        if (tile_map[pos_to_index(tilePos + V2{0, -1})].type == Tile_Type_NONE)
+        if (tile_map[get_index(tilePos + V2{0, -1})].type == Tile_Type_NONE)
         {
             tile->type = Tile_Type_NONE;
         }
