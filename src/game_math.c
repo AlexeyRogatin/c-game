@@ -17,6 +17,11 @@ V2 operator*(V2 a, f32 s)
     V2 result = {a.x * s, a.y * s};
     return result;
 }
+V2 operator*(V2 a, V2 b)
+{
+    V2 result = {a.x * b.x, a.y * b.y};
+    return result;
+}
 V2 operator-(V2 a, V2 b)
 {
     V2 result = {a.x - b.x, a.y - b.y};
@@ -25,6 +30,16 @@ V2 operator-(V2 a, V2 b)
 V2 operator/(V2 a, f32 c)
 {
     V2 result = {a.x / c, a.y / c};
+    return result;
+}
+V2 operator/(f32 c, V2 a)
+{
+    V2 result = {c / a.x, c / a.y};
+    return result;
+}
+V2 operator/(V2 a, V2 b)
+{
+    V2 result = {a.x / b.x, a.y / b.y};
     return result;
 }
 bool operator==(V2 a, V2 b)
@@ -56,6 +71,21 @@ V2 operator/=(V2 &a, f32 c)
 {
     a = a / c;
     return a;
+}
+V2 floor(V2 a)
+{
+    V2 result = V2{floorf(a.x), floorf(a.y)};
+    return result;
+}
+V2 ceil(V2 a)
+{
+    V2 result = V2{ceilf(a.x), ceilf(a.y)};
+    return result;
+}
+V2 round(V2 a)
+{
+    V2 result = V2{roundf(a.x), roundf(a.y)};
+    return result;
 }
 f32 dot(V2 a, V2 b)
 {
