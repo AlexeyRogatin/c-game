@@ -337,7 +337,7 @@ bool has_area(Rect rect)
 
 V2 fract(V2 a)
 {
-    V2 result = {a.x - (f32)(i32)a.x, a.y - (f32)(i32)a.y};
+    V2 result = {a.x - floorf(a.x), a.y - floorf(a.y)};
     return result;
 }
 
@@ -470,28 +470,25 @@ void draw_item(Bitmap screen, Drawing drawing)
                 V2 d = V2{(f32)x, (f32)y} - origin;
                 V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
 
-                if (uv01.x >= 0 && uv01.x < 1 && uv01.y >= 0 && uv01.y < 1)
+                V2 uv = uv01 * texture_size;
+                V2 uv_floored = floor(uv);
+                V2 uv_fract = clamp01(fract(uv) * pixel_scale);
+
+                Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
+                ARGB mixed_sample = bilinear_blend(sample, uv_fract);
+
+                ARGB pixel = {screen.pixels[y * (i32)screen.size.x + x]};
+                f32 alpha = (f32)mixed_sample.a / 255.0f;
+                if (alpha == 0)
                 {
-                    V2 uv = uv01 * texture_size;
-                    V2 uv_floored = floor(uv);
-                    V2 uv_fract = clamp01(fract(uv) * pixel_scale);
-
-                    Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
-                    ARGB mixed_sample = bilinear_blend(sample, uv_fract);
-
-                    ARGB pixel = {screen.pixels[y * (i32)screen.size.x + x]};
-                    f32 alpha = (f32)mixed_sample.a / 255.0f;
-                    if (alpha == 0)
-                    {
-                        i32 foo = 0;
-                    }
-                    ARGB result;
-                    result.r = (mixed_sample.r + pixel.r * (1 - alpha));
-                    result.g = (mixed_sample.g + pixel.g * (1 - alpha));
-                    result.b = (mixed_sample.b + pixel.b * (1 - alpha));
-
-                    screen.pixels[y * (i32)screen.size.x + x] = result.argb;
+                    i32 foo = 0;
                 }
+                ARGB result;
+                result.r = (mixed_sample.r + pixel.r * (1 - alpha));
+                result.g = (mixed_sample.g + pixel.g * (1 - alpha));
+                result.b = (mixed_sample.b + pixel.b * (1 - alpha));
+
+                screen.pixels[y * (i32)screen.size.x + x] = result.argb;
             }
         }
     }
