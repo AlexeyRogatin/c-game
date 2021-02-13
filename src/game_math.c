@@ -109,6 +109,14 @@ V2 unit(V2 a)
     return result;
 };
 
+V2 abs(V2 a) {
+    V2 result = {
+        fabsf(a.x),
+        fabsf(a.y),
+    };
+    return result;
+}
+
 f32 random_float(f32 start, f32 end)
 {
     f32 result = rand() / (f32)RAND_MAX * (end - start) + start;

@@ -94,19 +94,11 @@ Bitmap win32_read_bmp(char *file_name)
     Bmp_Info *info = (Bmp_Info *)(file.data + sizeof(Bmp_Header));
     u32 *pixels = (u32 *)(file.data + header->data_offset);
 
-    u32 *new_pixels = (u32 *)malloc(sizeof(u32) * (info->width + 2) * (info->height + 2));
+    u32 *new_pixels = (u32 *)calloc((info->width + 2) * (info->height + 2), sizeof(u32));
+    Bitmap result;
+    result.pitch = info->width + 2;
 
-    for (i32 i = 0; i < (info->width + 2); i++)
-    {
-        new_pixels[i] = 0x00000000;
-        new_pixels[(info->height + 1) * (info->width + 2) + i] = 0x00000000;
-    }
-
-    for (i32 i = 0; i < (info->height + 2); i++)
-    {
-        new_pixels[i * (info->width + 2)] = 0x00000000;
-        new_pixels[i * (info->width + 2) + info->width + 1] = 0x00000000;
-    }
+    u32 bitmap_start_offset = result.pitch + 1;
 
     for (i32 y = 0; y < info->height; y++)
     {
@@ -119,16 +111,13 @@ Bitmap win32_read_bmp(char *file_name)
             pixel.g *= alpha;
             pixel.b *= alpha;
 
-            new_pixels[(y + 1) * (info->width + 2) + x + 1] = pixel.argb;
+            new_pixels[y*result.pitch + x + bitmap_start_offset] = pixel.argb;
         }
     }
 
     // AA RR GG BB
-    Bitmap result;
-    result.pixels = new_pixels + info->width + 2 + 1;
+    result.pixels = new_pixels;
     result.size = {(f32)info->width, (f32)info->height};
-
-    result.pitch = info->width + 2;
 
     free(file.data);
 
@@ -208,7 +197,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_POPUP | WS_VISIBLE | WS_MAXIMIZE,
+        WS_VISIBLE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width

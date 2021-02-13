@@ -379,6 +379,9 @@ ARGB bilinear_blend(Bilinear_Sample sample, V2 f)
     return abcd;
 }
 
+#define PINK {0xFFff63ed}
+
+
 void draw_item(Bitmap screen, Drawing drawing)
 {
     if (drawing.type == DRAWING_TYPE_RECT)
@@ -433,9 +436,13 @@ void draw_item(Bitmap screen, Drawing drawing)
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
 
         V2 rect_size = drawing.size;
+        if (rect_size.x > 0) rect_size.x += 2;
+        if (rect_size.y > 0) rect_size.y += 2;
+        if (rect_size.x < 0) rect_size.x -= 2;
+        if (rect_size.y < 0) rect_size.y -= 2;
 
-        V2 x_axis = rotate_vector({drawing.size.x, 0}, drawing.angle);
-        V2 y_axis = rotate_vector({0, drawing.size.y}, drawing.angle);
+        V2 x_axis = rotate_vector({rect_size.x, 0}, drawing.angle);
+        V2 y_axis = rotate_vector({0, rect_size.y}, drawing.angle);
         V2 origin = drawing.pos - x_axis / 2 - y_axis / 2;
 
         V2 vertices[] = {
@@ -459,7 +466,8 @@ void draw_item(Bitmap screen, Drawing drawing)
         Rect paint_rect = intersect(screen_rect, drawn_rect);
 
         V2 texture_size = drawing.bitmap.size;
-        V2 pixel_scale = rect_size / texture_size;
+        V2 pixel_scale = abs(drawing.size) / texture_size;
+        V2 texture_size_with_apron = texture_size + 1/pixel_scale;
 
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
@@ -470,7 +478,7 @@ void draw_item(Bitmap screen, Drawing drawing)
                 V2 d = V2{(f32)x, (f32)y} - origin;
                 V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
 
-                V2 uv = uv01 * texture_size;
+                V2 uv = uv01 * texture_size_with_apron;
                 V2 uv_floored = floor(uv);
                 V2 uv_fract = clamp01(fract(uv) * pixel_scale);
 
@@ -598,8 +606,8 @@ typedef enum
 
 typedef enum
 {
-    Direction_RIGHT,
-    Direction_LEFT,
+    Direction_RIGHT = 1,
+    Direction_LEFT = -1,
 } Direction;
 
 typedef enum
@@ -1195,7 +1203,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
 
         i32 collision_up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x;
-        i32 up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x + (game_object->looking_direction * 2 - 1);
+        i32 up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x + (game_object->looking_direction);
 
         //состояние весит
         if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
@@ -1223,14 +1231,14 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //переход на стенку из состояния ползком
         if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
         {
-            V2 tile_pos = collided_y_tile_pos - V2{(f32)game_object->looking_direction * 2 - 1, 0};
+            V2 tile_pos = collided_y_tile_pos - V2{(f32)game_object->looking_direction, 0};
             if (!tile_map[get_index(tile_pos)].solid &&
                 ((game_object->pos.x + game_object->speed.x + game_object->hit_box.x / 2 <= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) && (ceilf(game_object->pos.x + game_object->hit_box.x / 2) >= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2) ||
                  (game_object->pos.x + game_object->speed.x - game_object->hit_box.x / 2 >= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2) && (floorf(game_object->pos.x - game_object->hit_box.x / 2) <= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS / 2)))
             {
-                game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1) + game_object->hit_box.x / 2 * -(game_object->looking_direction * 2 - 1);
+                game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS / 2 * (game_object->looking_direction) + game_object->hit_box.x / 2 * -(game_object->looking_direction);
                 supposed_cond = Condition_HANGING;
-                game_object->looking_direction = (Direction)((-(game_object->looking_direction * 2 - 1) + 1) / 2);
+                game_object->looking_direction = (Direction)((-(game_object->looking_direction) + 1) / 2);
                 game_object->speed = {0, 0};
                 game_object->condition = Condition_IDLE;
                 timers[game_object->hanging_animation_timer] = 16;
@@ -1428,7 +1436,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * -(game_object->looking_direction * 2 - 1), game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
+        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x*game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
 
         draw_light(game_object->pos, -200, 300);
     }
@@ -1452,7 +1460,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             if (timers[game_object->can_jump] == 0)
             {
                 game_object->speed.y = 2 * jump_height / jump_length;
-                game_object->speed.x += (game_object->looking_direction * 2 - 1) * 18;
+                game_object->speed.x += (game_object->looking_direction) * 18;
             }
             else if (timers[game_object->can_jump] > 0)
             {
@@ -1578,14 +1586,14 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         V2 obj_tile_pos = V2{roundf(game_object->pos.x / TILE_SIZE_PIXELS), roundf(game_object->pos.y / TILE_SIZE_PIXELS)};
         for (i32 tile_index = 1; tile_index * TILE_SIZE_PIXELS <= vision_length; tile_index++)
         {
-            Tile tile = tile_map[get_index(obj_tile_pos + V2{(f32)tile_index * (game_object->looking_direction * 2 - 1), 0})];
+            Tile tile = tile_map[get_index(obj_tile_pos + V2{(f32)tile_index * (game_object->looking_direction), 0})];
             if (tile.solid)
             {
-                vision_length = fabs((obj_tile_pos.x + tile_index * (game_object->looking_direction * 2 - 1)) * TILE_SIZE_PIXELS - game_object->pos.x - TILE_SIZE_PIXELS / 2 * (game_object->looking_direction * 2 - 1));
+                vision_length = fabs((obj_tile_pos.x + tile_index * (game_object->looking_direction)) * TILE_SIZE_PIXELS - game_object->pos.x - TILE_SIZE_PIXELS / 2 * (game_object->looking_direction));
             }
         }
 
-        if (check_vision_box(game_object->pos, V2{vision_length / 2 * (f32)(game_object->looking_direction * 2 - 1), 0}, V2{vision_length, 30}, triggers, 1, true) && timers[game_object->can_jump] < 0 && game_object->condition != Condition_FALLING)
+        if (check_vision_box(game_object->pos, V2{vision_length / 2 * (f32)(game_object->looking_direction), 0}, V2{vision_length, 30}, triggers, 1, true) && timers[game_object->can_jump] < 0 && game_object->condition != Condition_FALLING)
         {
             timers[game_object->can_jump] = 1;
         }
