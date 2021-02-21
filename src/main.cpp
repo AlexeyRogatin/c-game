@@ -111,7 +111,7 @@ Bitmap win32_read_bmp(char *file_name)
             pixel.g *= alpha;
             pixel.b *= alpha;
 
-            new_pixels[y*result.pitch + x + bitmap_start_offset] = pixel.argb;
+            new_pixels[y * result.pitch + x + bitmap_start_offset] = pixel.argb;
         }
     }
 
@@ -197,7 +197,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_VISIBLE,
+        WS_VISIBLE | WS_POPUP | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width
