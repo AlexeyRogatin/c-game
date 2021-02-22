@@ -109,7 +109,8 @@ V2 unit(V2 a)
     return result;
 };
 
-V2 abs(V2 a) {
+V2 abs(V2 a)
+{
     V2 result = {
         fabsf(a.x),
         fabsf(a.y),
@@ -148,5 +149,48 @@ f32 angle_between_points(V2 a, V2 b)
 f32 distance_between_points(V2 a, V2 b)
 {
     f32 result = sqrtf((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+    return result;
+}
+
+f32 min(f32 a, f32 b)
+{
+    f32 result;
+    if (a <= b)
+    {
+        result = a;
+    }
+    else
+    {
+        result = b;
+    }
+    return result;
+}
+
+f32 max(f32 a, f32 b)
+{
+    f32 result;
+    if (a >= b)
+    {
+        result = a;
+    }
+    else
+    {
+        result = b;
+    }
+    return result;
+}
+
+V2 fract(V2 a)
+{
+    V2 result = {a.x - floorf(a.x), a.y - floorf(a.y)};
+    return result;
+}
+
+V2 clamp01(V2 a)
+{
+    V2 result = {
+        min(1.0f, max(0.0f, a.x)),
+        min(1.0f, max(0.0f, a.y)),
+    };
     return result;
 }
