@@ -1207,13 +1207,13 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
         {
             if (game_object->speed.y < 0 &&
-                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2 && game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2)
+                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 && game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
             {
                 supposed_cond = Condition_HANGING;
 
                 game_object->speed = {0, 0};
 
-                game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2;
+                game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3;
 
                 if (collisions.x.tile_side == Side_RIGHT)
                 {
@@ -1996,28 +1996,28 @@ void update_tile(i32 tile_index)
         }
     }
 
-    if (tile->solid)
-    {
-        draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, 0xFFFF00FF, LAYER_TILE);
-    }
+    // if (tile->solid)
+    // {
+    //     draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, 0xFFFF00FF, LAYER_TILE);
+    // }
 
-    // if (tile->type == Tile_Type_EXIT)
-    // {
-    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
-    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, img_DoorBack.size * 5, tile_map[tile_index].angle, img_DoorBack, LAYER_BACKGROUND2);
-    // }
-    // else if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
-    // {
-    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
-    // }
-    // else if (tile->type == Tile_Type_ENTER)
-    // {
-    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
-    // }
-    // else if (tile->type != Tile_Type_NONE)
-    // {
-    //     draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_TILE);
-    // }
+    if (tile->type == Tile_Type_EXIT)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, img_DoorBack.size * 5, tile_map[tile_index].angle, img_DoorBack, LAYER_BACKGROUND2);
+    }
+    else if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
+    }
+    else if (tile->type == Tile_Type_ENTER)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
+    }
+    else if (tile->type != Tile_Type_NONE)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_TILE);
+    }
 }
 
 bool initialized = false;
