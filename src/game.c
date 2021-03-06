@@ -277,11 +277,12 @@ void clear_screen(Bitmap screen, Bitmap darkness)
     }
 
     //обновление темноты
-    for (i32 y = 0; y < darkness.size.y; y++)
+    i32 interval = (darkness.pitch - darkness.size.x) * 0.5;
+    for (i32 y = interval; y < darkness.size.y + interval; y++)
     {
-        for (i32 x = 0; x < darkness.size.x; x++)
+        for (i32 x = interval; x < darkness.size.x + interval; x++)
         {
-            darkness.pixels[(y + 1) * darkness.pitch + x + 1] = 0xD0000000;
+            darkness.pixels[y * darkness.pitch + x] = 0xFF000000;
         }
     }
 }
@@ -514,75 +515,49 @@ Bitmap darkness;
 
 void draw_light(Bitmap screen, V2 pos, f32 innerRadius, f32 radius)
 {
-    V2 screen_pos = pos + screen.size / 2 - camera.pos;
+    i32 interval = TILE_SIZE_PIXELS;
 
-    i32 interval = TILE_SIZE_PIXELS / img_PlayerIdle.size.x;
+    V2 min = pos - V2{radius, radius};
+    V2 max = pos + V2{radius, radius};
 
-    V2 min_pos = floor((screen_pos - V2{radius, radius}) / interval);
-    V2 max_pos = ceil((screen_pos + V2{radius, radius}) / interval);
+    if (min.x < camera.pos.x - screen.size.x / 2)
+        min.x = camera.pos.x - screen.size.x / 2;
+    if (min.y < camera.pos.y - screen.size.y / 2)
+        min.y = camera.pos.y - screen.size.y / 2;
+    if (max.x > camera.pos.x + screen.size.x / 2)
+        max.x = camera.pos.x + screen.size.x / 2;
+    if (max.y > camera.pos.y + screen.size.y / 2)
+        max.y = camera.pos.y + screen.size.y / 2;
 
-    if (min_pos.x < 0)
-        min_pos.x = 0;
-    if (min_pos.y < 0)
-        min_pos.y = 0;
-    if (max_pos.x > darkness.size.x)
-        max_pos.x = darkness.size.x;
-    if (max_pos.y > darkness.size.y)
-        max_pos.y = darkness.size.y;
+    min.x = floor(min.x / interval) * interval;
+    min.y = floor(min.y / interval) * interval;
+    max.x = ceil(max.x / interval) * interval;
+    max.y = ceil(max.y / interval) * interval;
 
-    for (i32 y = min_pos.y; y < max_pos.y; y++)
+    for (i32 y = min.y; y < max.y; y += interval)
     {
-        for (i32 x = min_pos.x; x < max_pos.x; x++)
+        for (i32 x = min.x; x < max.x; x += interval)
         {
-            V2 screen_interval_pixel_pos = V2{f32(x + 0.25), f32(y + 0.25)} * interval;
-            V2 interval_pixel_pos = screen_interval_pixel_pos - screen.size / 2 + camera.pos;
-            f32 distance = distance_between_points(screen_pos, screen_interval_pixel_pos);
+            f32 distance = distance_between_points(pos, V2{f32(x), f32(y)});
             f32 alpha = (distance - innerRadius) / (radius - innerRadius);
-
             if (alpha < 1)
             {
-                f32 k = (screen_pos.y - screen_interval_pixel_pos.y) / (screen_pos.x - screen_interval_pixel_pos.x);
-                f32 b = screen_pos.y - k * screen_pos.x;
-                //y=kx+b
-                V2 min_point = round(V2{min(pos.x, interval_pixel_pos.x), min(pos.y, interval_pixel_pos.y)} / TILE_SIZE_PIXELS);
-                V2 max_point = round(V2{max(pos.x, interval_pixel_pos.x), max(pos.y, interval_pixel_pos.y)} / TILE_SIZE_PIXELS);
-                for (i32 tile_y = min_point.y; tile_y <= max_point.y; tile_y++)
-                {
-                    for (i32 tile_x = min_point.x; tile_x <= max_point.x; tile_x++)
-                    {
-                        V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
-                        if (tile_map[get_index(tile_pos)].solid)
-                        {
-                            tile_pos = tile_pos * TILE_SIZE_PIXELS + screen.size / 2 - camera.pos;
-                            i32 collisions = 0;
-                            f32 x1 = ((tile_pos.y - TILE_SIZE_PIXELS / 2) - b) / k;
-                            f32 x2 = ((tile_pos.y + TILE_SIZE_PIXELS / 2) - b) / k;
-                            f32 y1 = k * (tile_pos.x - TILE_SIZE_PIXELS / 2) + b;
-                            f32 y2 = k * (tile_pos.x + TILE_SIZE_PIXELS / 2) + b;
-                            bool bx1 = x1 >= tile_pos.x - TILE_SIZE_PIXELS / 2 && x1 <= tile_pos.x + TILE_SIZE_PIXELS / 2;
-                            bool bx2 = x2 >= tile_pos.x - TILE_SIZE_PIXELS / 2 && x2 <= tile_pos.x + TILE_SIZE_PIXELS / 2;
-                            bool by1 = y1 >= tile_pos.y - TILE_SIZE_PIXELS / 2 && y1 <= tile_pos.y + TILE_SIZE_PIXELS / 2;
-                            bool by2 = y2 >= tile_pos.y - TILE_SIZE_PIXELS / 2 && y2 <= tile_pos.y + TILE_SIZE_PIXELS / 2;
-                            if (bx1 || bx2 || by1 || by2)
-                            {
-                                goto next_interval_pixel;
-                            }
-                        }
-                    }
-                }
-
                 if (alpha < 0)
                 {
                     alpha = 0;
                 }
+                for (i32 pY = -interval * 0.5; pY < interval * 0.5; pY++)
+                {
+                    for (i32 pX = -interval * 0.5; pX < interval * 0.5; pX++)
+                    {
+                        V2 tile_pos = V2{(f32)x, (f32)y} - camera.pos + screen.size / 2;
+                        i32 index = (tile_pos.y + pY) * darkness.pitch + (tile_pos.x + pX);
+                        ARGB pixel = {darkness.pixels[index]};
+                        pixel.a *= alpha;
 
-                i32 index = (y + 1) * darkness.pitch + x + 1;
-                ARGB pixel = {darkness.pixels[index]};
-                pixel.a *= alpha;
-
-                darkness.pixels[index] = pixel.argb;
-
-            next_interval_pixel:;
+                        darkness.pixels[index] = pixel.argb;
+                    }
+                }
             }
         }
     }
@@ -2078,9 +2053,9 @@ void game_update(Bitmap screen, Input input)
 
         //темнота
         i32 interval = floor(TILE_SIZE_PIXELS / img_PlayerIdle.size.x);
-        darkness.size = ceil(screen.size / interval);
-        darkness.pitch = darkness.size.x + 2;
-        darkness.pixels = (u32 *)malloc(sizeof(u32) * (darkness.size.x + 2) * (darkness.size.y + 2));
+        darkness.size = screen.size;
+        darkness.pitch = darkness.size.x + interval * 2;
+        darkness.pixels = (u32 *)malloc(sizeof(u32) * (darkness.size.x + interval * 2) * (darkness.size.y + interval * 2));
 
         generate_map();
     }
