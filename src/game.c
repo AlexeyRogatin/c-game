@@ -281,9 +281,51 @@ void clear_screen(Bitmap screen, Bitmap darkness)
     {
         for (i32 x = 0; x < darkness.size.x; x++)
         {
-            darkness.pixels[(y + 1) * darkness.pitch + x + 1] = 0xFA000000;
+            darkness.pixels[(y + 1) * darkness.pitch + x + 1] = 0xD0000000;
         }
     }
+}
+
+//тайлы
+typedef enum
+{
+    Tile_Type_NONE,
+    Tile_Type_BRICK,
+    Tile_Type_ELEGANT_BRICK,
+    Tile_Type_MARBLE_FLOOR,
+    Tile_Type_TILED_FLOOR,
+    Tile_Type_PARAPET,
+    Tile_Type_STONE,
+    Tile_Type_BORDER,
+    Tile_Type_ENTER,
+    Tile_Type_EXIT,
+} Tile_type;
+
+typedef struct
+{
+    Tile_type type;
+    Bitmap sprite;
+    f32 angle;
+    bool solid;
+    bool interactive;
+    i32 timer;
+} Tile;
+
+Tile *tile_map = NULL;
+
+V2 get_tile_pos(i32 index)
+{
+    //index = y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + x;
+    f32 y = floor(index / (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)));
+    f32 x = index - y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2));
+    V2 result = {x, y};
+    return result;
+}
+
+i32 get_index(V2 coords)
+{
+    i32 index = coords.y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + coords.x;
+    return index;
 }
 
 typedef struct
@@ -472,30 +514,63 @@ Bitmap darkness;
 
 void draw_light(Bitmap screen, V2 pos, f32 innerRadius, f32 radius)
 {
-    pos += screen.size / 2 - camera.pos;
+    V2 screen_pos = pos + screen.size / 2 - camera.pos;
 
     i32 interval = TILE_SIZE_PIXELS / img_PlayerIdle.size.x;
 
-    V2 min = floor((pos - V2{radius, radius}) / interval);
-    V2 max = ceil((pos + V2{radius, radius}) / interval);
+    V2 min_pos = floor((screen_pos - V2{radius, radius}) / interval);
+    V2 max_pos = ceil((screen_pos + V2{radius, radius}) / interval);
 
-    if (min.x < 0)
-        min.x = 0;
-    if (min.y < 0)
-        min.y = 0;
-    if (max.x > darkness.size.x)
-        max.x = darkness.size.x;
-    if (max.y > darkness.size.y)
-        max.y = darkness.size.y;
+    if (min_pos.x < 0)
+        min_pos.x = 0;
+    if (min_pos.y < 0)
+        min_pos.y = 0;
+    if (max_pos.x > darkness.size.x)
+        max_pos.x = darkness.size.x;
+    if (max_pos.y > darkness.size.y)
+        max_pos.y = darkness.size.y;
 
-    for (i32 y = min.y; y < max.y; y++)
+    for (i32 y = min_pos.y; y < max_pos.y; y++)
     {
-        for (i32 x = min.x; x < max.x; x++)
+        for (i32 x = min_pos.x; x < max_pos.x; x++)
         {
-            f32 distance = distance_between_points(pos, V2{f32(x + 0.25), f32(y + 0.25)} * interval);
+            V2 screen_interval_pixel_pos = V2{f32(x + 0.25), f32(y + 0.25)} * interval;
+            V2 interval_pixel_pos = screen_interval_pixel_pos - screen.size / 2 + camera.pos;
+            f32 distance = distance_between_points(screen_pos, screen_interval_pixel_pos);
             f32 alpha = (distance - innerRadius) / (radius - innerRadius);
+
             if (alpha < 1)
             {
+                f32 k = (screen_pos.y - screen_interval_pixel_pos.y) / (screen_pos.x - screen_interval_pixel_pos.x);
+                f32 b = screen_pos.y - k * screen_pos.x;
+                //y=kx+b
+                V2 min_point = round(V2{min(pos.x, interval_pixel_pos.x), min(pos.y, interval_pixel_pos.y)} / TILE_SIZE_PIXELS);
+                V2 max_point = round(V2{max(pos.x, interval_pixel_pos.x), max(pos.y, interval_pixel_pos.y)} / TILE_SIZE_PIXELS);
+                for (i32 tile_y = min_point.y; tile_y <= max_point.y; tile_y++)
+                {
+                    for (i32 tile_x = min_point.x; tile_x <= max_point.x; tile_x++)
+                    {
+                        V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
+                        if (tile_map[get_index(tile_pos)].solid)
+                        {
+                            tile_pos = tile_pos * TILE_SIZE_PIXELS + screen.size / 2 - camera.pos;
+                            i32 collisions = 0;
+                            f32 x1 = ((tile_pos.y - TILE_SIZE_PIXELS / 2) - b) / k;
+                            f32 x2 = ((tile_pos.y + TILE_SIZE_PIXELS / 2) - b) / k;
+                            f32 y1 = k * (tile_pos.x - TILE_SIZE_PIXELS / 2) + b;
+                            f32 y2 = k * (tile_pos.x + TILE_SIZE_PIXELS / 2) + b;
+                            bool bx1 = x1 >= tile_pos.x - TILE_SIZE_PIXELS / 2 && x1 <= tile_pos.x + TILE_SIZE_PIXELS / 2;
+                            bool bx2 = x2 >= tile_pos.x - TILE_SIZE_PIXELS / 2 && x2 <= tile_pos.x + TILE_SIZE_PIXELS / 2;
+                            bool by1 = y1 >= tile_pos.y - TILE_SIZE_PIXELS / 2 && y1 <= tile_pos.y + TILE_SIZE_PIXELS / 2;
+                            bool by2 = y2 >= tile_pos.y - TILE_SIZE_PIXELS / 2 && y2 <= tile_pos.y + TILE_SIZE_PIXELS / 2;
+                            if (bx1 || bx2 || by1 || by2)
+                            {
+                                goto next_interval_pixel;
+                            }
+                        }
+                    }
+                }
+
                 if (alpha < 0)
                 {
                     alpha = 0;
@@ -506,51 +581,11 @@ void draw_light(Bitmap screen, V2 pos, f32 innerRadius, f32 radius)
                 pixel.a *= alpha;
 
                 darkness.pixels[index] = pixel.argb;
+
+            next_interval_pixel:;
             }
         }
     }
-}
-
-//тайлы
-typedef enum
-{
-    Tile_Type_NONE,
-    Tile_Type_BRICK,
-    Tile_Type_ELEGANT_BRICK,
-    Tile_Type_MARBLE_FLOOR,
-    Tile_Type_TILED_FLOOR,
-    Tile_Type_PARAPET,
-    Tile_Type_STONE,
-    Tile_Type_BORDER,
-    Tile_Type_ENTER,
-    Tile_Type_EXIT,
-} Tile_type;
-
-typedef struct
-{
-    Tile_type type;
-    Bitmap sprite;
-    f32 angle;
-    bool solid;
-    bool interactive;
-    i32 timer;
-} Tile;
-
-Tile *tile_map = NULL;
-
-V2 get_tile_pos(i32 index)
-{
-    //index = y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + x;
-    f32 y = floor(index / (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)));
-    f32 x = index - y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2));
-    V2 result = {x, y};
-    return result;
-}
-
-i32 get_index(V2 coords)
-{
-    i32 index = coords.y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + coords.x;
-    return index;
 }
 
 //сущности
@@ -924,6 +959,7 @@ bool check_vision_box(V2 vision_point, V2 vision_pos, V2 vision_size, Game_Objec
                                     if (bx1 || bx2 || by1 || by2)
                                     {
                                         vision_triggered = false;
+                                        goto Result;
                                     }
                                 }
                             }
@@ -933,6 +969,7 @@ bool check_vision_box(V2 vision_point, V2 vision_pos, V2 vision_size, Game_Objec
             }
         }
     }
+Result:
     if (draw)
     {
         draw_rect(vision_pos, vision_size, 0, 0xFF00FF00, LAYER_FORGROUND);
@@ -1062,6 +1099,13 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             game_object->go_left = input.left.is_down;
             game_object->go_right = input.right.is_down;
             game_object->jump = input.z.went_down;
+        }
+        else
+        {
+            game_object->go_left = false;
+            game_object->go_right = false;
+            game_object->jump = false;
+            timers[jump] = 0;
         }
 
         //константы ускорения
@@ -1246,11 +1290,12 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //состояние смежные с состоянием весит
         if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP))
         {
-            if (input.up.is_down)
+
+            if (input.up.is_down && !input.down.is_down)
             {
                 supposed_cond = Condition_HANGING_LOOKING_UP;
             }
-            else if (input.down.is_down)
+            else if (input.down.is_down && !input.up.is_down)
             {
                 supposed_cond = Condition_HANGING_LOOKING_DOWN;
             }
@@ -2048,6 +2093,8 @@ void game_update(Bitmap screen, Input input)
     //очистка экрана
     clear_screen(screen, darkness);
 
+    camera.pos += (camera.target - camera.pos) * 0.25f;
+
     //обновление сущностей
     for (i32 object_index = 0; object_index < game_object_count; object_index++)
     {
@@ -2057,11 +2104,9 @@ void game_update(Bitmap screen, Input input)
         }
     }
 
-    camera.pos += (camera.target - camera.pos) * 0.25f;
-
-    // //прорисовка темноты
-    // f32 intervalx2 = darkness.pitch - darkness.size.x;
-    // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
+    //прорисовка темноты
+    f32 intervalx2 = darkness.pitch - darkness.size.x;
+    draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
     //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
