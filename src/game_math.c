@@ -207,21 +207,25 @@ typedef union
     };
 } ARGB;
 
-union V4 {
-    struct {
+union V4
+{
+    struct
+    {
         f32 x, y, z, w;
     };
-    struct {
+    struct
+    {
         f32 r, g, b, a;
     };
 };
 
-V4 argb_to_v4(ARGB pixel) {
+V4 argb_to_v4(ARGB pixel)
+{
     V4 result;
-    result.r = (f32)pixel.r/255.0f;
-    result.g = (f32)pixel.g/255.0f;
-    result.b = (f32)pixel.b/255.0f;
-    result.a = (f32)pixel.a/255.0f;
+    result.r = (f32)pixel.r / 255.0f;
+    result.g = (f32)pixel.g / 255.0f;
+    result.b = (f32)pixel.b / 255.0f;
+    result.a = (f32)pixel.a / 255.0f;
     return result;
 }
 
@@ -235,37 +239,168 @@ V4 lerp(V4 a, V4 b, f32 f)
     return result;
 }
 
-V4 operator*(V4 a, f32 s) {
+V4 operator*(V4 a, f32 s)
+{
     V4 result;
-    result.x = a.x*s;
-    result.y = a.y*s;
-    result.z = a.z*s;
-    result.w = a.w*s;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
+    result.w = a.w * s;
     return result;
 }
-V4 operator+(V4 a, V4 b) {
+V4 operator+(V4 a, V4 b)
+{
     V4 result;
-    result.x = a.x+b.x;
-    result.y = a.y+b.y;
-    result.z = a.z+b.z;
-    result.w = a.w+b.w;
-    return result;
-}
-
-V4 operator*(f32 s, V4 a) {
-    V4 result;
-    result.x = a.x*s;
-    result.y = a.y*s;
-    result.z = a.z*s;
-    result.w = a.w*s;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
     return result;
 }
 
-ARGB v4_to_argb(V4 color) {
+V4 operator*(f32 s, V4 a)
+{
+    V4 result;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
+    result.w = a.w * s;
+    return result;
+}
+
+ARGB v4_to_argb(V4 color)
+{
     ARGB result;
-    result.r = (u8)(color.r*255);
-    result.g = (u8)(color.g*255);
-    result.b = (u8)(color.b*255);
-    result.a = (u8)(color.a*255);
+    result.r = (u8)(color.r * 255);
+    result.g = (u8)(color.g * 255);
+    result.b = (u8)(color.b * 255);
+    result.a = (u8)(color.a * 255);
+    return result;
+}
+
+#include <immintrin.h>
+
+struct f32_8x
+{
+    __m256 v;
+
+    f32 &operator[](int i)
+    {
+        return ((f32 *)&v)[i];
+    }
+};
+
+f32_8x set1_f32(f32 value)
+{
+    f32_8x result = {_mm256_set1_ps(value)};
+    return result;
+}
+
+f32_8x set8_f32(f32 a, f32 b, f32 c, f32 d, f32 e, f32 f, f32 g, f32 h)
+{
+    f32_8x result = {_mm256_setr_ps(a, b, c, d, e, f, g, h)};
+    return result;
+}
+
+f32_8x operator*(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_mul_ps(a.v, b.v)};
+    return result;
+}
+
+f32_8x operator+(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_add_ps(a.v, b.v)};
+    return result;
+}
+
+f32_8x operator-(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_sub_ps(a.v, b.v)};
+    return result;
+}
+
+f32_8x operator+=(f32_8x &a, f32_8x b)
+{
+    a = a + b;
+    return a;
+}
+
+f32_8x floor(f32_8x v)
+{
+    f32_8x result = {_mm256_floor_ps(v.v)};
+    return result;
+}
+
+struct V2_8x
+{
+    f32_8x x, y;
+
+    V2 operator[](int i)
+    {
+        return V2{x[i], y[i]};
+    }
+};
+
+V2_8x set1(V2 v)
+{
+    V2_8x result = {
+        set1_f32(v.x),
+        set1_f32(v.y),
+    };
+    return result;
+}
+
+f32_8x dot(V2_8x a, V2_8x b)
+{
+    f32_8x result = (a.x * b.x) + (a.y * b.y);
+    return result;
+}
+
+V2_8x operator*(V2_8x a, V2_8x b)
+{
+    V2_8x result = {
+        a.x * b.x,
+        a.y * b.y,
+    };
+    return result;
+}
+
+V2_8x operator+(V2_8x a, V2_8x b)
+{
+    V2_8x result = {
+        a.x + b.x,
+        a.y + b.y,
+    };
+    return result;
+}
+
+V2_8x operator-(V2_8x a, V2_8x b)
+{
+    V2_8x result = {
+        a.x - b.x,
+        a.y - b.y,
+    };
+    return result;
+}
+
+V2_8x operator+=(V2_8x &a, V2_8x b)
+{
+    a = a + b;
+    return a;
+}
+
+V2_8x floor(V2_8x v)
+{
+    V2_8x result = {
+        floor(v.x),
+        floor(v.y),
+    };
+    return result;
+}
+
+V2_8x fract(V2_8x v)
+{
+    V2_8x result = v - floor(v);
     return result;
 }

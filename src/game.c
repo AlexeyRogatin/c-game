@@ -191,6 +191,7 @@ typedef enum
 {
     DRAWING_TYPE_RECT,
     DRAWING_TYPE_BITMAP,
+    DRAWING_TYPE_OLD_BITMAP,
 } Drawing_Type;
 
 typedef enum
@@ -425,9 +426,9 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_BITMAP)
+    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
     {
-        bool is_tile =  drawing.layer < LAYER_BG_ITEM;
+        bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
 
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
 
@@ -466,10 +467,9 @@ void draw_item(Bitmap screen, Drawing drawing)
         Rect paint_rect = intersect(screen_rect, drawn_rect);
 
         V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
-        V2 texture_size = drawing.bitmap.size + 1/pixel_scale;
+        V2 texture_size = drawing.bitmap.size + 1 / pixel_scale;
 
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
-
 
         for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
         {
@@ -477,7 +477,8 @@ void draw_item(Bitmap screen, Drawing drawing)
             {
                 V2 d = V2{(f32)x, (f32)y} - origin;
                 V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
-                if (uv01.x >= 0 && uv01.x < 1 && uv01.y >= 0 && uv01.y < 1) {
+                if (uv01.x >= 0 && uv01.x < 1 && uv01.y >= 0 && uv01.y < 1)
+                {
                     V2 uv = uv01 * (texture_size);
                     V2 uv_floored = floor(uv);
                     V2 uv_fract = clamp01(fract(uv) * pixel_scale);
@@ -487,11 +488,96 @@ void draw_item(Bitmap screen, Drawing drawing)
                     V4 pixel = argb_to_v4({screen.pixels[y * (i32)screen.size.x + x]});
                     // V4 pixel = argb_to_v4({0xFFFF00FF});
 
-                    f32 inverted_alpha = (1 - texel.a*(1 - is_tile));
-                    V4 result = inverted_alpha*pixel + texel;
+                    f32 inverted_alpha = (1 - texel.a * (1 - is_tile));
+                    V4 result = inverted_alpha * pixel + texel;
 
                     screen.pixels[y * (i32)screen.size.x + x] = v4_to_argb(result).argb;
                 }
+            }
+        }
+    }
+
+    if (drawing.type == DRAWING_TYPE_BITMAP)
+    {
+        bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
+
+        Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
+
+        V2 rect_size = drawing.size;
+        if (rect_size.x >= 0)
+            rect_size.x += 1;
+        else
+            rect_size.x -= 1;
+        if (rect_size.y >= 0)
+            rect_size.y += 1;
+        else
+            rect_size.y -= 1;
+
+        V2 x_axis = rotate_vector({rect_size.x, 0}, drawing.angle);
+        V2 y_axis = rotate_vector({0, rect_size.y}, drawing.angle);
+        V2 origin = drawing.pos - x_axis / 2 - y_axis / 2;
+
+        V2 vertices[] = {
+            origin,
+            origin + x_axis,
+            origin + y_axis,
+            origin + x_axis + y_axis,
+        };
+
+        Rect drawn_rect = {{INFINITY, INFINITY}, {-INFINITY, -INFINITY}};
+        for (u32 vertex_index = 0; vertex_index < 4; vertex_index++)
+        {
+            V2 vertex = vertices[vertex_index];
+
+            drawn_rect.min.x = floorf(min(drawn_rect.min.x, vertex.x));
+            drawn_rect.min.y = floorf(min(drawn_rect.min.y, vertex.y));
+            drawn_rect.max.x = ceilf(max(drawn_rect.max.x, vertex.x));
+            drawn_rect.max.y = ceilf(max(drawn_rect.max.y, vertex.y));
+        }
+
+        Rect paint_rect = intersect(screen_rect, drawn_rect);
+
+        V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
+        V2 texture_size = drawing.bitmap.size + 1 / pixel_scale;
+        V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
+
+        V2_8x x_axis_8x = set1(x_axis);
+        V2_8x y_axis_8x = set1(y_axis);
+        V2_8x inverted_sqr_rect_size_8x = set1(inverted_sqr_rect_size);
+        V2_8x origin_8x = set1(origin);
+        f32_8x zero_to_seven = set8_f32(0, 1, 2, 3, 4, 5, 6, 7);
+        V2_8x texture_size_8x = set1(texture_size);
+
+        for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
+        {
+            u32 *pixel_ptr = screen.pixels + y * (i32)screen.size.x + (i32)paint_rect.min.x;
+            V2_8x d = V2_8x{
+                          set1_f32(paint_rect.min.x) + zero_to_seven,
+                          set1_f32(y)} -
+                      origin_8x;
+
+            for (i32 x = paint_rect.min.x; x < paint_rect.max.x; x += 8)
+            {
+                V2_8x uv01 = V2_8x{dot(d, x_axis_8x), dot(d, y_axis_8x)} * inverted_sqr_rect_size_8x;
+                V2_8x uv = uv01 * (texture_size_8x);
+                V2_8x uv_floored = floor(uv);
+
+                for (i32 iter = 0; iter < 8; iter++)
+                {
+                    V2 uv_fract = clamp01(fract(uv[iter]) * pixel_scale);
+
+                    Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored[iter]));
+                    V4 texel = bilinear_blend(sample, uv_fract);
+                    V4 pixel = argb_to_v4({*pixel_ptr});
+
+                    f32 inverted_alpha = (1 - texel.a * (1 - is_tile));
+                    V4 result = inverted_alpha * pixel + texel;
+
+                    *pixel_ptr = v4_to_argb(result).argb;
+
+                    pixel_ptr++;
+                }
+                d.x += set1_f32(8.0f);
             }
         }
     }
@@ -675,7 +761,7 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
     if (type == Game_Object_PLAYER)
     {
-        game_object.hit_box = {26, 56};
+        game_object.hit_box = {25, 56};
 
         game_object.can_jump = add_timer(0);
         game_object.looking_key_held_timer = add_timer(0);
@@ -688,7 +774,7 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
     if (type == Game_Object_ZOMBIE)
     {
-        game_object.hit_box = {26, 56};
+        game_object.hit_box = {25, 56};
 
         game_object.can_jump = add_timer(0);
 
@@ -1442,7 +1528,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //хитбокс
         draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) / 2}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
 
-        draw_light(screen, game_object->pos, -200, 300);
+        // draw_light(screen, game_object->pos, -200, 300);
     }
 
     if (game_object->type == Game_Object_ZOMBIE)
@@ -2054,7 +2140,6 @@ void game_update(Bitmap screen, Input input)
     //очистка экрана
     clear_screen(screen, darkness);
 
-#if 1
     //обновление сущностей
     for (i32 object_index = 0; object_index < game_object_count; object_index++)
     {
@@ -2064,30 +2149,18 @@ void game_update(Bitmap screen, Input input)
         }
     }
 
-
     camera.pos += (camera.target - camera.pos) * 0.25f;
 
-    //прорисовка темноты
-    f32 intervalx2 = darkness.pitch - darkness.size.x;
-    draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
+    // //прорисовка темноты
+    // f32 intervalx2 = darkness.pitch - darkness.size.x;
+    // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
     //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
     {
         update_tile(tile_index);
     }
-#else
 
-    // f32 size = 40;
-
-    // camera.pos = {};
-    // static f32 t = 0;
-    // t += 0.001f;
-    // f32 x = sinf(t)*10;
-    // draw_bitmap({x, x}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
-    // // draw_bitmap({x + size, x}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
-    // // draw_bitmap({x - size, 0}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
-#endif
     //сортируем qrawQueue
     Drawing new_draw_queue[1024 * 8];
     i32 new_draw_queue_size = 0;

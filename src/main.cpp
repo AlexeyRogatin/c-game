@@ -197,7 +197,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "Auch",
-        WS_VISIBLE | WS_OVERLAPPEDWINDOW,
+        WS_VISIBLE | WS_POPUP | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
         CW_USEDEFAULT, //width
@@ -221,7 +221,11 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     bitmap_info.bmiHeader.biBitCount = 32;
     bitmap_info.bmiHeader.biCompression = BI_RGB;
 
-    u32 *pixels = (u32 *)malloc(4 * window_width * window_height);
+    u64 alignment = 8 * sizeof(u32);
+    u64 screen_buffer_size = 4 * window_width * window_height;
+    screen_buffer_size += alignment - (screen_buffer_size % alignment);
+
+    u32 *pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
 
     Bitmap game_screen;
     game_screen.pixels = pixels;
