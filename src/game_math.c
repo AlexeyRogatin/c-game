@@ -194,3 +194,78 @@ V2 clamp01(V2 a)
     };
     return result;
 }
+
+typedef union
+{
+    u32 argb;
+    struct
+    {
+        u8 b;
+        u8 g;
+        u8 r;
+        u8 a;
+    };
+} ARGB;
+
+union V4 {
+    struct {
+        f32 x, y, z, w;
+    };
+    struct {
+        f32 r, g, b, a;
+    };
+};
+
+V4 argb_to_v4(ARGB pixel) {
+    V4 result;
+    result.r = (f32)pixel.r/255.0f;
+    result.g = (f32)pixel.g/255.0f;
+    result.b = (f32)pixel.b/255.0f;
+    result.a = (f32)pixel.a/255.0f;
+    return result;
+}
+
+V4 lerp(V4 a, V4 b, f32 f)
+{
+    V4 result;
+    result.r = a.r * (1 - f) + b.r * f;
+    result.g = a.g * (1 - f) + b.g * f;
+    result.b = a.b * (1 - f) + b.b * f;
+    result.a = a.a * (1 - f) + b.a * f;
+    return result;
+}
+
+V4 operator*(V4 a, f32 s) {
+    V4 result;
+    result.x = a.x*s;
+    result.y = a.y*s;
+    result.z = a.z*s;
+    result.w = a.w*s;
+    return result;
+}
+V4 operator+(V4 a, V4 b) {
+    V4 result;
+    result.x = a.x+b.x;
+    result.y = a.y+b.y;
+    result.z = a.z+b.z;
+    result.w = a.w+b.w;
+    return result;
+}
+
+V4 operator*(f32 s, V4 a) {
+    V4 result;
+    result.x = a.x*s;
+    result.y = a.y*s;
+    result.z = a.z*s;
+    result.w = a.w*s;
+    return result;
+}
+
+ARGB v4_to_argb(V4 color) {
+    ARGB result;
+    result.r = (u8)(color.r*255);
+    result.g = (u8)(color.g*255);
+    result.b = (u8)(color.b*255);
+    result.a = (u8)(color.a*255);
+    return result;
+}

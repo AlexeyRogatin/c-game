@@ -186,17 +186,6 @@ Camera camera = {
 };
 
 //drawing
-typedef union
-{
-    u32 argb;
-    struct
-    {
-        u8 b;
-        u8 g;
-        u8 r;
-        u8 a;
-    };
-} ARGB;
 
 typedef enum
 {
@@ -210,10 +199,9 @@ typedef enum
     LAYER_BACKGROUND1,
     LAYER_BACKGROUND2,
     LAYER_BACKGROUND3,
-    LAYER_BACKGROUND4,
-    LAYER_GAME_OBJECT,
     LAYER_TILE,
-    LAYER_FTILE,
+    LAYER_BG_ITEM,
+    LAYER_GAME_OBJECT,
     LAYER_FORGROUND,
 } Layer;
 
@@ -273,22 +261,22 @@ void clear_screen(Bitmap screen, Bitmap darkness)
     i32 pixelCount = screen.size.x * screen.size.y;
     for (i32 i = 0; i < pixelCount; i++)
     {
-        screen.pixels[i] = 0xFFFFFF00;
+        screen.pixels[i] = 0;
     }
 
-    //обновление темноты
-    for (i32 y = 0; y < darkness.size.y; y++)
-    {
-        for (i32 x = 0; x < darkness.size.x; x++)
-        {
-            darkness.pixels[(y + 1) * darkness.pitch + x + 1] = 0xFA000000;
-        }
-    }
+    // //обновление темноты
+    // for (i32 y = 0; y < darkness.size.y; y++)
+    // {
+    //     for (i32 x = 0; x < darkness.size.x; x++)
+    //     {
+    //         darkness.pixels[(y + 1) * darkness.pitch + x + 1] = 0xFA000000;
+    //     }
+    // }
 }
 
 typedef struct
 {
-    ARGB a, b, c, d;
+    V4 a, b, c, d;
 } Bilinear_Sample;
 
 V2 get_size(Rect rect)
@@ -320,30 +308,20 @@ bool has_area(Rect rect)
 
 Bilinear_Sample get_bilinear_sample(Bitmap bitmap, V2 pos)
 {
-    ARGB a = {bitmap.pixels[(i32)pos.y * bitmap.pitch + (i32)pos.x]};
-    ARGB b = {bitmap.pixels[(i32)pos.y * bitmap.pitch + (i32)pos.x + 1]};
-    ARGB c = {bitmap.pixels[((i32)pos.y + 1) * bitmap.pitch + (i32)pos.x]};
-    ARGB d = {bitmap.pixels[((i32)pos.y + 1) * bitmap.pitch + (i32)pos.x + 1]};
+    V4 a = argb_to_v4({bitmap.pixels[(i32)pos.y * bitmap.pitch + (i32)pos.x]});
+    V4 b = argb_to_v4({bitmap.pixels[(i32)pos.y * bitmap.pitch + (i32)pos.x + 1]});
+    V4 c = argb_to_v4({bitmap.pixels[((i32)pos.y + 1) * bitmap.pitch + (i32)pos.x]});
+    V4 d = argb_to_v4({bitmap.pixels[((i32)pos.y + 1) * bitmap.pitch + (i32)pos.x + 1]});
 
     Bilinear_Sample result = {a, b, c, d};
     return result;
 }
 
-ARGB lerp(ARGB a, ARGB b, f32 f)
+V4 bilinear_blend(Bilinear_Sample sample, V2 f)
 {
-    ARGB result;
-    result.r = a.r * (1 - f) + b.r * f;
-    result.g = a.g * (1 - f) + b.g * f;
-    result.b = a.b * (1 - f) + b.b * f;
-    result.a = a.a * (1 - f) + b.a * f;
-    return result;
-}
-
-ARGB bilinear_blend(Bilinear_Sample sample, V2 f)
-{
-    ARGB ab = lerp(sample.a, sample.b, f.x);
-    ARGB cd = lerp(sample.c, sample.d, f.x);
-    ARGB abcd = lerp(ab, cd, f.y);
+    V4 ab = lerp(sample.a, sample.b, f.x);
+    V4 cd = lerp(sample.c, sample.d, f.x);
+    V4 abcd = lerp(ab, cd, f.y);
     return abcd;
 }
 
@@ -354,6 +332,14 @@ void draw_item(Bitmap screen, Drawing drawing)
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
 
         V2 rect_size = drawing.size;
+        if (rect_size.x >= 0)
+            rect_size.x += 2;
+        else
+            rect_size.x -= 2;
+        if (rect_size.y >= 0)
+            rect_size.y += 2;
+        else
+            rect_size.y -= 2;
 
         V2 x_axis = rotate_vector({drawing.size.x, 0}, drawing.angle);
         V2 y_axis = rotate_vector({0, drawing.size.y}, drawing.angle);
@@ -398,17 +384,19 @@ void draw_item(Bitmap screen, Drawing drawing)
 
     if (drawing.type == DRAWING_TYPE_BITMAP)
     {
+        bool is_tile =  drawing.layer < LAYER_BG_ITEM;
+
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
 
         V2 rect_size = drawing.size;
-        if (rect_size.x > 0)
-            rect_size.x += 2;
-        if (rect_size.y > 0)
-            rect_size.y += 2;
-        if (rect_size.x < 0)
-            rect_size.x -= 2;
-        if (rect_size.y < 0)
-            rect_size.y -= 2;
+        if (rect_size.x >= 0)
+            rect_size.x += 1;
+        else
+            rect_size.x -= 1;
+        if (rect_size.y >= 0)
+            rect_size.y += 1;
+        else
+            rect_size.y -= 1;
 
         V2 x_axis = rotate_vector({rect_size.x, 0}, drawing.angle);
         V2 y_axis = rotate_vector({0, rect_size.y}, drawing.angle);
@@ -434,11 +422,11 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         Rect paint_rect = intersect(screen_rect, drawn_rect);
 
-        V2 texture_size = drawing.bitmap.size;
-        V2 pixel_scale = abs(drawing.size) / texture_size;
-        V2 texture_size_with_apron = texture_size + 1 / pixel_scale;
+        V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
+        V2 texture_size = drawing.bitmap.size + 1/pixel_scale;
 
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
+
 
         for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
         {
@@ -446,23 +434,21 @@ void draw_item(Bitmap screen, Drawing drawing)
             {
                 V2 d = V2{(f32)x, (f32)y} - origin;
                 V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
+                if (uv01.x >= 0 && uv01.x < 1 && uv01.y >= 0 && uv01.y < 1) {
+                    V2 uv = uv01 * (texture_size);
+                    V2 uv_floored = floor(uv);
+                    V2 uv_fract = clamp01(fract(uv) * pixel_scale);
 
-                V2 uv = uv01 * texture_size_with_apron;
-                V2 uv_floored = floor(uv);
-                V2 uv_fract = clamp01(fract(uv) * pixel_scale);
+                    Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
+                    V4 texel = bilinear_blend(sample, uv_fract);
+                    V4 pixel = argb_to_v4({screen.pixels[y * (i32)screen.size.x + x]});
+                    // V4 pixel = argb_to_v4({0xFFFF00FF});
 
-                Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
-                ARGB mixed_sample = bilinear_blend(sample, uv_fract);
+                    f32 inverted_alpha = (1 - texel.a*(1 - is_tile));
+                    V4 result = inverted_alpha*pixel + texel;
 
-                ARGB pixel = {screen.pixels[y * (i32)screen.size.x + x]};
-                f32 alpha = (f32)mixed_sample.a / 255.0f;
-
-                ARGB result;
-                result.r = (mixed_sample.r + pixel.r * (1 - alpha));
-                result.g = (mixed_sample.g + pixel.g * (1 - alpha));
-                result.b = (mixed_sample.b + pixel.b * (1 - alpha));
-
-                screen.pixels[y * (i32)screen.size.x + x] = result.argb;
+                    screen.pixels[y * (i32)screen.size.x + x] = v4_to_argb(result).argb;
+                }
             }
         }
     }
@@ -2003,7 +1989,7 @@ void update_tile(i32 tile_index)
 
     if (tile->type == Tile_Type_EXIT)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BG_ITEM);
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, img_DoorBack.size * 5, tile_map[tile_index].angle, img_DoorBack, LAYER_BACKGROUND2);
     }
     else if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
@@ -2012,7 +1998,7 @@ void update_tile(i32 tile_index)
     }
     else if (tile->type == Tile_Type_ENTER)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BACKGROUND4);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS / 2)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BG_ITEM);
     }
     else if (tile->type != Tile_Type_NONE)
     {
@@ -2048,6 +2034,7 @@ void game_update(Bitmap screen, Input input)
     //очистка экрана
     clear_screen(screen, darkness);
 
+#if 1
     //обновление сущностей
     for (i32 object_index = 0; object_index < game_object_count; object_index++)
     {
@@ -2057,18 +2044,30 @@ void game_update(Bitmap screen, Input input)
         }
     }
 
+
     camera.pos += (camera.target - camera.pos) * 0.25f;
 
-    // //прорисовка темноты
-    // f32 intervalx2 = darkness.pitch - darkness.size.x;
-    // draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
+    //прорисовка темноты
+    f32 intervalx2 = darkness.pitch - darkness.size.x;
+    draw_bitmap(camera.pos, screen.size + V2{intervalx2, intervalx2}, 0, darkness, LAYER_FORGROUND);
 
     //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
     {
         update_tile(tile_index);
     }
+#else
 
+    // f32 size = 40;
+
+    // camera.pos = {};
+    // static f32 t = 0;
+    // t += 0.001f;
+    // f32 x = sinf(t)*10;
+    // draw_bitmap({x, x}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
+    // // draw_bitmap({x + size, x}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
+    // // draw_bitmap({x - size, 0}, {size, size}, 0, img_Bricks[0], LAYER_BACKGROUND1);
+#endif
     //сортируем qrawQueue
     Drawing new_draw_queue[1024 * 8];
     i32 new_draw_queue_size = 0;
