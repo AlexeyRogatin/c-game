@@ -279,6 +279,7 @@ ARGB v4_to_argb(V4 color)
 }
 
 #include <immintrin.h>
+#include <intrin.h>
 
 struct f32_8x
 {
@@ -308,6 +309,12 @@ f32_8x operator*(f32_8x a, f32_8x b)
     return result;
 }
 
+f32_8x operator/(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_div_ps(a.v, b.v)};
+    return result;
+}
+
 f32_8x operator+(f32_8x a, f32_8x b)
 {
     f32_8x result = {_mm256_add_ps(a.v, b.v)};
@@ -330,6 +337,75 @@ f32_8x floor(f32_8x v)
 {
     f32_8x result = {_mm256_floor_ps(v.v)};
     return result;
+}
+
+struct i32_8x
+{
+    __m256i v;
+
+    i32 &operator[](int i)
+    {
+        return ((i32 *)&v)[i];
+    }
+};
+
+i32_8x to_i32_8x(f32_8x v)
+{
+    i32_8x result = {_mm256_cvtps_epi32(v.v)};
+    return result;
+}
+
+f32_8x to_f32_8x(i32_8x v)
+{
+    f32_8x result = {_mm256_cvtepi32_ps(v.v)};
+    return result;
+}
+
+i32_8x gather(const int *address, i32_8x offsets)
+{
+    i32_8x result = {_mm256_i32gather_epi32(address, offsets.v, 4)};
+    return result;
+}
+
+i32_8x set1_i32(i32 a)
+{
+    i32_8x result = {_mm256_set1_epi32(a)};
+    return result;
+}
+
+i32_8x operator>>(i32_8x a, i32 b)
+{
+    i32_8x result = {_mm256_srli_epi32(a.v, b)};
+    return result;
+}
+
+i32_8x operator<<(i32_8x a, i32 b)
+{
+    i32_8x result = {_mm256_slli_epi32(a.v, b)};
+    return result;
+}
+
+i32_8x operator|(i32_8x a, i32_8x b)
+{
+    i32_8x result = {_mm256_or_si256(a.v, b.v)};
+    return result;
+}
+
+i32_8x operator&(i32_8x a, i32_8x b)
+{
+    i32_8x result = {_mm256_and_si256(a.v, b.v)};
+    return result;
+}
+
+i32_8x load(void *address)
+{
+    i32_8x result = {_mm256_load_si256((const __m256i *)address)};
+    return result;
+}
+
+void store(void *address, i32_8x data)
+{
+    _mm256_store_si256((__m256i *)address, data.v);
 }
 
 struct V2_8x
@@ -402,5 +478,129 @@ V2_8x floor(V2_8x v)
 V2_8x fract(V2_8x v)
 {
     V2_8x result = v - floor(v);
+    return result;
+}
+
+f32_8x min(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_min_ps(a.v, b.v)};
+    return result;
+}
+
+f32_8x max(f32_8x a, f32_8x b)
+{
+    f32_8x result = {_mm256_max_ps(a.v, b.v)};
+    return result;
+}
+
+V2_8x clamp01(V2_8x v)
+{
+    V2_8x result = V2_8x{
+        min(set1_f32(1), max(v.x, set1_f32(0))),
+        min(set1_f32(1), max(v.y, set1_f32(0))),
+    };
+    return result;
+}
+
+union V4_8x
+{
+    struct
+    {
+        f32_8x x, y, z, w;
+    };
+    struct
+    {
+        f32_8x r, g, b, a;
+    };
+
+    V4 operator[](int i)
+    {
+        return V4{x[i], y[i], z[i], w[i]};
+    }
+};
+
+// 00 00 00 FF (mask)
+
+// AA RR GG BB (c)
+
+// 00 00 00 AA
+// c >> 24
+
+// 00 00 00 RR
+// (c >> 16) | mask
+
+// 00 00 00 GG
+// (c >> 8) | mask
+
+// 00 00 00 BB
+// c | mask
+
+V4_8x argb_to_v4_8x(i32_8x pixel)
+{
+    V4_8x result;
+    i32_8x mask = set1_i32(0xFF);
+    f32_8x pixel_a = to_f32_8x(pixel >> 24);
+    f32_8x pixel_r = to_f32_8x((pixel >> 16) & mask);
+    f32_8x pixel_g = to_f32_8x((pixel >> 8) & mask);
+    f32_8x pixel_b = to_f32_8x(pixel & mask);
+
+    f32_8x one_over_255 = set1_f32(1 / 255.0f);
+
+    result.r = pixel_r * one_over_255;
+    result.g = pixel_g * one_over_255;
+    result.b = pixel_b * one_over_255;
+    result.a = pixel_a * one_over_255;
+    return result;
+}
+
+V4_8x lerp(V4_8x a, V4_8x b, f32_8x f)
+{
+    V4_8x result;
+    f32_8x one_8x = set1_f32(1);
+    result.r = a.r * (one_8x - f) + b.r * f;
+    result.g = a.g * (one_8x - f) + b.g * f;
+    result.b = a.b * (one_8x - f) + b.b * f;
+    result.a = a.a * (one_8x - f) + b.a * f;
+    return result;
+}
+
+V4_8x operator*(V4_8x a, f32_8x s)
+{
+    V4_8x result;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
+    result.w = a.w * s;
+    return result;
+}
+V4_8x operator+(V4_8x a, V4_8x b)
+{
+    V4_8x result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    return result;
+}
+
+V4_8x operator*(f32_8x s, V4_8x a)
+{
+    V4_8x result;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
+    result.w = a.w * s;
+    return result;
+}
+
+i32_8x v4_to_argb_8x(V4_8x color)
+{
+    f32_8x one255 = set1_f32(255);
+    i32_8x result;
+    i32_8x a = to_i32_8x(color.a * one255) << 24;
+    i32_8x r = to_i32_8x(color.r * one255) << 16;
+    i32_8x g = to_i32_8x(color.g * one255) << 8;
+    i32_8x b = to_i32_8x(color.b * one255);
+    result = a | r | g | b;
     return result;
 }

@@ -27,6 +27,11 @@ typedef u8 byte;
 #include "game.c"
 #include "Windows.h"
 
+void foo(const char *str)
+{
+    OutputDebugStringA(str);
+}
+
 typedef struct
 {
     byte *data;
@@ -94,7 +99,11 @@ Bitmap win32_read_bmp(char *file_name)
     Bmp_Info *info = (Bmp_Info *)(file.data + sizeof(Bmp_Header));
     u32 *pixels = (u32 *)(file.data + header->data_offset);
 
-    u32 *new_pixels = (u32 *)calloc((info->width + 2) * (info->height + 2), sizeof(u32));
+    u64 alignment = 8 * sizeof(u32);
+    u64 screen_buffer_size = 4 * (info->width + 2) * (info->height + 2);
+    screen_buffer_size += alignment - (screen_buffer_size % alignment);
+
+    u32 *new_pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
     Bitmap result;
     result.pitch = info->width + 2;
 
