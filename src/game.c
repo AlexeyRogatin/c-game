@@ -425,7 +425,7 @@ struct Timed_Scope
     }
 };
 
-#define TIMED_BLOCK(name, times) Timed_Scope __scope_##name = {__rdtsc(), #name, times};
+// #define TIMED_BLOCK(name, times) Timed_Scope __scope_##name = {__rdtsc(), #name, times};
 
 void draw_item(Bitmap screen, Drawing drawing)
 {
@@ -530,7 +530,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
         if (has_area(paint_rect))
         {
-            TIMED_BLOCK(draw_pixel_slowly, (u64)get_area(paint_rect));
+            // TIMED_BLOCK(draw_pixel_slowly, (u64)get_area(paint_rect));
 
             for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
             {
@@ -616,7 +616,7 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         if (has_area(paint_rect))
         {
-            TIMED_BLOCK(draw_pixel, (u64)get_area(paint_rect));
+            // TIMED_BLOCK(draw_pixel, (u64)get_area(paint_rect));
             for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
             {
                 u32 *pixel_ptr = screen.pixels + y * (i32)screen.size.x + (i32)paint_rect.min.x;

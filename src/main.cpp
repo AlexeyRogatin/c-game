@@ -104,6 +104,7 @@ Bitmap win32_read_bmp(char *file_name)
     screen_buffer_size += alignment - (screen_buffer_size % alignment);
 
     u32 *new_pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
+    memset(new_pixels, 0, screen_buffer_size);
     Bitmap result;
     result.pitch = info->width + 2;
 
