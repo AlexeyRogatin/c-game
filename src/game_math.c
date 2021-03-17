@@ -67,9 +67,19 @@ V2 operator*=(V2 &a, f32 c)
     a = a * c;
     return a;
 }
+V2 operator*=(V2 &a, V2 b)
+{
+    a = a * b;
+    return a;
+}
 V2 operator/=(V2 &a, f32 c)
 {
     a = a / c;
+    return a;
+}
+V2 operator/=(V2 &a, V2 b)
+{
+    a = a / b;
     return a;
 }
 V2 floor(V2 a)
