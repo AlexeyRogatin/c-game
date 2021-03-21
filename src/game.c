@@ -178,7 +178,7 @@ typedef struct
 {
     V2 pos;
     V2 target;
-    V2 size;
+    V2 scale;
 } Camera;
 
 Camera camera = {
@@ -357,6 +357,14 @@ bool has_area(Rect rect)
 {
     V2 size = get_size(rect);
     bool result = size.x > 0 && size.y > 0;
+    return result;
+}
+
+Bitmap create_empty_bitmap(V2 size) {
+    Bitmap result = {};
+    result.size = size;
+    result.pitch = size.x + 2;
+    result.pixels = (u32 *)malloc((u32)(result.pitch*(size.y + 2)*sizeof(u32)));
     return result;
 }
 
@@ -650,51 +658,35 @@ void draw_item(Bitmap screen, Drawing drawing)
 
 Bitmap darkness;
 
-void draw_light(Bitmap screen, V2 pos, f32 innerRadius, f32 radius)
-{
-    V2 scale = screen.size / camera.size;
-    V2 interval = (TILE_SIZE_PIXELS / img_PlayerIdle.size) * scale;
+V2 world_to_screen(Bitmap screen, Camera camera, V2 p) {
+    V2 result = (p - camera.pos)*camera.scale + screen.size*0.5f;
+    return result;
+}
 
-    V2 min_pos = pos - V2{radius, radius};
-    V2 max_pos = pos + V2{radius, radius};
+void draw_light(Bitmap screen, Camera camera, V2 world_pos, f32 innerRadius, f32 world_radius)
+{  
+    f32 darkness_scale = darkness.size.x/screen.size.x;
+    f32 radius = world_radius*camera.scale.x*darkness_scale;
+    V2 center = world_to_screen(screen, camera, world_pos)*darkness_scale;
 
-    min_pos.x = max(min_pos.x, camera.pos.x - camera.size.x * 0.5);
-    min_pos.y = max(min_pos.y, camera.pos.y - camera.size.y * 0.5);
-    max_pos.x = min(max_pos.x, camera.pos.x + camera.size.x * 0.5);
-    max_pos.y = min(max_pos.y, camera.pos.y + camera.size.y * 0.5);
 
-    min_pos = ceil(min_pos / interval) * interval;
-    max_pos = floor(max_pos / interval) * interval;
+    Rect rect = {
+        center - V2{radius, radius},
+        center + V2{radius, radius},
+    };
+    f32 radius_sqr = radius*radius;
 
-    V2 half_interval = interval * 0.5;
-    V2 from_map_to_camera_screen = camera.size * 0.5 - camera.pos;
-
-    for (f32 y = min_pos.y; y < max_pos.y; y += interval.y)
+    for (f32 y = rect.min.y; y < rect.max.y; y++)
     {
-        for (f32 x = min_pos.x; x < max_pos.x; x += interval.x)
-        {
-            f32 distance = distance_between_points(pos, V2{f32(x), f32(y)});
-            f32 alpha = (distance - innerRadius) / (radius - innerRadius);
-            if (alpha < 1)
+            for (f32 x = rect.min.x; x < rect.max.x; x++)
             {
-                if (alpha < 0)
-                {
-                    alpha = 0;
-                }
-                V2 tex_pos = (V2{(f32)x, (f32)y} + from_map_to_camera_screen) * scale;
-                for (f32 pY = -half_interval.y; pY <= half_interval.y; pY++)
-                {
-                    for (f32 pX = -half_interval.x; pX <= half_interval.x; pX++)
-                    {
-                        i32 index = ceil(tex_pos.y + pY) * darkness.size.x + ceil(tex_pos.x + pX);
-                        ARGB pixel = {darkness.pixels[index]};
-                        pixel.a *= alpha;
+                V2 d = {x, y};
+                f32 dist_sqr = length_sqr(d - center);
 
-                        darkness.pixels[index] = pixel.argb;
-                    }
-                }
+                ARGB pixel = {darkness.pixels[(i32)y*(i32)darkness.pitch + (i32)x]};
+                f32 intensity = min(pixel.a/255.0f, dist_sqr / radius_sqr);
+                darkness.pixels[(i32)y*(i32)darkness.pitch + (i32)x] = v4_to_argb({0, 0, 0, intensity}).argb;
             }
-        }
     }
 }
 
@@ -1566,32 +1558,32 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //границы для камеры
-        if (!(camera.target.x - camera.size.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
-        {
-            camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + camera.size.x * 0.5;
-        }
+        // if (!(camera.target.x - camera.size.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
+        // {
+        //     camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + camera.size.x * 0.5;
+        // }
 
-        if (!(camera.target.x + camera.size.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
-        {
-            camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - camera.size.x * 0.5;
-        }
+        // if (!(camera.target.x + camera.size.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
+        // {
+        //     camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - camera.size.x * 0.5;
+        // }
 
-        if (!(camera.target.y - camera.size.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
-        {
-            camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + camera.size.y * 0.5;
-        }
+        // if (!(camera.target.y - camera.size.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
+        // {
+        //     camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + camera.size.y * 0.5;
+        // }
 
-        if (!(camera.target.y + camera.size.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
-        {
-            camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - camera.size.y * 0.5;
-        }
+        // if (!(camera.target.y + camera.size.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
+        // {
+        //     camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - camera.size.y * 0.5;
+        // }
 
         //прорисовка игрока
 
         //хитбокс
         draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->hit_box.y) * 0.5f}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
 
-        draw_light(screen, game_object->pos, -200, 300);
+        draw_light(screen, camera, game_object->pos, 200, 300);
     }
 
     if (game_object->type == Game_Object_ZOMBIE)
@@ -2096,25 +2088,25 @@ void generate_map(Bitmap screen)
             add_game_object(Game_Object_ZOMBIE, spawn_pos);
             camera.pos = spawn_pos;
             //границы для камеры
-            if (!(camera.pos.x - camera.size.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
-            {
-                camera.pos.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + camera.size.x * 0.5;
-            }
+            // if (!(camera.pos.x - camera.size.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
+            // {
+            //     camera.pos.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + camera.size.x * 0.5;
+            // }
 
-            if (!(camera.pos.x + camera.size.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
-            {
-                camera.pos.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - camera.size.x * 0.5;
-            }
+            // if (!(camera.pos.x + camera.size.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
+            // {
+            //     camera.pos.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - camera.size.x * 0.5;
+            // }
 
-            if (!(camera.pos.y - camera.size.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
-            {
-                camera.pos.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + camera.size.y * 0.5;
-            }
+            // if (!(camera.pos.y - camera.size.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
+            // {
+            //     camera.pos.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + camera.size.y * 0.5;
+            // }
 
-            if (!(camera.pos.y + camera.size.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
-            {
-                camera.pos.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - camera.size.y * 0.5;
-            }
+            // if (!(camera.pos.y + camera.size.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
+            // {
+            //     camera.pos.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - camera.size.y * 0.5;
+            // }
             camera.target = camera.pos;
             solid = false;
             sprite = img_Door[0];
@@ -2206,12 +2198,11 @@ void game_update(Bitmap screen, Input input)
     {
         initialized = true;
 
-        camera.size = screen.size * 1.5;
+        camera.scale = V2{1, 1};
 
         //темнота
         i32 interval = floor(TILE_SIZE_PIXELS / img_PlayerIdle.size.x);
-        darkness.size = screen.size;
-        darkness.pixels = (u32 *)malloc(sizeof(u32) * darkness.size.x * darkness.size.y);
+        darkness = create_empty_bitmap(screen.size);
 
         generate_map(screen);
     }
@@ -2224,6 +2215,9 @@ void game_update(Bitmap screen, Input input)
     //очистка экрана
     clear_screen(screen, darkness);
 
+    //камера
+    camera.pos += (camera.target - camera.pos) * 0.25f;
+
     //обновление сущностей
     for (i32 object_index = 0; object_index < game_object_count; object_index++)
     {
@@ -2232,9 +2226,6 @@ void game_update(Bitmap screen, Input input)
             update_game_object(&game_objects[object_index], input, screen);
         }
     }
-
-    //камера
-    camera.pos += (camera.target - camera.pos) * 0.25f;
 
     //прорисовка темноты
     draw_bitmap(camera.pos, screen.size, 0, darkness, LAYER_FORGROUND);
@@ -2250,21 +2241,18 @@ void game_update(Bitmap screen, Input input)
     i32 new_draw_queue_size = 0;
     Layer layer = (Layer)0;
 
-    V2 scale = screen.size / camera.size;
 
     //to do переделать под insertion sort
     while (new_draw_queue_size != draw_queue_size)
     {
-        for (i32 drawingIndex = 0; drawingIndex < draw_queue_size; drawingIndex++)
+        for (i32 drawing_index = 0; drawing_index < draw_queue_size; drawing_index++)
         {
-            if (draw_queue[drawingIndex].layer == layer)
+            if (draw_queue[drawing_index].layer == layer)
             {
-                draw_queue[drawingIndex].pos += screen.size * 0.5 - camera.pos;
-                draw_queue[drawingIndex].size *= scale;
-                V2 pos_to_camera = draw_queue[drawingIndex].pos - screen.size * 0.5;
-                pos_to_camera *= scale;
-                draw_queue[drawingIndex].pos = pos_to_camera + screen.size * 0.5;
-                new_draw_queue[new_draw_queue_size] = draw_queue[drawingIndex];
+                draw_queue[drawing_index].pos = world_to_screen(screen, camera, draw_queue[drawing_index].pos);
+                draw_queue[drawing_index].size *= camera.scale;
+
+                new_draw_queue[new_draw_queue_size] = draw_queue[drawing_index];
                 new_draw_queue_size++;
             }
         }
