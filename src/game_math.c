@@ -108,6 +108,11 @@ f32 length(V2 a)
     f32 result = sqrtf(length_sqr);
     return result;
 }
+f32 length_sqr(V2 a)
+{
+    f32 result = a.x * a.x + a.y * a.y;
+    return result;
+}
 V2 unit(V2 a)
 {
     V2 result = {0, 0};
