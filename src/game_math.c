@@ -195,6 +195,20 @@ f32 max(f32 a, f32 b)
     return result;
 }
 
+V2 min(V2 a, V2 b)
+{
+    V2 result;
+    result = {min(a.x, b.x), min(a.y, b.y)};
+    return result;
+}
+
+V2 max(V2 a, V2 b)
+{
+    V2 result;
+    result = {max(a.x, b.x), max(a.y, b.y)};
+    return result;
+}
+
 V2 fract(V2 a)
 {
     V2 result = {a.x - floorf(a.x), a.y - floorf(a.y)};
@@ -617,5 +631,45 @@ i32_8x v4_to_argb_8x(V4_8x color)
     i32_8x g = to_i32_8x(color.g * one255) << 8;
     i32_8x b = to_i32_8x(color.b * one255);
     result = a | r | g | b;
+    return result;
+}
+
+typedef struct
+{
+    V2 min;
+    V2 max;
+} Rect;
+
+V2 get_size(Rect rect)
+{
+    V2 size = {rect.max.x - rect.min.x, rect.max.y - rect.min.y};
+    return size;
+}
+
+f32 get_area(Rect r)
+{
+    V2 size = get_size(r);
+    f32 result = size.x * size.y;
+    return result;
+}
+
+V2 get_center(Rect rect)
+{
+    V2 result = rect.min + get_size(rect) * 0.5;
+    return result;
+}
+
+Rect intersect(Rect rect1, Rect rect2)
+{
+    Rect result = {
+        {max(rect1.min.x, rect2.min.x), max(rect1.min.y, rect2.min.y)},
+        {min(rect1.max.x, rect2.max.x), min(rect1.max.y, rect2.max.y)}};
+    return result;
+}
+
+bool has_area(Rect rect)
+{
+    V2 size = get_size(rect);
+    bool result = size.x > 0 && size.y > 0;
     return result;
 }
