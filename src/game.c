@@ -347,7 +347,7 @@ typedef struct
 
 Bitmap create_empty_bitmap(V2 size)
 {
-    Bitmap result = {};
+    Bitmap result;
     result.size = size;
     result.pitch = size.x + 2;
     result.pixels = (u32 *)malloc((u32)(result.pitch * (size.y + 2) * sizeof(u32)));
@@ -427,13 +427,13 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         V2 rect_size = drawing.size;
         if (rect_size.x >= 0)
-            rect_size.x += 2;
+            rect_size.x += 1;
         else
-            rect_size.x -= 2;
+            rect_size.x -= 1;
         if (rect_size.y >= 0)
-            rect_size.y += 2;
+            rect_size.y += 1;
         else
-            rect_size.y -= 2;
+            rect_size.y -= 1;
 
         V2 x_axis = rotate_vector({drawing.size.x, 0}, drawing.angle);
         V2 y_axis = rotate_vector({0, drawing.size.y}, drawing.angle);
@@ -476,8 +476,13 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
+    if (drawing.type == DRAWING_TYPE_BITMAP)
     {
+        if (drawing.layer == LAYER_FORGROUND)
+        {
+            i32 foo = 0;
+        }
+
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
 
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
@@ -536,6 +541,11 @@ void draw_item(Bitmap screen, Drawing drawing)
                         V2 uv_floored = floor(uv);
                         V2 uv_fract = clamp01(fract(uv) * pixel_scale);
 
+                        if (uv_floored.y == 866 && drawing.bitmap.size.x > 16)
+                        {
+                            i32 foor = 0;
+                        }
+
                         Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
                         V4 texel = bilinear_blend(sample, uv_fract);
                         V4 pixel = argb_to_v4({screen.pixels[y * (i32)screen.size.x + x]});
@@ -551,7 +561,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_BITMAP)
+    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
     {
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
         f32_8x is_tile_multiplier = set1_f32(1 - is_tile);
@@ -662,7 +672,7 @@ void draw_light(Bitmap screen, Camera camera, V2 world_pos, f32 innerRadius, f32
     };
     Rect screen_rect = {
         V2{0, 0},
-        screen.size,
+        darkness.size,
     };
     rect = intersect(rect, screen_rect);
 
@@ -2158,7 +2168,7 @@ void game_update(Bitmap screen, Input input)
     {
         initialized = true;
 
-        camera.scale = V2{1, 1};
+        camera.scale = V2{1, 1} * 0.3;
 
         //темнота
         darkness = create_empty_bitmap(screen.size);

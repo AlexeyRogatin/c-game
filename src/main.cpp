@@ -107,6 +107,7 @@ Bitmap win32_read_bmp(char *file_name)
     memset(new_pixels, 0, screen_buffer_size);
     Bitmap result;
     result.pitch = info->width + 2;
+    result.size = {(f32)info->width, (f32)info->height};
 
     u32 bitmap_start_offset = result.pitch + 1;
 
@@ -127,7 +128,6 @@ Bitmap win32_read_bmp(char *file_name)
 
     // AA RR GG BB
     result.pixels = new_pixels;
-    result.size = {(f32)info->width, (f32)info->height};
 
     free(file.data);
 
