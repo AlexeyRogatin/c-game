@@ -1,6 +1,6 @@
-#include <malloc.h>
 #include "math.h"
 #include "game_math.c"
+#include <malloc.h>
 
 #define PI 3.14159265
 
@@ -9,6 +9,7 @@
 #define CHUNK_SIZE_Y 8
 #define CHUNK_COUNT_X 4
 #define CHUNK_COUNT_Y 4
+#define BORDER_SIZE 2
 
 //fps
 f64 target_time_per_frame = 1.0f / 60.0f;
@@ -272,24 +273,24 @@ void clear_screen(Bitmap screen, Bitmap darkness)
 
 void border_camera(Bitmap screen)
 {
-    if (!(camera.target.x - screen.size.x / camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - TILE_SIZE_PIXELS * 2))
+    if (!(camera.target.x - screen.size.x / camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - TILE_SIZE_PIXELS * 2 + screen.size.x / camera.scale.x * 0.5;
+        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + screen.size.x / camera.scale.x * 0.5;
     }
 
-    if (!(camera.target.x + screen.size.x / camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + TILE_SIZE_PIXELS * 2))
+    if (!(camera.target.x + screen.size.x / camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + TILE_SIZE_PIXELS * 2 - screen.size.x / camera.scale.x * 0.5;
+        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / camera.scale.x * 0.5;
     }
 
-    if (!(camera.target.y - screen.size.y / camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - TILE_SIZE_PIXELS * 2))
+    if (!(camera.target.y - screen.size.y / camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - TILE_SIZE_PIXELS * 2 + screen.size.y / camera.scale.y * 0.5;
+        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + screen.size.y / camera.scale.y * 0.5;
     }
 
-    if (!(camera.target.y + screen.size.y / camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + TILE_SIZE_PIXELS * 2))
+    if (!(camera.target.y + screen.size.y / camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + TILE_SIZE_PIXELS * 2 - screen.size.y / camera.scale.y * 0.5;
+        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / camera.scale.y * 0.5;
     }
 }
 
@@ -322,16 +323,17 @@ Tile *tile_map = NULL;
 
 V2 get_tile_pos(i32 index)
 {
-    //index = y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + x;
-    f32 y = floor(index / (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)));
-    f32 x = index - y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2));
+    //size_x = CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2;
+    //index = y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + x;
+    f32 y = floor(index / (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2));
+    f32 x = index - y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2);
     V2 result = {x, y};
     return result;
 }
 
 i32 get_index(V2 coords)
 {
-    i32 index = coords.y * (CHUNK_SIZE_X * (CHUNK_COUNT_X + 2)) + coords.x;
+    i32 index = coords.y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + coords.x;
     return index;
 }
 
@@ -623,7 +625,7 @@ void draw_item(Bitmap screen, Drawing drawing)
                 {
                     V2_8x uv01 = V2_8x{dot(d, x_axis_8x), dot(d, y_axis_8x)} * inverted_sqr_rect_size_8x;
                     V2_8x uv = uv01 * (texture_size_8x);
-                    V2_8x uv_floored = clamp(floor(uv), zero_vector_8x, bitmap_size_8x);
+                    V2_8x uv_floored = floor(uv), zero_vector_8x, bitmap_size_8x;
                     V2_8x uv_fract = clamp01(fract(uv) * pixel_scale_8x);
 
                     Bilinear_Sample_8x sample = get_bilinear_sample(drawing.bitmap, uv_floored);
@@ -695,6 +697,7 @@ typedef enum
 {
     Direction_RIGHT = 1,
     Direction_LEFT = -1,
+    Direction_VERTICAL = 0,
 } Direction;
 
 typedef enum
@@ -900,7 +903,7 @@ Collisions check_collision(Game_Object *game_object)
         for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
         {
             V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
-            i32 tile_index = tile_pos.y * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + tile_pos.x;
+            i32 tile_index = get_index(V2{tile_pos.x, tile_pos.y});
             Tile tile = tile_map[tile_index];
             if (tile.type && tile.solid)
             {
@@ -1101,7 +1104,7 @@ Result:
 //     {
 //         for (i32 x = objTilePos.x - tileCountX; x <= objTilePos.x + tileCountX; x++)
 //         {
-//             i32 tileIndex = y * (CHUNK_COUNT_X + 2) * CHUNK_SIZE_X + x;
+//             i32 tileIndex = get_index(x,y);
 //             Tile tile = tile_map[tileIndex];
 
 //             if (tile.solid)
@@ -1340,8 +1343,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
         V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
 
-        i32 collision_up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x;
-        i32 up_tile_index = (collided_x_tile_pos.y + 1) * CHUNK_SIZE_X * (CHUNK_COUNT_X + 2) + collided_x_tile_pos.x - game_object->looking_direction;
+        i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
+        i32 up_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
 
         //состояние весит
         if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
@@ -1735,14 +1738,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     }
 }
 
-void generate_map(Bitmap screen)
+void generate_new_map(Bitmap screen)
 {
-    //карта тайлов
-    V2 map_size = {(CHUNK_COUNT_X + 2) * CHUNK_SIZE_X, (CHUNK_COUNT_Y + 2) * CHUNK_SIZE_Y};
-    i32 tile_count = map_size.x * map_size.y;
-
-    tile_map = (Tile *)malloc(sizeof(Tile) * tile_count);
-
     //удаляем объекты
     for (i32 i = 0; i < game_object_count; i++)
     {
@@ -1752,62 +1749,55 @@ void generate_map(Bitmap screen)
     //удаляем таймеры
     timers_count = 1;
 
-    //создание чанков
-    char *chunk_strings[(CHUNK_COUNT_X + 2) * (CHUNK_COUNT_Y + 2)];
+    //генерация
+    f32 down_chunk_chance = 0.25;
 
-    //путь через тайлы
-    V2 enter_chunk_pos = {(f32)random_int(1, CHUNK_COUNT_X), 1};
-    V2 chunk_pos = enter_chunk_pos;
-    V2 end_chunk_pos = {(f32)random_int(1, CHUNK_COUNT_X), CHUNK_COUNT_Y};
+    //карта тайлов
+    V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
+    i32 tile_count = map_size.x * map_size.y;
 
-    //заполняем чанки
-    for (i32 y = 0; y < CHUNK_COUNT_Y + 2; y++)
+    tile_map = (Tile *)malloc(sizeof(Tile) * tile_count);
+    for (i32 index = 0; index < tile_count; index++)
     {
-        for (i32 x = 0; x < CHUNK_COUNT_X + 2; x++)
-        {
-            if (y == 0 || y == CHUNK_COUNT_Y + 1 || x == 0 || x == CHUNK_COUNT_Y + 1)
-            {
-                //чанк-граница
-                chunk_strings[y * (CHUNK_COUNT_X + 2) + x] =
-                    "----------"
-                    "----------"
-                    "----------"
-                    "----------"
-                    "----------"
-                    "----------"
-                    "----------"
-                    "----------";
-            }
-            else
-            {
-                //чанк-наполнитель
-                chunk_strings[y * (CHUNK_COUNT_X + 2) + x] =
-                    "##########"
-                    "##########"
-                    "##########"
-                    "##########"
-                    "##########"
-                    "##########"
-                    "##########"
-                    "##########";
-            }
-        }
+        tile_map[index].type = Tile_Type_BORDER;
     }
 
-    i8 direction = random_int(-1, 1);
-    if ((direction == 1 && chunk_pos.x == CHUNK_COUNT_X) || (direction == -1 && chunk_pos.x == 1))
+    //создание чанков
+    char *chunks_strings[CHUNK_COUNT_X * CHUNK_COUNT_Y];
+
+    //путь через тайлы
+    V2 enter_chunk_pos = {(f32)random_int(0, CHUNK_COUNT_X - 1), CHUNK_COUNT_Y - 1};
+    V2 chunk_pos = enter_chunk_pos;
+    V2 end_chunk_pos = {(f32)random_int(0, CHUNK_COUNT_X - 1), 0};
+
+    //заполняем чанки
+    for (i32 index = 0; index < CHUNK_COUNT_X * CHUNK_COUNT_Y; index++)
+    {
+        chunks_strings[index] =
+            "##########"
+            "##########"
+            "##########"
+            "##########"
+            "##########"
+            "##########"
+            "##########"
+            "##########";
+    }
+
+    i8 direction = random_int(Direction_LEFT, Direction_RIGHT);
+    if ((direction == Direction_RIGHT && chunk_pos.x == CHUNK_COUNT_X - 1) || (direction == Direction_LEFT && chunk_pos.x == 0))
     {
         direction = -direction;
     }
 
     while (chunk_pos != end_chunk_pos)
     {
-        if ((random_float(0, 1) < 0.25 || direction == 0) && chunk_pos.y < CHUNK_COUNT_Y)
+        if ((random_float(0, 1) <= down_chunk_chance || direction == Direction_VERTICAL) && chunk_pos.y > 0)
         {
             if (chunk_pos == enter_chunk_pos)
             {
                 //чанк-вход с проходом вниз
-                chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
                     "8      8  "
                     "8        8"
                     "       #  "
@@ -1820,7 +1810,7 @@ void generate_map(Bitmap screen)
             else
             {
                 //чанк-проход вниз
-                chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
                     "          "
                     "          "
                     "          "
@@ -1830,44 +1820,36 @@ void generate_map(Bitmap screen)
                     "M8MM   8##"
                     "##### ####";
             }
-            chunk_pos.y++;
+            chunk_pos.y--;
 
-            bool chance = random_int(0, 1);
-            if (chance == 0)
-            {
-                direction = 1;
-            }
-            else if (chance == 1)
-            {
-                direction = -1;
-            }
+            direction = random_int(0, 1) * 2 - 1;
         }
         else
         {
-            if ((direction == 1 && chunk_pos.x == CHUNK_COUNT_X) || (direction == -1 && chunk_pos.x == 1))
+            if ((direction == Direction_RIGHT && chunk_pos.x == CHUNK_COUNT_X - 1) || (direction == Direction_LEFT && chunk_pos.x == 0))
             {
-                direction = 0;
+                direction = Direction_VERTICAL;
             }
 
-            if (chunk_pos.y == CHUNK_COUNT_Y)
+            if (chunk_pos.y == 0)
             {
                 direction = end_chunk_pos.x - chunk_pos.x;
                 if (direction > 0)
                 {
-                    direction = 1;
+                    direction = Direction_RIGHT;
                 }
                 else
                 {
-                    direction = -1;
+                    direction = Direction_LEFT;
                 }
             }
 
-            if (direction != 0)
+            if (direction != Direction_VERTICAL)
             {
                 if (chunk_pos == enter_chunk_pos)
                 {
                     //чанк-вход
-                    chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
                         "          "
                         "          "
                         "    N     "
@@ -1880,7 +1862,7 @@ void generate_map(Bitmap screen)
                 else
                 {
                     //обычный чанк
-                    chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
                         " PPPPPPP  "
                         " #######  "
                         "          "
@@ -1896,7 +1878,7 @@ void generate_map(Bitmap screen)
         //чанк-выход
         if (chunk_pos == end_chunk_pos)
         {
-            chunk_strings[(i32)(chunk_pos.y * (CHUNK_COUNT_X + 2) + chunk_pos.x)] =
+            chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
                 "          "
                 " 8        "
                 "8         "
@@ -1910,17 +1892,18 @@ void generate_map(Bitmap screen)
 
     char *chunk_string;
     //заполняем чанки
-    for (i32 chunk_index_y = 0; chunk_index_y < CHUNK_COUNT_Y + 2; chunk_index_y++)
+    for (i32 chunk_index_y = 0; chunk_index_y < CHUNK_COUNT_Y; chunk_index_y++)
     {
-        for (i32 chunk_index_x = 0; chunk_index_x < CHUNK_COUNT_X + 2; chunk_index_x++)
+        for (i32 chunk_index_x = 0; chunk_index_x < CHUNK_COUNT_X; chunk_index_x++)
         {
-            chunk_string = chunk_strings[(CHUNK_COUNT_Y + 2 - chunk_index_y - 1) * (CHUNK_COUNT_X + 2) + chunk_index_x];
+            chunk_string = chunks_strings[chunk_index_y * CHUNK_COUNT_X + chunk_index_x];
             for (i32 y = 0; y < CHUNK_SIZE_Y; y++)
             {
                 for (i32 x = 0; x < CHUNK_SIZE_X; x++)
                 {
+                    char tile_char = chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x];
                     Tile_type type = Tile_Type_NONE;
-                    switch (chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x])
+                    switch (tile_char)
                     {
                     case '#':
                     {
@@ -1968,7 +1951,7 @@ void generate_map(Bitmap screen)
                         break;
                     };
                     }
-                    V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X), (f32)(y + chunk_index_y * CHUNK_SIZE_Y)};
+                    V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X + BORDER_SIZE), (f32)(y + chunk_index_y * CHUNK_SIZE_Y + BORDER_SIZE)};
                     i32 index = get_index(tile_pos);
                     tile_map[index].type = type;
                 }
@@ -2150,7 +2133,7 @@ void update_tile(i32 tile_index)
 bool initialized = false;
 void game_update(Bitmap screen, Input input)
 {
-    V2 map_size = {(CHUNK_COUNT_X + 2) * CHUNK_SIZE_X, (CHUNK_COUNT_Y + 2) * CHUNK_SIZE_Y};
+    V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
     i32 tile_count = map_size.x * map_size.y;
 
     i32 interval = floor(TILE_SIZE_PIXELS / img_PlayerIdle.size.x);
@@ -2165,12 +2148,12 @@ void game_update(Bitmap screen, Input input)
         //темнота
         darkness = create_empty_bitmap(screen.size);
 
-        generate_map(screen);
+        generate_new_map(screen);
     }
 
     if (input.r.went_down)
     {
-        generate_map(screen);
+        generate_new_map(screen);
     }
 
     //очистка экрана
