@@ -272,24 +272,24 @@ void clear_screen(Bitmap screen, Bitmap darkness)
 
 void border_camera(Bitmap screen)
 {
-    if (!(camera.target.x - screen.size.x / camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150))
+    if (!(camera.target.x - screen.size.x / camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - TILE_SIZE_PIXELS * 2))
     {
-        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - 150 + screen.size.x / camera.scale.x * 0.5;
+        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_X - TILE_SIZE_PIXELS * 2 + screen.size.x / camera.scale.x * 0.5;
     }
 
-    if (!(camera.target.x + screen.size.x / camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150))
+    if (!(camera.target.x + screen.size.x / camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + TILE_SIZE_PIXELS * 2))
     {
-        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + 150 - screen.size.x / camera.scale.x * 0.5;
+        camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_X + 1) * CHUNK_SIZE_X + TILE_SIZE_PIXELS * 2 - screen.size.x / camera.scale.x * 0.5;
     }
 
-    if (!(camera.target.y - screen.size.y / camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120))
+    if (!(camera.target.y - screen.size.y / camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - TILE_SIZE_PIXELS * 2))
     {
-        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - 120 + screen.size.y / camera.scale.y * 0.5;
+        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_SIZE_Y - TILE_SIZE_PIXELS * 2 + screen.size.y / camera.scale.y * 0.5;
     }
 
-    if (!(camera.target.y + screen.size.y / camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120))
+    if (!(camera.target.y + screen.size.y / camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + TILE_SIZE_PIXELS * 2))
     {
-        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + 120 - screen.size.y / camera.scale.y * 0.5;
+        camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * (CHUNK_COUNT_Y + 1) * CHUNK_SIZE_Y + TILE_SIZE_PIXELS * 2 - screen.size.y / camera.scale.y * 0.5;
     }
 }
 
@@ -478,11 +478,6 @@ void draw_item(Bitmap screen, Drawing drawing)
 
     if (drawing.type == DRAWING_TYPE_BITMAP)
     {
-        if (drawing.layer == LAYER_FORGROUND)
-        {
-            i32 foo = 0;
-        }
-
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
 
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
@@ -538,13 +533,8 @@ void draw_item(Bitmap screen, Drawing drawing)
                     if (uv01.x >= 0 && uv01.x < 1 && uv01.y >= 0 && uv01.y < 1)
                     {
                         V2 uv = uv01 * (texture_size);
-                        V2 uv_floored = floor(uv);
+                        V2 uv_floored = clamp(floor(uv), V2{0, 0}, drawing.bitmap.size);
                         V2 uv_fract = clamp01(fract(uv) * pixel_scale);
-
-                        if (uv_floored.y == 866 && drawing.bitmap.size.x > 16)
-                        {
-                            i32 foor = 0;
-                        }
 
                         Bilinear_Sample sample = get_bilinear_sample(drawing.bitmap, V2(uv_floored));
                         V4 texel = bilinear_blend(sample, uv_fract);
@@ -612,6 +602,8 @@ void draw_item(Bitmap screen, Drawing drawing)
         V2_8x origin_8x = set1(origin);
         f32_8x zero_to_seven = set8_f32(0, 1, 2, 3, 4, 5, 6, 7);
         V2_8x texture_size_8x = set1(texture_size);
+        V2_8x zero_vector_8x = set1(V2{0, 0});
+        V2_8x bitmap_size_8x = set1(drawing.bitmap.size);
         V2_8x pixel_scale_8x = set1(pixel_scale);
         f32_8x one_8x = set1_f32(1.0f);
         f32_8x eight_8x = set1_f32(8.0f);
@@ -631,7 +623,7 @@ void draw_item(Bitmap screen, Drawing drawing)
                 {
                     V2_8x uv01 = V2_8x{dot(d, x_axis_8x), dot(d, y_axis_8x)} * inverted_sqr_rect_size_8x;
                     V2_8x uv = uv01 * (texture_size_8x);
-                    V2_8x uv_floored = floor(uv);
+                    V2_8x uv_floored = clamp(floor(uv), zero_vector_8x, bitmap_size_8x);
                     V2_8x uv_fract = clamp01(fract(uv) * pixel_scale_8x);
 
                     Bilinear_Sample_8x sample = get_bilinear_sample(drawing.bitmap, uv_floored);

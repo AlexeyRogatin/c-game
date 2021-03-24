@@ -224,6 +224,16 @@ V2 clamp01(V2 a)
     return result;
 }
 
+V2 clamp(V2 a, V2 bord1, V2 bord2)
+{
+    V2 result = {
+        min(bord2.x, max(bord1.x, a.x)),
+        min(bord2.y, max(bord1.y, a.y)),
+    };
+    //  V2 result = clamp01((a - bord1) / bord2) * bord2 + bord1;
+    return result;
+}
+
 typedef union
 {
     u32 argb;
@@ -527,6 +537,15 @@ V2_8x clamp01(V2_8x v)
     V2_8x result = V2_8x{
         min(set1_f32(1), max(v.x, set1_f32(0))),
         min(set1_f32(1), max(v.y, set1_f32(0))),
+    };
+    return result;
+}
+
+V2_8x clamp(V2_8x v, V2_8x bord1, V2_8x bord2)
+{
+    V2_8x result = V2_8x{
+        min(bord2.x, max(v.x, bord1.x)),
+        min(bord2.y, max(v.y, bord1.y)),
     };
     return result;
 }
