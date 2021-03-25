@@ -400,9 +400,10 @@ f32_8x to_f32_8x(i32_8x v)
     return result;
 }
 
-i32_8x gather(const int *address, i32_8x offsets)
+i32_8x gather(const int *address, i32_8x offsets, i32_8x mask)
 {
-    i32_8x result = {_mm256_i32gather_epi32(address, offsets.v, 4)};
+    __m256i default = {};
+    i32_8x result = {_mm256_mask_i32gather_epi32(default, address, offsets.v, mask.v, 4)};
     return result;
 }
 
@@ -442,9 +443,22 @@ i32_8x load(void *address)
     return result;
 }
 
-void store(void *address, i32_8x data)
+i32_8x operator>=(f32_8x a, f32_8x b)
 {
-    _mm256_store_si256((__m256i *)address, data.v);
+    __m256 r = _mm256_cmp_ps(b.v, a.v, _CMP_LT_OS);
+    i32_8x result = {*(__m256i *)&r};
+    return result;
+}
+i32_8x operator<(f32_8x a, f32_8x b)
+{
+    __m256 r = _mm256_cmp_ps(a.v, b.v, _CMP_LT_OS);
+    i32_8x result = {*(__m256i *)&r};
+    return result;
+}
+
+void store(void *address, i32_8x data, i32_8x mask)
+{
+    _mm256_maskstore_epi32((int *)address, mask.v, data.v);
 }
 
 struct V2_8x

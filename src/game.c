@@ -7,7 +7,7 @@
 #define TILE_SIZE_PIXELS 80
 #define CHUNK_SIZE_X 10
 #define CHUNK_SIZE_Y 8
-#define CHUNK_COUNT_X 4
+#define CHUNK_COUNT_X 6
 #define CHUNK_COUNT_Y 4
 #define BORDER_SIZE 2
 
@@ -367,15 +367,15 @@ Bilinear_Sample get_bilinear_sample(Bitmap bitmap, V2 pos)
     return result;
 }
 
-Bilinear_Sample_8x get_bilinear_sample(Bitmap bitmap, V2_8x pos)
+Bilinear_Sample_8x get_bilinear_sample(Bitmap bitmap, V2_8x pos, i32_8x mask)
 {
     i32_8x x = to_i32_8x(pos.x);
     i32_8x y = to_i32_8x(pos.y);
     i32_8x offsets = to_i32_8x(pos.y * set1_f32(bitmap.pitch) + pos.x);
-    i32_8x pixel_a = gather((const int *)bitmap.pixels, offsets);
-    i32_8x pixel_b = gather((const int *)bitmap.pixels + 1, offsets);
-    i32_8x pixel_c = gather((const int *)bitmap.pixels + bitmap.pitch, offsets);
-    i32_8x pixel_d = gather((const int *)bitmap.pixels + bitmap.pitch + 1, offsets);
+    i32_8x pixel_a = gather((const int *)bitmap.pixels, offsets, mask);
+    i32_8x pixel_b = gather((const int *)bitmap.pixels + 1, offsets, mask);
+    i32_8x pixel_c = gather((const int *)bitmap.pixels + bitmap.pitch, offsets, mask);
+    i32_8x pixel_d = gather((const int *)bitmap.pixels + bitmap.pitch + 1, offsets, mask);
 
     V4_8x a = argb_to_v4_8x(pixel_a);
     V4_8x b = argb_to_v4_8x(pixel_b);
@@ -478,7 +478,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_BITMAP)
+    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
     {
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
 
@@ -553,7 +553,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
+    if (drawing.type == DRAWING_TYPE_BITMAP)
     {
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
         f32_8x is_tile_multiplier = set1_f32(1 - is_tile);
@@ -594,6 +594,16 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         Rect paint_rect = intersect(screen_rect, drawn_rect);
 
+        if ((i32)paint_rect.min.x & 7)
+        {
+            paint_rect.min.x = (i32)paint_rect.min.x & ~7;
+        }
+
+        if ((i32)paint_rect.max.x & 7)
+        {
+            paint_rect.max.x = ((i32)paint_rect.max.x & ~7) + 8;
+        }
+
         V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
         V2 texture_size = drawing.bitmap.size + 1 / pixel_scale;
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
@@ -608,6 +618,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         V2_8x bitmap_size_8x = set1(drawing.bitmap.size);
         V2_8x pixel_scale_8x = set1(pixel_scale);
         f32_8x one_8x = set1_f32(1.0f);
+        f32_8x zero_8x = set1_f32(0);
         f32_8x eight_8x = set1_f32(8.0f);
 
         if (has_area(paint_rect))
@@ -625,20 +636,20 @@ void draw_item(Bitmap screen, Drawing drawing)
                 {
                     V2_8x uv01 = V2_8x{dot(d, x_axis_8x), dot(d, y_axis_8x)} * inverted_sqr_rect_size_8x;
                     V2_8x uv = uv01 * (texture_size_8x);
-                    V2_8x uv_floored = floor(uv), zero_vector_8x, bitmap_size_8x;
+                    V2_8x uv_floored = clamp(floor(uv), zero_vector_8x, bitmap_size_8x);
                     V2_8x uv_fract = clamp01(fract(uv) * pixel_scale_8x);
 
-                    Bilinear_Sample_8x sample = get_bilinear_sample(drawing.bitmap, uv_floored);
+                    i32_8x mask = uv01.x >= zero_8x & uv01.x < one_8x & uv01.y >= zero_8x & uv01.y < one_8x;
+                    Bilinear_Sample_8x sample = get_bilinear_sample(drawing.bitmap, uv_floored, mask);
                     V4_8x texel = bilinear_blend(sample, uv_fract);
                     V4_8x pixel = argb_to_v4_8x(load(pixel_ptr));
 
                     f32_8x inverted_alpha = one_8x - texel.a * is_tile_multiplier;
                     V4_8x result = inverted_alpha * pixel + texel;
 
-                    store(pixel_ptr, v4_to_argb_8x(result));
+                    store(pixel_ptr, v4_to_argb_8x(result), mask);
 
                     pixel_ptr += 8;
-
                     d.x += eight_8x;
                 }
             }
@@ -2143,7 +2154,7 @@ void game_update(Bitmap screen, Input input)
     {
         initialized = true;
 
-        camera.scale = V2{1, 1} * 0.3;
+        camera.scale = V2{1, 1} * 0.6f;
 
         //темнота
         darkness = create_empty_bitmap(screen.size);
@@ -2169,7 +2180,7 @@ void game_update(Bitmap screen, Input input)
     }
 
     //прорисовка темноты
-    draw_bitmap(camera.pos, darkness.size, 0, darkness, LAYER_FORGROUND);
+    // draw_bitmap(camera.pos, darkness.size, 0, darkness, LAYER_FORGROUND);
 
     //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)

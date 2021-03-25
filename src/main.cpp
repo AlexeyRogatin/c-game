@@ -210,8 +210,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         WS_VISIBLE | WS_POPUP | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
-        CW_USEDEFAULT, //width
-        CW_USEDEFAULT, //height
+        1920,          //width
+        1080,          //height
         NULL,
         NULL,
         wndClass.hInstance,
@@ -220,26 +220,28 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     RECT rect;
     GetClientRect(window, &rect);
     HDC device_context = GetDC(window);
+    i32 game_width = 960;
+    i32 game_height = 540;
     i32 window_width = rect.right - rect.left;
     i32 window_height = rect.bottom - rect.top;
 
     BITMAPINFO bitmap_info = {0};
     bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bitmap_info.bmiHeader.biWidth = window_width;
-    bitmap_info.bmiHeader.biHeight = window_height;
+    bitmap_info.bmiHeader.biWidth = game_width;
+    bitmap_info.bmiHeader.biHeight = game_height;
     bitmap_info.bmiHeader.biPlanes = 1;
     bitmap_info.bmiHeader.biBitCount = 32;
     bitmap_info.bmiHeader.biCompression = BI_RGB;
 
     u64 alignment = 8 * sizeof(u32);
-    u64 screen_buffer_size = 4 * window_width * window_height;
+    u64 screen_buffer_size = 4 * game_width * game_height;
     screen_buffer_size += alignment - (screen_buffer_size % alignment);
 
     u32 *pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
 
     Bitmap game_screen;
     game_screen.pixels = pixels;
-    game_screen.size = {(f32)window_width, (f32)window_height};
+    game_screen.size = {(f32)game_width, (f32)game_height};
 
     Input input = {0};
 
@@ -330,8 +332,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
             0,
             0,
-            window_width,
-            window_height,
+            game_width,
+            game_height,
 
             pixels,
             &bitmap_info,
