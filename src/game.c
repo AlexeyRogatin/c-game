@@ -1,13 +1,14 @@
 #include "math.h"
 #include "game_math.c"
 #include <malloc.h>
+#include <string.h>
 
-#define PI 3.14159265
+#define PI 3.14159265359
 
 #define TILE_SIZE_PIXELS 80
 #define CHUNK_SIZE_X 10
 #define CHUNK_SIZE_Y 8
-#define CHUNK_COUNT_X 6
+#define CHUNK_COUNT_X 4
 #define CHUNK_COUNT_Y 4
 #define BORDER_SIZE 2
 
@@ -125,8 +126,6 @@ Bitmap img_ZombieStep[6] = {
 Bitmap img_BackGround = win32_read_bmp("../data/backGround.bmp");
 
 Bitmap img_Border = win32_read_bmp("../data/border.bmp");
-Bitmap img_TransitionBorder = win32_read_bmp("../data/borderWithTransition.bmp");
-Bitmap img_CornerBorder = win32_read_bmp("../data/cornerBorder.bmp");
 
 Bitmap img_Bricks[12] = {
     win32_read_bmp("../data/brick1.bmp"),
@@ -173,6 +172,56 @@ Bitmap img_Door[7] = {
 Bitmap img_DoorBack = win32_read_bmp("../data/doorBack.bmp");
 
 Bitmap img_Parapet = win32_read_bmp("../data/parapet.bmp");
+
+Bitmap turn_bitmap(Bitmap bitmap, f64 angle)
+{
+    Bitmap result;
+    result.pitch = bitmap.pitch;
+    result.size = bitmap.size;
+
+    u64 alignment = 8 * sizeof(u32);
+    u64 screen_buffer_size = 4 * (bitmap.size.x + 2) * (bitmap.size.y + 2);
+    screen_buffer_size += alignment - (screen_buffer_size % alignment);
+    u32 *pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
+    memset(pixels, 0, screen_buffer_size);
+
+    result.pixels = pixels;
+
+    for (i32 y = 0; y < bitmap.size.y + 2; y++)
+    {
+        for (i32 x = 0; x < bitmap.size.x + 2; x++)
+        {
+            i32 pixel = bitmap.pixels[y * bitmap.pitch + x];
+            if (angle == 0)
+            {
+                result.pixels[y * result.pitch + x] = pixel;
+            }
+            if (angle == PI * 0.5)
+            {
+                result.pixels[x * ((i32)result.size.x + 2) + ((i32)result.size.y + 1 - y)] = pixel;
+            }
+            if (angle == PI)
+            {
+                result.pixels[((i32)result.size.y + 1 - y) * result.pitch + ((i32)result.size.x + 1 - x)] = pixel;
+            }
+            if (angle == PI * 1.5)
+            {
+                result.pixels[((i32)result.size.x + 1 - x) * ((i32)result.size.x + 2) + y] = pixel;
+            }
+        }
+    }
+    return result;
+}
+
+Bitmap img_TransitionBorder_0 = win32_read_bmp("../data/borderWithTransition.bmp");
+Bitmap img_TransitionBorder_05PI = turn_bitmap(img_TransitionBorder_0, 0.5 * PI);
+Bitmap img_TransitionBorder_PI = turn_bitmap(img_TransitionBorder_0, PI);
+Bitmap img_TransitionBorder_15PI = turn_bitmap(img_TransitionBorder_0, 1.5 * PI);
+
+Bitmap img_CornerBorder_0 = win32_read_bmp("../data/cornerBorder.bmp");
+Bitmap img_CornerBorder_05PI = turn_bitmap(img_CornerBorder_0, 0.5 * PI);
+Bitmap img_CornerBorder_PI = turn_bitmap(img_CornerBorder_0, PI);
+Bitmap img_CornerBorder_15PI = turn_bitmap(img_CornerBorder_0, 1.5 * PI);
 
 //камера
 typedef struct
@@ -742,7 +791,7 @@ typedef struct
     f32 accel;
     f32 friction;
     f32 jump_height;
-    f32 jump_length;
+    f32 jump_duration;
 
     i32 moved_through_pixels;
     Direction looking_direction;
@@ -832,7 +881,7 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
         game_object.hanging_animation_timer = add_timer(0);
 
         game_object.jump_height = TILE_SIZE_PIXELS * 2.2 - game_object.hit_box.y;
-        game_object.jump_length = 19;
+        game_object.jump_duration = 19;
     }
 
     if (type == Game_Object_ZOMBIE)
@@ -842,7 +891,7 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
         game_object.can_jump = add_timer(0);
 
         game_object.jump_height = TILE_SIZE_PIXELS * 2;
-        game_object.jump_length = 15;
+        game_object.jump_duration = 15;
     }
 
     i32 slot_index = game_object_count;
@@ -986,7 +1035,7 @@ Collisions check_collision(Game_Object *game_object)
                     collisions.expanded_collision = true;
                 }
 
-                if (our_object->speed.y != 0)
+                if (our_object->speed.y != 0 && !(collisions.x.happened && collisions.x.tile_index == tile_index))
                 {
                     if (our_object->speed.y > 0)
                     {
@@ -1232,7 +1281,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             game_object->accel = 0.85;
         }
 
-        f32 gravity = -2 * game_object->jump_height / (game_object->jump_length * game_object->jump_length);
+        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
@@ -1254,19 +1303,19 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 }
                 else
                 {
-                    game_object->speed.y = 2 * game_object->jump_height / game_object->jump_length;
+                    game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
                     game_object->condition = Condition_FALLING;
                 }
             }
             else
             {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_length;
+                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
             }
         }
 
         if (game_object->speed.y > 0 && !input.z.is_down)
         {
-            gravity = -2 * game_object->jump_height / (game_object->jump_length * game_object->jump_length) * 2;
+            gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration) * 2;
         }
 
         //гравитация
@@ -1582,7 +1631,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     if (game_object->type == Game_Object_ZOMBIE)
     {
         //константы скорости
-        f32 gravity = -2 * game_object->jump_height / (game_object->jump_length * game_object->jump_length);
+        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //движение
         game_object->speed.x += (game_object->go_right - game_object->go_left) * game_object->accel;
@@ -1592,7 +1641,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         {
             if (timers[game_object->can_jump] == 0)
             {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_length * random_float(0.5, 1);
+                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration * random_float(0.5, 1);
                 game_object->accel = 6;
             }
             else if (timers[game_object->can_jump] > 0)
@@ -2015,41 +2064,35 @@ void generate_new_map(Bitmap screen)
             i32 topleft_tile = get_index(tile_pos + V2{-1, 1});
             if (tile_pos.y != 0 && tile_map[bottom_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_TransitionBorder;
+                sprite = img_TransitionBorder_0;
             }
             else if (tile_pos.x != map_size.x - 1 && tile_map[right_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_TransitionBorder;
-                angle = PI * 0.5;
+                sprite = img_TransitionBorder_05PI;
             }
             else if (tile_pos.y != map_size.y - 1 && tile_map[top_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_TransitionBorder;
-                angle = PI;
+                sprite = img_TransitionBorder_PI;
             }
             else if (tile_pos.x != 0 && tile_map[left_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_TransitionBorder;
-                angle = PI * 1.5;
+                sprite = img_TransitionBorder_15PI;
             }
             else if (tile_pos.y != 0 && tile_pos.x != map_size.x - 1 && tile_map[bottomright_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_CornerBorder;
+                sprite = img_CornerBorder_0;
             }
             else if (tile_pos.y != map_size.y - 1 && tile_pos.x != map_size.x - 1 && tile_map[topright_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_CornerBorder;
-                angle = PI * 0.5;
+                sprite = img_CornerBorder_05PI;
             }
             else if (tile_pos.y != map_size.y - 1 && tile_pos.x != 0 && tile_map[topleft_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_CornerBorder;
-                angle = PI;
+                sprite = img_CornerBorder_PI;
             }
             else if (tile_pos.y != 0 && tile_pos.x != 0 && tile_map[bottomleft_tile].type != Tile_Type_BORDER)
             {
-                sprite = img_CornerBorder;
-                angle = PI * 1.5;
+                sprite = img_CornerBorder_15PI;
             }
             break;
         };
@@ -2098,7 +2141,6 @@ void generate_new_map(Bitmap screen)
         };
         }
         tile_map[index].sprite = sprite;
-        tile_map[index].angle = angle;
         tile_map[index].solid = solid;
     }
 }
@@ -2119,13 +2161,13 @@ void update_tile(i32 tile_index)
 
     // if (tile->solid)
     // {
-    //     draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS *0.5)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, 0xFFFF00FF, LAYER_TILE);
+    //     draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS *0.5)}, tile_map[tile_index].sprite.size * 5, 0, 0xFFFF00FF, LAYER_TILE);
     // }
 
     if (tile->type == Tile_Type_EXIT)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BG_ITEM);
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, img_DoorBack.size * 5, tile_map[tile_index].angle, img_DoorBack, LAYER_BACKGROUND2);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, img_DoorBack.size * 5, 0, img_DoorBack, LAYER_BACKGROUND2);
     }
     else if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
     {
@@ -2133,11 +2175,11 @@ void update_tile(i32 tile_index)
     }
     else if (tile->type == Tile_Type_ENTER)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_BG_ITEM);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
     }
     else if (tile->type != Tile_Type_NONE)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, tile_map[tile_index].angle, tile_map[tile_index].sprite, LAYER_TILE);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
     }
 }
 
