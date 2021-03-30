@@ -1763,6 +1763,184 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     }
 }
 
+#define NORMAL_CHUNKS_COUNT 3
+char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
+    "##8  #####"
+    "#     ####"
+    "TTT   ### "
+    "#   M ##  "
+    "#     ##  "
+    "#    ##8# "
+    "8    #88##"
+    "#  ##8####",
+
+    "##    ## #"
+    "#       ##"
+    "##      ##"
+    "#      ###"
+    "##       #"
+    "#       ##"
+    "###    ###"
+    "###TTTT###",
+
+    "#         "
+    "#         "
+    "#    ##   "
+    "#TT TTTT  "
+    "#         "
+    "#T TTTTTT "
+    "##        "
+    "##########",
+};
+
+#define DOWN_PASSAGE_CHUNKS_COUNT 3
+char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
+    "          "
+    "          "
+    "          "
+    "##     TT="
+    "   8      "
+    "     MMM8M"
+    "M8MM   8##"
+    "##### ####",
+
+    "##    ## #"
+    "        ##"
+    "##      ##"
+    "       ## "
+    "          "
+    "  ### ### "
+    "###      #"
+    "###T   ###",
+
+    "          "
+    " #        "
+    "          "
+    "          "
+    "   #   #  "
+    "# ##   ## "
+    "####   ## "
+    "####   ###",
+};
+
+#define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 3
+char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
+    "8      8  "
+    "8        8"
+    "       #  "
+    "     N  # "
+    "     T    "
+    "       MMM"
+    "M8MM   ###"
+    "####   ###",
+
+    "          "
+    "  N       "
+    "####      "
+    "       ## "
+    "    #     "
+    "#####  ###"
+    "#####  ###"
+    "###T#  ###",
+
+    "       #  "
+    "##      ##"
+    "          "
+    "    N     "
+    "    ##    "
+    "#TT##  ###"
+    "####    ##"
+    "###T#  ###",
+};
+
+#define ENTER_CHUNKS_COUNT 3
+char *enter_chunks[ENTER_CHUNKS_COUNT] = {
+    "          "
+    "          "
+    "    N     "
+    "   TTTT   "
+    "   =###=  "
+    "  =#####8 "
+    "MMMM######"
+    "##########",
+
+    "          "
+    "  N       "
+    "####      "
+    "       ## "
+    "    #     "
+    "####   ###"
+    "####  ####"
+    "###T#  ###",
+
+    "       #  "
+    "##      ##"
+    "          "
+    "    N     "
+    "    ##    "
+    "#TT##  ## "
+    "####   ###"
+    "###T#  ###",
+};
+
+#define PASSAGE_CHUNKS_COUNT 3
+char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
+    " PPPPPPP  "
+    " #######  "
+    "          "
+    "         ="
+    "          "
+    "   TT     "
+    "MMMMMMMMMM"
+    "#======###",
+
+    "  ##   ## "
+    "#         "
+    "        ##"
+    "       ###"
+    "  #     ##"
+    "####   ###"
+    "##########"
+    "##########",
+
+    "##     #  "
+    "##      ##"
+    "          "
+    "          "
+    "          "
+    "#TT#  ## #"
+    "##########"
+    "###T######",
+};
+
+#define END_CHUNKS_COUNT 3
+char *exit_chunks[END_CHUNKS_COUNT] = {
+    "          "
+    " 8        "
+    "8         "
+    "      T  8"
+    "          "
+    " #   X    "
+    "  TTTTTT  "
+    " ######## ",
+    "          "
+    "#         "
+    "#         "
+    "         #"
+    "  X       "
+    " ####     "
+    "##TTTTTT  "
+    "##########",
+    "#         "
+    "          "
+    "#         "
+    "#  X      "
+    " #####    "
+    "          "
+    "# TTTTTT  "
+    " ######## ",
+};
+
 void generate_new_map(Bitmap screen)
 {
     //удаляем объекты
@@ -1798,15 +1976,7 @@ void generate_new_map(Bitmap screen)
     //заполняем чанки
     for (i32 index = 0; index < CHUNK_COUNT_X * CHUNK_COUNT_Y; index++)
     {
-        chunks_strings[index] =
-            "##########"
-            "##########"
-            "##########"
-            "##########"
-            "##########"
-            "##########"
-            "##########"
-            "##########";
+        chunks_strings[index] = normal_chunks[random_int(1, NORMAL_CHUNKS_COUNT) - 1];
     }
 
     i8 direction = random_int(Direction_LEFT, Direction_RIGHT);
@@ -1822,28 +1992,12 @@ void generate_new_map(Bitmap screen)
             if (chunk_pos == enter_chunk_pos)
             {
                 //чанк-вход с проходом вниз
-                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
-                    "8      8  "
-                    "8        8"
-                    "       #  "
-                    "     N  # "
-                    "     T    "
-                    "        # "
-                    "M8MM   MMM"
-                    "##### ####";
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_down_passage_chunks[random_int(1, ENTER_DOWN_PASSAGE_CHUNKS_COUNT) - 1];
             }
             else
             {
                 //чанк-проход вниз
-                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
-                    "          "
-                    "          "
-                    "          "
-                    "##     TT="
-                    "   8      "
-                    "     MMM8M"
-                    "M8MM   8##"
-                    "##### ####";
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = down_passage_chunks[random_int(1, DOWN_PASSAGE_CHUNKS_COUNT) - 1];
             }
             chunk_pos.y--;
 
@@ -1874,28 +2028,12 @@ void generate_new_map(Bitmap screen)
                 if (chunk_pos == enter_chunk_pos)
                 {
                     //чанк-вход
-                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
-                        "          "
-                        "          "
-                        "    N     "
-                        "   TTTT   "
-                        "   =###=  "
-                        "  =#####8 "
-                        "MMMM##### "
-                        "##########";
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_chunks[random_int(1, ENTER_CHUNKS_COUNT) - 1];
                 }
                 else
                 {
-                    //обычный чанк
-                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
-                        " PPPPPPP  "
-                        " #######  "
-                        "          "
-                        "         ="
-                        "          "
-                        "   TT     "
-                        "MMMMMMMMMM"
-                        "#======###";
+                    //проходной чанк
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = passage_chunks[random_int(1, PASSAGE_CHUNKS_COUNT) - 1];
                 }
                 chunk_pos.x += direction;
             }
@@ -1903,15 +2041,7 @@ void generate_new_map(Bitmap screen)
         //чанк-выход
         if (chunk_pos == end_chunk_pos)
         {
-            chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] =
-                "          "
-                " 8        "
-                "8         "
-                "      T  8"
-                "          "
-                " #   X    "
-                "  TTTTTT  "
-                " ######## ";
+            chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = exit_chunks[random_int(1, END_CHUNKS_COUNT) - 1];
         }
     }
 
