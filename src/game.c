@@ -977,6 +977,9 @@ Collisions check_collision(Game_Object *game_object)
                     {
                         our_object->speed.x = -obj_side + tile_side;
 
+                        obj_left += our_object->speed.x;
+                        obj_right += our_object->speed.x;
+
                         collisions.x.happened = true;
                         collisions.x.tile_index = tile_index;
                         if (tile_side == tile_left)
@@ -1331,21 +1334,21 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //состояние стоит
         if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
         {
-
             supposed_cond = Condition_IDLE;
+            timers[game_object->can_jump] = 5;
 
             //состояние ползком и смотрит вверх
             if (input.down.is_down && !input.up.is_down)
             {
                 supposed_cond = Condition_CROUCHING_IDLE;
             }
-            if (input.up.is_down && fabs(game_object->speed.x) < 1 && timers[game_object->crouching_animation_timer] <= 0 && !input.down.is_down)
+            else if (input.up.is_down && !input.down.is_down && fabs(game_object->speed.x) <= 1 && timers[game_object->crouching_animation_timer] <= 0)
             {
                 supposed_cond = Condition_LOOKING_UP;
             }
 
             //состояния движения
-            if (fabs(game_object->speed.x) >= 1)
+            if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
             {
 
                 game_object->moved_through_pixels += game_object->speed.x;
@@ -1361,7 +1364,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
         }
 
-        if (input.left.went_down || input.right.went_down || supposed_cond == Condition_FALLING)
+        if (input.left.went_down || input.right.went_down)
         {
             game_object->moved_through_pixels = 0;
         }
@@ -1485,8 +1488,6 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
                 game_object->sprite = img_PlayerStep[step];
             }
-
-            timers[game_object->can_jump] = 5;
         }
 
         if (game_object->condition == Condition_CROUCHING_MOOVING || game_object->condition == Condition_CROUCHING_IDLE)
@@ -1512,8 +1513,6 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                     game_object->sprite = img_PlayerCrouchStep[step];
                 }
             }
-
-            timers[game_object->can_jump] = 5;
         }
 
         if (game_object->condition == Condition_LOOKING_UP)
@@ -2253,16 +2252,6 @@ void update_tile(i32 tile_index)
         }
     }
 
-    // if (tile->solid)
-    // {
-    //     draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS *0.5)}, tile_map[tile_index].sprite.size * 5, 0, 0xFFFF00FF, LAYER_TILE);
-    // }
-
-    if (!tile->solid)
-    {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
-    }
-
     if (tile->type == Tile_Type_EXIT)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
@@ -2272,14 +2261,13 @@ void update_tile(i32 tile_index)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
     }
+    else if (!tile->solid)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
+    }
     else if (tile->type != Tile_Type_NONE)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
-    }
-
-    if (tile->type == Tile_Type_PARAPET)
-    {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_Parapet, LAYER_FORGROUND);
     }
 }
 
