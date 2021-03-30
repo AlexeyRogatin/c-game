@@ -185,6 +185,64 @@ f64 win32_get_time()
     return result;
 }
 
+#define TASK_QUEUE_SIZE 1024
+
+typedef struct
+{
+    void (*fn)(void *);
+    void *data;
+} Task;
+
+typedef struct
+{
+    Task tasks[TASK_QUEUE_SIZE];
+    u32 start_cursor;
+    u32 end_cursor;
+} Queue;
+
+void add_task(Queue *queue, Task task)
+{
+    queue->tasks[queue->end_cursor] = task;
+    queue->end_cursor = (queue->end_cursor + 1) % TASK_QUEUE_SIZE;
+    assert(queue->end_cursor != queue->start_cursor);
+}
+
+Task *take_task(Queue *queue)
+{
+    Task *result = NULL;
+    if (queue->end_cursor != queue->start_cursor)
+    {
+        result = &queue->tasks[queue->start_cursor];
+        queue->start_cursor = (queue->start_cursor + 1) % TASK_QUEUE_SIZE;
+    }
+    return result;
+}
+
+Queue queue = {0};
+
+DWORD WINAPI ThreadProc(LPVOID lpParameter)
+{
+    Queue *queue = (Queue *)lpParameter;
+    while (true)
+    {
+        Task *task = take_task(queue);
+        if (task)
+        {
+            task->fn(task->data);
+        }
+    }
+
+    return 0;
+};
+
+void print_smth(void *data)
+{
+    char buffer[256];
+    sprintf_s(buffer, 256, "%d\n", (i32)data);
+
+    OutputDebugStringA(buffer);
+}
+
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
@@ -194,6 +252,26 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LARGE_INTEGER perf_frequency_li;
     QueryPerformanceFrequency(&perf_frequency_li);
     performance_frequency = perf_frequency_li.QuadPart;
+
+    // for (i32 num = 0; num <= 100; num++)
+    // {
+    //     Task task;
+    //     task.fn = print_smth;
+    //     task.data = (void *)num;
+    //     add_task(&queue, task);
+    // }
+
+    // //поток
+    // for (i32 i = 0; i < 50; i++)
+    // {
+    //     CreateThread(
+    //         NULL,
+    //         0,
+    //         ThreadProc,
+    //         &queue,
+    //         0,
+    //         0);
+    // }
 
     WNDCLASSA wndClass = {0};
     wndClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -353,6 +431,6 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         char buffer[256];
         sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        OutputDebugStringA(buffer);
+        // OutputDebugStringA(buffer);
     }
 }
