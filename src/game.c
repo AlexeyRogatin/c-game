@@ -362,7 +362,6 @@ typedef struct
 {
     Tile_type type;
     Bitmap sprite;
-    f32 angle;
     bool solid;
     bool interactive;
     i32 timer;
@@ -925,37 +924,15 @@ Collisions check_collision(Game_Object *game_object)
     collisions.y.happened = false;
     collisions.expanded_collision = false;
 
-    V2 obj_tile_pos = our_object->pos / TILE_SIZE_PIXELS;
+    V2 obj_tile_pos = our_object->pos;
 
-    V2 obj_end_tile_pos = (our_object->pos + our_object->speed) / TILE_SIZE_PIXELS;
+    V2 obj_end_tile_pos = (our_object->pos + our_object->speed);
 
-    V2 start_tile;
-    V2 finish_tile;
+    V2 start_tile = min(obj_tile_pos, obj_end_tile_pos) - our_object->hit_box * 0.5;
+    V2 finish_tile = max(obj_tile_pos, obj_end_tile_pos) + our_object->hit_box * 0.5;
 
-    if (obj_tile_pos.x <= obj_end_tile_pos.x)
-    {
-        start_tile.x = obj_tile_pos.x;
-        finish_tile.x = obj_end_tile_pos.x;
-    }
-    else
-    {
-        start_tile.x = obj_end_tile_pos.x;
-        finish_tile.x = obj_tile_pos.x;
-    }
-
-    if (obj_tile_pos.y <= obj_end_tile_pos.y)
-    {
-        start_tile.y = obj_tile_pos.y;
-        finish_tile.y = obj_end_tile_pos.y;
-    }
-    else
-    {
-        start_tile.y = obj_end_tile_pos.y;
-        finish_tile.y = obj_tile_pos.y;
-    }
-
-    start_tile = V2{floorf(start_tile.x - our_object->hit_box.x * 0.5 / TILE_SIZE_PIXELS), floorf(start_tile.y - our_object->hit_box.y * 0.5 / TILE_SIZE_PIXELS)};
-    finish_tile = V2{ceilf(finish_tile.x + our_object->hit_box.x * 0.5 / TILE_SIZE_PIXELS), ceilf(finish_tile.y + our_object->hit_box.y * 0.5 / TILE_SIZE_PIXELS)};
+    start_tile = floor(start_tile / TILE_SIZE_PIXELS);
+    finish_tile = ceil(finish_tile / TILE_SIZE_PIXELS);
 
     //проверка столкновений с тайлами
     for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
@@ -999,9 +976,6 @@ Collisions check_collision(Game_Object *game_object)
                           (obj_bottom >= tile_top)))
                     {
                         our_object->speed.x = -obj_side + tile_side;
-
-                        obj_left += our_object->speed.x;
-                        obj_right += our_object->speed.x;
 
                         collisions.x.happened = true;
                         collisions.x.tile_index = tile_index;
@@ -1297,13 +1271,12 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 {
                     timers[jump] = timers[game_object->hanging_animation_timer] + 1;
                 }
-                else if (input.down.is_down)
-                {
-                    game_object->condition = Condition_FALLING;
-                }
                 else
                 {
-                    game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                    if (!input.down.is_down)
+                    {
+                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                    }
                     game_object->condition = Condition_FALLING;
                 }
             }
@@ -1356,45 +1329,39 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         supposed_cond = Condition_FALLING;
 
         //состояние стоит
-        if (collisions.y.happened)
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
         {
-            if (collisions.y.tile_side == Side_TOP)
-            {
-                supposed_cond = Condition_IDLE;
-                timers[game_object->can_jump] = 5;
-            }
-        }
 
-        //состояние ползком и смотрит вверх
-        if (supposed_cond == Condition_IDLE)
-        {
+            supposed_cond = Condition_IDLE;
+
+            //состояние ползком и смотрит вверх
             if (input.down.is_down && !input.up.is_down)
             {
                 supposed_cond = Condition_CROUCHING_IDLE;
             }
-            if (input.up.is_down && !input.down.is_down && !game_object->go_right && !game_object->go_left && timers[game_object->crouching_animation_timer] <= 0)
+            if (input.up.is_down && fabs(game_object->speed.x) < 1 && timers[game_object->crouching_animation_timer] <= 0 && !input.down.is_down)
             {
                 supposed_cond = Condition_LOOKING_UP;
             }
+
+            //состояния движения
+            if (fabs(game_object->speed.x) >= 1)
+            {
+
+                game_object->moved_through_pixels += game_object->speed.x;
+
+                if (supposed_cond == Condition_IDLE)
+                {
+                    supposed_cond = Condition_MOOVING;
+                }
+                else
+                {
+                    supposed_cond = Condition_CROUCHING_MOOVING;
+                }
+            }
         }
 
-        //состояния движения
-        if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
-        {
-
-            game_object->moved_through_pixels += game_object->speed.x;
-
-            if (supposed_cond == Condition_IDLE)
-            {
-                supposed_cond = Condition_MOOVING;
-            }
-            else
-            {
-                supposed_cond = Condition_CROUCHING_MOOVING;
-            }
-        }
-
-        if (input.left.went_down || input.right.went_down)
+        if (input.left.went_down || input.right.went_down || supposed_cond == Condition_FALLING)
         {
             game_object->moved_through_pixels = 0;
         }
@@ -1404,13 +1371,14 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
 
         i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
-        i32 up_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
+        i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
 
         //состояние весит
-        if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[up_tile_index].solid)
+        if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[collision_frontup_tile_index].solid)
         {
             if (game_object->speed.y < 0 &&
-                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 && game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
+                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
+                game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
             {
                 supposed_cond = Condition_HANGING;
 
@@ -1418,26 +1386,19 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
                 game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3;
 
-                if (collisions.x.tile_side == Side_RIGHT)
-                {
-                    game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5 + game_object->hit_box.x * 0.5;
-                }
-                else
-                {
-                    game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5 - game_object->hit_box.x * 0.5;
-                }
+                game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5 + game_object->hit_box.x * 0.5);
             }
         }
 
         //переход на стенку из состояния ползком
         if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
         {
-            V2 tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
-            if (!tile_map[get_index(tile_pos)].solid &&
-                ((game_object->pos.x + game_object->speed.x + game_object->hit_box.x * 0.5 <= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(game_object->pos.x + game_object->hit_box.x * 0.5) >= tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
-                 (game_object->pos.x + game_object->speed.x - game_object->hit_box.x * 0.5 >= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(game_object->pos.x - game_object->hit_box.x * 0.5) <= tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
+            V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
+            if (!tile_map[get_index(collisionY_front_tile_pos)].solid &&
+                ((game_object->pos.x + game_object->speed.x + game_object->hit_box.x * 0.5 <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(game_object->pos.x + game_object->hit_box.x * 0.5) >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
+                 (game_object->pos.x + game_object->speed.x - game_object->hit_box.x * 0.5 >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(game_object->pos.x - game_object->hit_box.x * 0.5) <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
             {
-                game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5 * (-game_object->looking_direction) + game_object->hit_box.x * 0.5 * game_object->looking_direction;
+                game_object->pos.x = collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5 * game_object->looking_direction + game_object->hit_box.x * 0.5 * game_object->looking_direction;
                 supposed_cond = Condition_HANGING;
                 game_object->looking_direction = (Direction)(-game_object->looking_direction);
                 game_object->speed = {0, 0};
@@ -1475,7 +1436,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                 (game_object->condition != Condition_HANGING_LOOKING_UP && supposed_cond == Condition_HANGING_LOOKING_UP) ||
                 (game_object->condition != Condition_HANGING_LOOKING_DOWN && supposed_cond == Condition_HANGING_LOOKING_DOWN))
             {
-                timers[game_object->looking_key_held_timer] = 50;
+                timers[game_object->looking_key_held_timer] = 40;
             }
 
             //поднимаемся и встаём
@@ -1524,6 +1485,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
                 game_object->sprite = img_PlayerStep[step];
             }
+
+            timers[game_object->can_jump] = 5;
         }
 
         if (game_object->condition == Condition_CROUCHING_MOOVING || game_object->condition == Condition_CROUCHING_IDLE)
@@ -1549,6 +1512,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                     game_object->sprite = img_PlayerCrouchStep[step];
                 }
             }
+
+            timers[game_object->can_jump] = 5;
         }
 
         if (game_object->condition == Condition_LOOKING_UP)
@@ -1606,12 +1571,12 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //смотрим вниз и вверх
         if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_HANGING_LOOKING_DOWN) && timers[game_object->looking_key_held_timer] <= 0)
         {
-            camera.target.y = game_object->pos.y - screen.size.y * 0.5 + 200;
+            camera.target.y = game_object->pos.y - screen.size.y / camera.scale.y * 0.5 + 200;
         }
 
         if ((game_object->condition == Condition_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_UP) && timers[game_object->looking_key_held_timer] <= 0)
         {
-            camera.target.y = game_object->pos.y + screen.size.y * 0.5 - 200;
+            camera.target.y = game_object->pos.y + screen.size.y / camera.scale.y * 0.5 - 200;
         }
 
         //границы для камеры
@@ -2024,7 +1989,6 @@ void generate_new_map(Bitmap screen)
     {
         V2 tile_pos = get_tile_pos(index);
         Bitmap sprite = img_None;
-        f32 angle = 0;
         bool solid = true;
         switch (tile_map[index].type)
         {
@@ -2164,14 +2128,15 @@ void update_tile(i32 tile_index)
     //     draw_rect(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS *0.5)}, tile_map[tile_index].sprite.size * 5, 0, 0xFFFF00FF, LAYER_TILE);
     // }
 
+    if (!tile->solid)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
+    }
+
     if (tile->type == Tile_Type_EXIT)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, img_DoorBack.size * 5, 0, img_DoorBack, LAYER_BACKGROUND2);
-    }
-    else if (tile->type == Tile_Type_NONE || tile->type == Tile_Type_PARAPET)
-    {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
     }
     else if (tile->type == Tile_Type_ENTER)
     {
@@ -2180,6 +2145,11 @@ void update_tile(i32 tile_index)
     else if (tile->type != Tile_Type_NONE)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
+    }
+
+    if (tile->type == Tile_Type_PARAPET)
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_Parapet, LAYER_FORGROUND);
     }
 }
 
