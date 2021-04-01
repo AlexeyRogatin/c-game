@@ -145,19 +145,9 @@ Bitmap img_ElegantBrick = win32_read_bmp("../data/elegantBrick.bmp");
 
 Bitmap img_Stone = win32_read_bmp("../data/stone.bmp");
 
-Bitmap img_MarbleFloor[4] = {
-    win32_read_bmp("../data/floor1.bmp"),
-    win32_read_bmp("../data/floor2.bmp"),
-    win32_read_bmp("../data/floor3.bmp"),
-    win32_read_bmp("../data/floor4.bmp"),
-};
+Bitmap img_MarbleFloor = win32_read_bmp("../data/floor1.bmp");
 
-Bitmap img_TiledFloor[4] = {
-    win32_read_bmp("../data/floor5.bmp"),
-    win32_read_bmp("../data/floor6.bmp"),
-    win32_read_bmp("../data/floor7.bmp"),
-    win32_read_bmp("../data/floor8.bmp"),
-};
+Bitmap img_TiledFloor = win32_read_bmp("../data/floor5.bmp");
 
 Bitmap img_Door[7] = {
     win32_read_bmp("../data/door1.bmp"),
@@ -347,24 +337,21 @@ void border_camera(Bitmap screen)
 typedef enum
 {
     Tile_Type_NONE,
-    Tile_Type_BRICK,
-    Tile_Type_ELEGANT_BRICK,
-    Tile_Type_MARBLE_FLOOR,
-    Tile_Type_TILED_FLOOR,
-    Tile_Type_PARAPET,
-    Tile_Type_STONE,
+    Tile_Type_NORMAL,
+    Tile_Type_FLOOR,
     Tile_Type_BORDER,
     Tile_Type_ENTER,
     Tile_Type_EXIT,
+    Tile_Type_PARAPET,
 } Tile_type;
 
 typedef struct
 {
     Tile_type type;
+    i32 subtype;
     Bitmap sprite;
     bool solid;
-    bool interactive;
-    i32 timer;
+    i32 interactive;
 } Tile;
 
 Tile *tile_map = NULL;
@@ -528,6 +515,7 @@ void draw_item(Bitmap screen, Drawing drawing)
 
     if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
     {
+
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND1;
 
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
@@ -1200,7 +1188,7 @@ i32 check_for_interactive_tiles(Game_Object *game_object)
         {
             i32 index = get_index(V2{(f32)x, (f32)y});
             Tile tile = tile_map[index];
-            if (tile.interactive)
+            if (tile.interactive != -1)
             {
                 result = index;
                 goto end;
@@ -1557,6 +1545,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
                     if (game_object->condition != Condition_FALLING)
                     {
                         game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS;
+                        game_object->speed = V2{0, 0};
 
                         game_object->can_control = false;
                     }
@@ -1764,14 +1753,14 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 
 #define NORMAL_CHUNKS_COUNT 3
 char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
-    "##8  #####"
+    "###  #####"
     "#     ####"
     "TTT   ### "
-    "#   M ##  "
+    "#   T ##  "
     "#     ##  "
-    "#    ##8# "
-    "8    #88##"
-    "#  ##8####",
+    "#    #### "
+    "#    #####"
+    "#  #######",
 
     "##    ## #"
     "#       ##"
@@ -1789,7 +1778,7 @@ char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
     "#         "
     "#T TTTTTT "
     "##        "
-    "##########",
+    "###======#",
 };
 
 #define DOWN_PASSAGE_CHUNKS_COUNT 3
@@ -1798,9 +1787,9 @@ char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
     "          "
     "          "
     "##     TT="
-    "   8      "
-    "     MMM8M"
-    "M8MM   8##"
+    "   #      "
+    "     TTT#T"
+    "T#TT   #=="
     "##### ####",
 
     "##    ## #"
@@ -1808,48 +1797,48 @@ char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
     "##      ##"
     "       ## "
     "          "
-    "  ### ### "
-    "###      #"
+    "  === ### "
+    "###      ="
     "###T   ###",
 
     "          "
-    " #        "
+    " =        "
     "          "
     "          "
     "   #   #  "
-    "# ##   ## "
+    "= ##   ## "
     "####   ## "
     "####   ###",
 };
 
 #define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 3
 char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
-    "8      8  "
-    "8        8"
+    "#      #  "
+    "#        #"
     "       #  "
     "     N  # "
     "     T    "
-    "       MMM"
-    "M8MM   ###"
+    "       TTT"
+    "T#TT   ==="
     "####   ###",
 
     "          "
     "  N       "
-    "####      "
+    "TTTT      "
     "       ## "
-    "    #     "
-    "#####  ###"
-    "#####  ###"
-    "###T#  ###",
+    "    =     "
+    "####=  TT#"
+    "####=  ###"
+    "####=  ###",
 
     "       #  "
-    "##      ##"
+    "TT      ##"
     "          "
     "    N     "
     "    ##    "
-    "#TT##  ###"
-    "####    ##"
-    "###T#  ###",
+    "#TT=#  ###"
+    "###=    ##"
+    "#####  ###",
 };
 
 #define ENTER_CHUNKS_COUNT 3
@@ -1865,7 +1854,7 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
 
     "          "
     "  N       "
-    "####      "
+    " ###      "
     "       ## "
     "    #     "
     "####   ###"
@@ -1873,7 +1862,7 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "###T#  ###",
 
     "       #  "
-    "##      ##"
+    " ##     # "
     "          "
     "    N     "
     "    ##    "
@@ -1882,7 +1871,7 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "###T#  ###",
 };
 
-#define PASSAGE_CHUNKS_COUNT 3
+#define PASSAGE_CHUNKS_COUNT 2
 char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
     " PPPPPPP  "
     " #######  "
@@ -1895,20 +1884,20 @@ char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
 
     "  ##   ## "
     "#         "
-    "        ##"
-    "       ###"
-    "  #     ##"
-    "####   ###"
+    "        # "
+    "       ## "
+    "  #    ###"
+    "TTTT  ####"
     "##########"
     "##########",
 
     "##     #  "
-    "##      ##"
+    " #      ##"
     "          "
     "          "
     "          "
     "#TT#  ## #"
-    "##########"
+    "###======#"
     "###T######",
 };
 
@@ -1930,14 +1919,14 @@ char *exit_chunks[END_CHUNKS_COUNT] = {
     " ####     "
     "##TTTTTT  "
     "##########",
-    "#         "
+    "##      # "
+    "         #"
     "          "
-    "#         "
-    "#  X      "
+    "   X      "
     " #####    "
     "          "
-    "# TTTTTT  "
-    " ######## ",
+    "  TTTTTT  "
+    " ======== ",
 };
 
 void generate_new_map(Bitmap screen)
@@ -1962,6 +1951,8 @@ void generate_new_map(Bitmap screen)
     for (i32 index = 0; index < tile_count; index++)
     {
         tile_map[index].type = Tile_Type_BORDER;
+        tile_map[index].solid = true;
+        tile_map[index].interactive = -1;
     }
 
     //создание чанков
@@ -2056,185 +2047,287 @@ void generate_new_map(Bitmap screen)
                 for (i32 x = 0; x < CHUNK_SIZE_X; x++)
                 {
                     char tile_char = chunk_string[(CHUNK_SIZE_Y - y - 1) * CHUNK_SIZE_X + x];
-                    Tile_type type = Tile_Type_NONE;
+                    V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X + BORDER_SIZE), (f32)(y + chunk_index_y * CHUNK_SIZE_Y + BORDER_SIZE)};
+                    i32 index = get_index(tile_pos);
+
+                    Tile_type type;
+                    bool solid;
+                    i32 interactive;
+                    Bitmap sprite;
+
                     switch (tile_char)
                     {
+                    case ' ':
+                    {
+                        type = Tile_Type_NONE;
+                        solid = false;
+                        interactive = -1;
+                        sprite = img_None;
+
+                        break;
+                    };
                     case '#':
                     {
-                        type = Tile_Type_BRICK;
+                        type = Tile_Type_NORMAL;
+                        solid = true;
+                        interactive = -1;
+
+                        f32 chance = random_float(0, 1);
+                        if (chance < 0.95)
+                        {
+                            if (chance > 0.15)
+                            {
+                                sprite = img_Bricks[(i32)random_int(0, 6)];
+                            }
+                            else
+                            {
+                                sprite = img_Stone;
+                            }
+                        }
+                        else
+                        {
+                            sprite = img_Bricks[(i32)random_int(7, 11)];
+                        }
+
                         break;
                     };
                     case '=':
                     {
-                        type = Tile_Type_ELEGANT_BRICK;
+                        type = Tile_Type_NORMAL;
+                        solid = true;
+                        interactive = -1;
+                        sprite = img_ElegantBrick;
+
                         break;
                     };
                     case '-':
                     {
                         type = Tile_Type_BORDER;
+                        solid = true;
+                        interactive = -1;
+
+                        sprite = img_Border;
+                        Tile_type left_tile = tile_map[get_index(tile_pos + V2{-1, 0})].type;
+                        Tile_type right_tile = tile_map[get_index(tile_pos + V2{1, 0})].type;
+                        Tile_type top_tile = tile_map[get_index(tile_pos + V2{0, 1})].type;
+                        Tile_type bottom_tile = tile_map[get_index(tile_pos + V2{0, -1})].type;
+                        Tile_type bottomright_tile = tile_map[get_index(tile_pos + V2{1, -1})].type;
+                        Tile_type topright_tile = tile_map[get_index(tile_pos + V2{1, 1})].type;
+                        Tile_type bottomleft_tile = tile_map[get_index(tile_pos + V2{-1, -1})].type;
+                        Tile_type topleft_tile = tile_map[get_index(tile_pos + V2{-1, 1})].type;
+
+                        if (bottom_tile != Tile_Type_BORDER)
+                        {
+                            sprite = img_TransitionBorder_0;
+                        }
+                        else
+                        {
+                            if (right_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_TransitionBorder_05PI;
+                            }
+                            else if (bottomright_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_CornerBorder_0;
+                            }
+
+                            if (left_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_TransitionBorder_15PI;
+                            }
+                            else if (bottomright_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_CornerBorder_15PI;
+                            }
+                        }
+
+                        if (top_tile != Tile_Type_BORDER)
+                        {
+                            sprite = img_TransitionBorder_PI;
+                        }
+                        else
+                        {
+                            if (right_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_TransitionBorder_05PI;
+                            }
+                            else if (topright_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_CornerBorder_05PI;
+                            }
+
+                            if (left_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_TransitionBorder_15PI;
+                            }
+                            else if (topleft_tile != Tile_Type_BORDER)
+                            {
+                                sprite = img_CornerBorder_PI;
+                            }
+                        }
+
                         break;
                     };
                     case 'N':
                     {
                         type = Tile_Type_ENTER;
+                        solid = false;
+                        interactive = -1;
+
+                        sprite = img_Door[0];
+
+                        //addPlayer
+                        V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS;
+                        add_game_object(Game_Object_PLAYER, spawn_pos);
+                        add_game_object(Game_Object_ZOMBIE, spawn_pos);
+                        camera.target = spawn_pos;
+                        border_camera(screen);
+                        camera.pos = camera.target;
+
                         break;
                     };
                     case 'X':
                     {
                         type = Tile_Type_EXIT;
-                        break;
-                    };
-                    case 'M':
-                    {
-                        type = Tile_Type_MARBLE_FLOOR;
+                        solid = false;
+                        interactive = add_timer(0);
+                        sprite = img_Door[6];
                         break;
                     };
                     case 'T':
                     {
-                        type = Tile_Type_TILED_FLOOR;
+                        type = Tile_Type_FLOOR;
+                        solid = true;
+                        interactive = -1;
+                        sprite = img_None;
                         break;
                     };
                     case 'P':
                     {
                         type = Tile_Type_PARAPET;
-                        break;
-                    };
-                    case '8':
-                    {
-                        type = Tile_Type_STONE;
+                        solid = false;
+                        interactive = -1;
+                        sprite = img_Parapet;
                         break;
                     };
                     }
-                    V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X + BORDER_SIZE), (f32)(y + chunk_index_y * CHUNK_SIZE_Y + BORDER_SIZE)};
-                    i32 index = get_index(tile_pos);
+
                     tile_map[index].type = type;
+                    tile_map[index].solid = solid;
+                    tile_map[index].interactive = interactive;
+                    tile_map[index].sprite = sprite;
                 }
             }
         }
     }
 
-    //налаживаем свойства тайлов
+    //налаживаем свойства тайлов после полной расстановки
     for (i32 index = 0; index < tile_count; index++)
     {
         V2 tile_pos = get_tile_pos(index);
-        Bitmap sprite = img_None;
-        bool solid = true;
-        switch (tile_map[index].type)
+        Tile_type type = tile_map[index].type;
+        Bitmap sprite = tile_map[index].sprite;
+
+        if (type == Tile_Type_FLOOR)
         {
-        case Tile_Type_NONE:
-        {
-            solid = false;
-            break;
-        };
-        case Tile_Type_BRICK:
-        {
-            f32 chance = random_float(0, 1);
-            if (chance < 0.95)
+            Bitmap left_tile = tile_map[get_index(tile_pos + V2{-1, 0})].sprite;
+            Bitmap bottom_tile = tile_map[get_index(tile_pos + V2{0, -1})].sprite;
+            Bitmap bottomleft_tile = tile_map[get_index(tile_pos + V2{-1, -1})].sprite;
+            Bitmap bottomright_tile = tile_map[get_index(tile_pos + V2{1, -1})].sprite;
+
+            i32 bitmap_size = img_TiledFloor.pitch * (img_TiledFloor.size.y + 2) * sizeof(u32);
+
+            if (left_tile.pixels == img_TiledFloor.pixels ||
+                bottom_tile.pixels == img_TiledFloor.pixels ||
+                bottomleft_tile.pixels == img_TiledFloor.pixels ||
+                bottomright_tile.pixels == img_TiledFloor.pixels)
             {
-                sprite = img_Bricks[(i32)random_int(0, 6)];
+                sprite = img_TiledFloor;
+            }
+            else if (left_tile.pixels == img_MarbleFloor.pixels ||
+                     bottom_tile.pixels == img_MarbleFloor.pixels ||
+                     bottomleft_tile.pixels == img_MarbleFloor.pixels ||
+                     bottomright_tile.pixels == img_MarbleFloor.pixels)
+            {
+                sprite = img_MarbleFloor;
             }
             else
             {
-                sprite = img_Bricks[(i32)random_int(7, 11)];
+                if (random_int(0, 1) == 0)
+                {
+                    sprite = img_TiledFloor;
+                }
+                else
+                {
+                    sprite = img_MarbleFloor;
+                }
             }
-            break;
-        };
-        case Tile_Type_ELEGANT_BRICK:
-        {
-            sprite = img_ElegantBrick;
-            break;
-        };
-        case Tile_Type_BORDER:
+        }
+
+        if (type == Tile_Type_BORDER)
         {
             sprite = img_Border;
-            i32 left_tile = get_index(tile_pos + V2{-1, 0});
-            i32 right_tile = get_index(tile_pos + V2{1, 0});
-            i32 top_tile = get_index(tile_pos + V2{0, 1});
-            i32 bottom_tile = get_index(tile_pos + V2{0, -1});
-            i32 bottomright_tile = get_index(tile_pos + V2{1, -1});
-            i32 topright_tile = get_index(tile_pos + V2{1, 1});
-            i32 bottomleft_tile = get_index(tile_pos + V2{-1, -1});
-            i32 topleft_tile = get_index(tile_pos + V2{-1, 1});
-            if (tile_pos.y != 0 && tile_map[bottom_tile].type != Tile_Type_BORDER)
+            Tile_type left_tile = tile_map[get_index(tile_pos + V2{-1, 0})].type;
+            Tile_type right_tile = tile_map[get_index(tile_pos + V2{1, 0})].type;
+            Tile_type top_tile = tile_map[get_index(tile_pos + V2{0, 1})].type;
+            Tile_type bottom_tile = tile_map[get_index(tile_pos + V2{0, -1})].type;
+            Tile_type bottomright_tile = tile_map[get_index(tile_pos + V2{1, -1})].type;
+            Tile_type topright_tile = tile_map[get_index(tile_pos + V2{1, 1})].type;
+            Tile_type bottomleft_tile = tile_map[get_index(tile_pos + V2{-1, -1})].type;
+            Tile_type topleft_tile = tile_map[get_index(tile_pos + V2{-1, 1})].type;
+
+            if (bottom_tile != Tile_Type_BORDER)
             {
                 sprite = img_TransitionBorder_0;
             }
-            else if (tile_pos.x != map_size.x - 1 && tile_map[right_tile].type != Tile_Type_BORDER)
+            else
             {
-                sprite = img_TransitionBorder_05PI;
+                if (right_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_TransitionBorder_05PI;
+                }
+                else if (bottomright_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_CornerBorder_0;
+                }
+
+                if (left_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_TransitionBorder_15PI;
+                }
+                else if (bottomright_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_CornerBorder_15PI;
+                }
             }
-            else if (tile_pos.y != map_size.y - 1 && tile_map[top_tile].type != Tile_Type_BORDER)
+
+            if (top_tile != Tile_Type_BORDER)
             {
                 sprite = img_TransitionBorder_PI;
             }
-            else if (tile_pos.x != 0 && tile_map[left_tile].type != Tile_Type_BORDER)
+            else
             {
-                sprite = img_TransitionBorder_15PI;
+                if (right_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_TransitionBorder_05PI;
+                }
+                else if (topright_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_CornerBorder_05PI;
+                }
+
+                if (left_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_TransitionBorder_15PI;
+                }
+                else if (topleft_tile != Tile_Type_BORDER)
+                {
+                    sprite = img_CornerBorder_PI;
+                }
             }
-            else if (tile_pos.y != 0 && tile_pos.x != map_size.x - 1 && tile_map[bottomright_tile].type != Tile_Type_BORDER)
-            {
-                sprite = img_CornerBorder_0;
-            }
-            else if (tile_pos.y != map_size.y - 1 && tile_pos.x != map_size.x - 1 && tile_map[topright_tile].type != Tile_Type_BORDER)
-            {
-                sprite = img_CornerBorder_05PI;
-            }
-            else if (tile_pos.y != map_size.y - 1 && tile_pos.x != 0 && tile_map[topleft_tile].type != Tile_Type_BORDER)
-            {
-                sprite = img_CornerBorder_PI;
-            }
-            else if (tile_pos.y != 0 && tile_pos.x != 0 && tile_map[bottomleft_tile].type != Tile_Type_BORDER)
-            {
-                sprite = img_CornerBorder_15PI;
-            }
-            break;
-        };
-        case Tile_Type_ENTER:
-        {
-            //addPlayer
-            V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS;
-            add_game_object(Game_Object_PLAYER, spawn_pos);
-            add_game_object(Game_Object_ZOMBIE, spawn_pos);
-            camera.target = spawn_pos;
-            border_camera(screen);
-            camera.pos = camera.target;
-            solid = false;
-            sprite = img_Door[0];
-            break;
-        };
-        case Tile_Type_EXIT:
-        {
-            solid = false;
-            sprite = img_Door[6];
-            tile_map[index].interactive = true;
-            break;
-        };
-        case Tile_Type_MARBLE_FLOOR:
-        {
-            i16 chance = random_int(0, 3);
-            sprite = img_MarbleFloor[chance];
-            break;
-        };
-        case Tile_Type_TILED_FLOOR:
-        {
-            i16 chance = random_int(0, 3);
-            sprite = img_TiledFloor[chance];
-            break;
-        };
-        case Tile_Type_PARAPET:
-        {
-            sprite = img_Parapet;
-            solid = false;
-            break;
-        };
-        case Tile_Type_STONE:
-        {
-            sprite = img_Stone;
-            break;
-        };
         }
+
         tile_map[index].sprite = sprite;
-        tile_map[index].solid = solid;
     }
 }
 
@@ -2265,7 +2358,7 @@ void update_tile(i32 tile_index)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
     }
-    else if (tile->type != Tile_Type_NONE)
+    else
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
     }
