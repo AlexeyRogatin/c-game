@@ -431,6 +431,6 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         char buffer[256];
         sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        // OutputDebugStringA(buffer);
+        OutputDebugStringA(buffer);
     }
 }

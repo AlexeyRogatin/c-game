@@ -1755,11 +1755,11 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
 char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
     "###  #####"
     "#     ####"
-    "TTT   ### "
-    "#   T ##  "
-    "#     ##  "
-    "#    #### "
-    "#    #####"
+    "TTT   ####"
+    "=== T  ###"
+    "##      ##"
+    "##    TT##"
+    "#    ===##"
     "#  #######",
 
     "##    ## #"
@@ -1771,11 +1771,11 @@ char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
     "###    ###"
     "###TTTT###",
 
-    "#         "
-    "#         "
-    "#    ##   "
-    "#TT TTTT  "
-    "#         "
+    "          "
+    "          "
+    "     ##   "
+    " TT TTTT  "
+    "          "
     "#T TTTTTT "
     "##        "
     "###======#",
@@ -1848,8 +1848,8 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "    N     "
     "   TTTT   "
     "   =###=  "
-    "  =#####8 "
-    "MMMM######"
+    "  =###### "
+    "TT########"
     "##########",
 
     "          "
@@ -1859,7 +1859,7 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "    #     "
     "####   ###"
     "####  ####"
-    "###T#  ###",
+    "#####  ###",
 
     "       #  "
     " ##     # "
@@ -1868,10 +1868,10 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "    ##    "
     "#TT##  ## "
     "####   ###"
-    "###T#  ###",
+    "#####  ###",
 };
 
-#define PASSAGE_CHUNKS_COUNT 2
+#define PASSAGE_CHUNKS_COUNT 3
 char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
     " PPPPPPP  "
     " #######  "
@@ -1879,7 +1879,7 @@ char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
     "         ="
     "          "
     "   TT     "
-    "MMMMMMMMMM"
+    "TTTTTTTTTT"
     "#======###",
 
     "  ##   ## "
@@ -1904,9 +1904,9 @@ char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
 #define END_CHUNKS_COUNT 3
 char *exit_chunks[END_CHUNKS_COUNT] = {
     "          "
-    " 8        "
-    "8         "
-    "      T  8"
+    " #        "
+    "#         "
+    "      T  #"
     "          "
     " #   X    "
     "  TTTTTT  "
@@ -2053,7 +2053,7 @@ void generate_new_map(Bitmap screen)
                     Tile_type type;
                     bool solid;
                     i32 interactive;
-                    Bitmap sprite;
+                    Bitmap sprite = img_None;
 
                     switch (tile_char)
                     {
@@ -2267,62 +2267,65 @@ void generate_new_map(Bitmap screen)
         if (type == Tile_Type_BORDER)
         {
             sprite = img_Border;
-            Tile_type left_tile = tile_map[get_index(tile_pos + V2{-1, 0})].type;
-            Tile_type right_tile = tile_map[get_index(tile_pos + V2{1, 0})].type;
-            Tile_type top_tile = tile_map[get_index(tile_pos + V2{0, 1})].type;
-            Tile_type bottom_tile = tile_map[get_index(tile_pos + V2{0, -1})].type;
-            Tile_type bottomright_tile = tile_map[get_index(tile_pos + V2{1, -1})].type;
-            Tile_type topright_tile = tile_map[get_index(tile_pos + V2{1, 1})].type;
-            Tile_type bottomleft_tile = tile_map[get_index(tile_pos + V2{-1, -1})].type;
-            Tile_type topleft_tile = tile_map[get_index(tile_pos + V2{-1, 1})].type;
+            if (tile_pos.x != 0 && tile_pos.y != 0 && tile_pos.x != (map_size.x - 1) && tile_pos.y != (map_size.y - 1))
+            {
+                Tile_type left_tile = tile_map[get_index(tile_pos + V2{-1, 0})].type;
+                Tile_type right_tile = tile_map[get_index(tile_pos + V2{1, 0})].type;
+                Tile_type top_tile = tile_map[get_index(tile_pos + V2{0, 1})].type;
+                Tile_type bottom_tile = tile_map[get_index(tile_pos + V2{0, -1})].type;
+                Tile_type bottomright_tile = tile_map[get_index(tile_pos + V2{1, -1})].type;
+                Tile_type topright_tile = tile_map[get_index(tile_pos + V2{1, 1})].type;
+                Tile_type bottomleft_tile = tile_map[get_index(tile_pos + V2{-1, -1})].type;
+                Tile_type topleft_tile = tile_map[get_index(tile_pos + V2{-1, 1})].type;
 
-            if (bottom_tile != Tile_Type_BORDER)
-            {
-                sprite = img_TransitionBorder_0;
-            }
-            else
-            {
-                if (right_tile != Tile_Type_BORDER)
+                if (bottom_tile != Tile_Type_BORDER)
                 {
-                    sprite = img_TransitionBorder_05PI;
+                    sprite = img_TransitionBorder_0;
                 }
-                else if (bottomright_tile != Tile_Type_BORDER)
+                else
                 {
-                    sprite = img_CornerBorder_0;
-                }
+                    if (right_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_TransitionBorder_05PI;
+                    }
+                    else if (bottomleft_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_CornerBorder_15PI;
+                    }
 
-                if (left_tile != Tile_Type_BORDER)
-                {
-                    sprite = img_TransitionBorder_15PI;
-                }
-                else if (bottomright_tile != Tile_Type_BORDER)
-                {
-                    sprite = img_CornerBorder_15PI;
-                }
-            }
-
-            if (top_tile != Tile_Type_BORDER)
-            {
-                sprite = img_TransitionBorder_PI;
-            }
-            else
-            {
-                if (right_tile != Tile_Type_BORDER)
-                {
-                    sprite = img_TransitionBorder_05PI;
-                }
-                else if (topright_tile != Tile_Type_BORDER)
-                {
-                    sprite = img_CornerBorder_05PI;
+                    if (left_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_TransitionBorder_15PI;
+                    }
+                    else if (bottomright_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_CornerBorder_0;
+                    }
                 }
 
-                if (left_tile != Tile_Type_BORDER)
+                if (top_tile != Tile_Type_BORDER)
                 {
-                    sprite = img_TransitionBorder_15PI;
+                    sprite = img_TransitionBorder_PI;
                 }
-                else if (topleft_tile != Tile_Type_BORDER)
+                else
                 {
-                    sprite = img_CornerBorder_PI;
+                    if (right_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_TransitionBorder_05PI;
+                    }
+                    else if (topright_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_CornerBorder_05PI;
+                    }
+
+                    if (left_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_TransitionBorder_15PI;
+                    }
+                    else if (topleft_tile != Tile_Type_BORDER)
+                    {
+                        sprite = img_CornerBorder_PI;
+                    }
                 }
             }
         }
@@ -2377,7 +2380,7 @@ void game_update(Bitmap screen, Input input)
     {
         initialized = true;
 
-        camera.scale = V2{1, 1} * 0.6f;
+        camera.scale = V2{1, 1} * 0.6f * 1080 / map_size.y / TILE_SIZE_PIXELS;
 
         //темнота
         darkness = create_empty_bitmap(screen.size);
