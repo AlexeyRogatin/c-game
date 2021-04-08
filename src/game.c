@@ -242,9 +242,9 @@ typedef enum
     LAYER_BACKGROUND2,
     LAYER_BACKGROUND3,
     LAYER_TILE,
-    LAYER_BG_ITEM,
     LAYER_GAME_OBJECT,
     LAYER_FORGROUND,
+    LAYER_DARKNESS,
 } Layer;
 
 typedef struct
@@ -1182,21 +1182,12 @@ i32 check_for_interactive_tiles(Game_Object *game_object)
     i32 result = -1;
     V2 obj_tile_pos = V2{roundf(game_object->pos.x / TILE_SIZE_PIXELS), roundf(game_object->pos.y / TILE_SIZE_PIXELS)};
 
-    for (i32 y = obj_tile_pos.y - 1; y <= obj_tile_pos.y + 1; y++)
+    i32 index = get_index(obj_tile_pos);
+    Tile tile = tile_map[index];
+    if (tile.interactive != -1)
     {
-        for (i32 x = obj_tile_pos.x - 1; x <= obj_tile_pos.x + 1; x++)
-        {
-            i32 index = get_index(V2{(f32)x, (f32)y});
-            Tile tile = tile_map[index];
-            if (tile.interactive != -1)
-            {
-                result = index;
-                goto end;
-            }
-        }
+        result = index;
     }
-
-end:
     return result;
 }
 
@@ -1283,7 +1274,10 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //гравитация
-        game_object->speed.y += gravity;
+        if (game_object->speed.y < TILE_SIZE_PIXELS / 2)
+        {
+            game_object->speed.y += gravity;
+        }
 
         if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
         {
@@ -2050,9 +2044,9 @@ void generate_new_map(Bitmap screen)
                     V2 tile_pos = {(f32)(x + chunk_index_x * CHUNK_SIZE_X + BORDER_SIZE), (f32)(y + chunk_index_y * CHUNK_SIZE_Y + BORDER_SIZE)};
                     i32 index = get_index(tile_pos);
 
-                    Tile_type type;
-                    bool solid;
-                    i32 interactive;
+                    Tile_type type = Tile_Type_NONE;
+                    bool solid = false;
+                    i32 interactive = -1;
                     Bitmap sprite = img_None;
 
                     switch (tile_char)
@@ -2063,9 +2057,8 @@ void generate_new_map(Bitmap screen)
                         solid = false;
                         interactive = -1;
                         sprite = img_None;
-
-                        break;
-                    };
+                    }
+                    break;
                     case '#':
                     {
                         type = Tile_Type_NORMAL;
@@ -2088,18 +2081,16 @@ void generate_new_map(Bitmap screen)
                         {
                             sprite = img_Bricks[(i32)random_int(7, 11)];
                         }
-
-                        break;
-                    };
+                    }
+                    break;
                     case '=':
                     {
                         type = Tile_Type_NORMAL;
                         solid = true;
                         interactive = -1;
                         sprite = img_ElegantBrick;
-
-                        break;
-                    };
+                    }
+                    break;
                     case '-':
                     {
                         type = Tile_Type_BORDER;
@@ -2165,9 +2156,8 @@ void generate_new_map(Bitmap screen)
                                 sprite = img_CornerBorder_PI;
                             }
                         }
-
-                        break;
-                    };
+                    }
+                    break;
                     case 'N':
                     {
                         type = Tile_Type_ENTER;
@@ -2183,33 +2173,32 @@ void generate_new_map(Bitmap screen)
                         camera.target = spawn_pos;
                         border_camera(screen);
                         camera.pos = camera.target;
-
-                        break;
-                    };
+                    }
+                    break;
                     case 'X':
                     {
                         type = Tile_Type_EXIT;
                         solid = false;
                         interactive = add_timer(0);
                         sprite = img_Door[6];
-                        break;
-                    };
+                    }
+                    break;
                     case 'T':
                     {
                         type = Tile_Type_FLOOR;
                         solid = true;
                         interactive = -1;
                         sprite = img_None;
-                        break;
-                    };
+                    }
+                    break;
                     case 'P':
                     {
                         type = Tile_Type_PARAPET;
                         solid = false;
                         interactive = -1;
                         sprite = img_Parapet;
-                        break;
-                    };
+                    }
+                    break;
                     }
 
                     tile_map[index].type = type;
@@ -2339,31 +2328,62 @@ void update_tile(i32 tile_index)
     Tile *tile = &tile_map[tile_index];
     V2 tilePos = get_tile_pos(tile_index);
 
+    if (tile->sprite.pixels == img_Parapet.pixels)
+    {
+        i32 foo = 0;
+    }
+
     //обновление тайлов
-    if (tile->type == Tile_Type_PARAPET)
+    switch (tile->type)
+    {
+    case Tile_Type_NONE:
+    {
+    }
+    break;
+    case Tile_Type_NORMAL:
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
+    }
+    break;
+    case Tile_Type_BORDER:
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
+    }
+    break;
+    case Tile_Type_FLOOR:
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
+    }
+    break;
+    case Tile_Type_PARAPET:
     {
         if (tile_map[get_index(tilePos + V2{0, -1})].type == Tile_Type_NONE)
         {
             tile->type = Tile_Type_NONE;
+            tile->sprite = img_BackGround;
+        }
+        else
+        {
+            draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_FORGROUND);
         }
     }
-
-    if (tile->type == Tile_Type_EXIT)
+    break;
+    case Tile_Type_ENTER:
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BACKGROUND3);
+    }
+    break;
+    case Tile_Type_EXIT:
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BACKGROUND3);
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, img_DoorBack.size * 5, 0, img_DoorBack, LAYER_BACKGROUND2);
     }
-    else if (tile->type == Tile_Type_ENTER)
-    {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BG_ITEM);
+    break;
     }
-    else if (!tile->solid)
+
+    if (!tile->solid)
     {
         draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, LAYER_BACKGROUND1);
-    }
-    else
-    {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, LAYER_TILE);
     }
 }
 
@@ -2380,7 +2400,7 @@ void game_update(Bitmap screen, Input input)
     {
         initialized = true;
 
-        camera.scale = V2{1, 1} * 0.6f * 1080 / map_size.y / TILE_SIZE_PIXELS;
+        camera.scale = V2{1, 1} * 0.6f * 0.2;
 
         //темнота
         darkness = create_empty_bitmap(screen.size);
@@ -2406,7 +2426,7 @@ void game_update(Bitmap screen, Input input)
     }
 
     //прорисовка темноты
-    // draw_bitmap(camera.pos, darkness.size, 0, darkness, LAYER_FORGROUND);
+    // draw_bitmap(camera.pos, darkness.size, 0, darkness, LAYER_DARKNESS);
 
     //обновление тайлов
     for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
