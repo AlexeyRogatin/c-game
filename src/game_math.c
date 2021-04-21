@@ -133,9 +133,71 @@ V2 abs(V2 a)
     return result;
 }
 
+u64 rol64(u64 x, int k)
+{
+    return (x << k) | (x >> (64 - k));
+}
+
+struct xoshiro256ss_state
+{
+    u64 s[4];
+};
+
+xoshiro256ss_state __global_random_state;
+#define U64_MAX 0xffffffffffffffff
+
+u64 xoshiro256ss(struct xoshiro256ss_state *state)
+{
+    u64 *s = state->s;
+    u64 const result = rol64(s[1] * 5, 7) * 9;
+    u64 const t = s[1] << 17;
+
+    s[2] ^= s[0];
+    s[3] ^= s[1];
+    s[1] ^= s[2];
+    s[0] ^= s[3];
+
+    s[2] ^= t;
+    s[3] = rol64(s[3], 45);
+
+    return result;
+}
+
+struct splitmix64_state
+{
+    u64 s;
+};
+
+u64 splitmix64(struct splitmix64_state *state)
+{
+    u64 result = (state->s += 0x9E3779B97f4A7C15);
+    result = (result ^ (result >> 30)) * 0xBF58476D1CE4E5B9;
+    result = (result ^ (result >> 27)) * 0x94D049BB133111EB;
+    return result ^ (result >> 31);
+}
+
+// as an example; one could do this same thing for any of the other generators
+struct xoshiro256ss_state xorshift256_init(u64 seed)
+{
+    struct splitmix64_state smstate = {seed};
+    struct xoshiro256ss_state result = {0};
+
+    u64 tmp = splitmix64(&smstate);
+    result.s[0] = tmp;
+    tmp = splitmix64(&smstate);
+    result.s[1] = tmp;
+    tmp = splitmix64(&smstate);
+    result.s[2] = tmp;
+    tmp = splitmix64(&smstate);
+    result.s[3] = tmp;
+
+    return result;
+}
+
 f32 random_float(f32 start, f32 end)
 {
-    f32 result = rand() / (f32)RAND_MAX * (end - start) + start;
+    f32 r01 = (f64)xoshiro256ss(&__global_random_state) / (f64)U64_MAX;
+    f32 result = r01 * (end - start) + start;
     return result;
 };
 i32 random_int(f32 start, f32 end)

@@ -246,8 +246,8 @@ void print_smth(void *data)
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
-    time_t curTime = time(NULL);
-    srand((u32)curTime);
+    time_t cur_time = time(NULL);
+    __global_random_state = xorshift256_init(cur_time);
 
     LARGE_INTEGER perf_frequency_li;
     QueryPerformanceFrequency(&perf_frequency_li);
@@ -298,8 +298,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     RECT rect;
     GetClientRect(window, &rect);
     HDC device_context = GetDC(window);
-    i32 game_width = 960;
-    i32 game_height = 540;
+    i32 game_width = 512;
+    i32 game_height = 288;
     i32 window_width = rect.right - rect.left;
     i32 window_height = rect.bottom - rect.top;
 
