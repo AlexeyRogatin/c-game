@@ -164,6 +164,7 @@ Bitmap img_Parapet = win32_read_bmp("../data/parapet.bmp");
 Bitmap img_HealthBar = win32_read_bmp("../data/health_bar.bmp");
 Bitmap img_Health = win32_read_bmp("../data/health.bmp");
 
+//получение перевёрнутых картинок
 Bitmap turn_bitmap(Bitmap bitmap, f64 angle)
 {
     Bitmap result;
@@ -228,7 +229,13 @@ Camera camera = {
     {0, 0},
 };
 
-//drawing
+V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
+{
+    V2 result = (p - camera.pos) * camera.scale + screen.size * 0.5f;
+    return result;
+}
+
+//прорисовка
 
 typedef enum
 {
@@ -294,6 +301,10 @@ void draw_bitmap(V2 pos, V2 size, f32 angle, Bitmap bitmap, Layer layer)
     draw_queue_size++;
 }
 
+//очищение экрана и затемнение среды
+#define DARKNESS_USUAL_LVL 0.9
+f32 darkness_lvl = DARKNESS_USUAL_LVL;
+
 void clear_screen(Bitmap screen, Bitmap darkness)
 {
     i32 pixelCount = screen.size.x * screen.size.y;
@@ -307,11 +318,14 @@ void clear_screen(Bitmap screen, Bitmap darkness)
     {
         for (i32 x = 0; x <= darkness.size.x; x++)
         {
-            darkness.pixels[y * darkness.pitch + x] = 0xCC000000;
+            ARGB dark_pixel = {0xFF000000};
+            dark_pixel.a *= darkness_lvl;
+            darkness.pixels[y * darkness.pitch + x] = dark_pixel.argb;
         }
     }
 }
 
+//границы камеры
 void border_camera(Bitmap screen)
 {
     if (!(camera.target.x - screen.size.x / camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5))
@@ -373,6 +387,7 @@ i32 get_index(V2 coords)
     return index;
 }
 
+//смешивание цветов
 typedef struct
 {
     V4 a, b, c, d;
@@ -694,16 +709,14 @@ void draw_item(Bitmap screen, Drawing drawing)
     }
 }
 
+//темнота и уровень освещения
 Bitmap darkness;
+f32 light_lvl = 1;
 
-V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
+void draw_light(Bitmap screen, Camera camera, V2 world_pos, f32 inner_radius, f32 world_radius)
 {
-    V2 result = (p - camera.pos) * camera.scale + screen.size * 0.5f;
-    return result;
-}
-
-void draw_light(Bitmap screen, Camera camera, V2 world_pos, f32 innerRadius, f32 world_radius)
-{
+    inner_radius *= light_lvl;
+    world_radius *= light_lvl;
     f32 darkness_scale = darkness.size.x / screen.size.x;
     f32 radius = world_radius * camera.scale.x * darkness_scale;
     V2 center = world_to_screen(screen, camera, world_pos) * darkness_scale;
@@ -838,19 +851,19 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
         3, //жизни
         3, //максимальные жизни
 
-        pos,    //позиция
-        {0, 0}, //коробки
-        {0, 0},
+        pos,      //позиция
+        {25, 56}, //коробки
+        {60, 60},
         {0, 0}, //скорость
 
         false, //инпут
         false,
         NULL,
 
-        1,                //ускорение
-        0.75,             //трение
-        TILE_SIZE_PIXELS, //высота прыжка
-        15,               //время прыжка
+        1,                    //ускорение
+        0.75,                 //трение
+        TILE_SIZE_PIXELS * 2, //высота прыжка
+        19,                   //время прыжка
 
         0,                                     //пройденный путь в пикселях
         (Direction)(random_int(0, 1) * 2 - 1), //направление
@@ -870,9 +883,6 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
     if (type == Game_Object_PLAYER)
     {
-        game_object.collision_box = {25, 56};
-        game_object.hit_box = {40, 60};
-
         game_object.jump = add_timer(0);
         game_object.can_jump = add_timer(0);
         game_object.looking_key_held_timer = add_timer(0);
@@ -882,21 +892,15 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
         game_object.invulnerable_timer = add_timer(0);
 
         game_object.jump_height = TILE_SIZE_PIXELS * 2.2 - game_object.collision_box.y;
-        game_object.jump_duration = 19;
     }
 
     if (type == Game_Object_ZOMBIE)
     {
-
-        game_object.collision_box = {25, 56};
-        game_object.hit_box = {40, 60};
-
         game_object.healthpoints = 1;
 
         game_object.jump = add_timer(-1);
         game_object.can_jump = add_timer(0);
 
-        game_object.jump_height = TILE_SIZE_PIXELS * 2;
         game_object.jump_duration = 15;
 
         game_object.go_left = random_int(0, 1);
@@ -923,6 +927,8 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
     return &game_objects[slot_index];
 }
+
+#define DISTANT_HANGING_VALUE 7
 
 Collisions check_collision(Game_Object *game_object)
 {
@@ -1001,8 +1007,8 @@ Collisions check_collision(Game_Object *game_object)
                 }
                 //столкновение удлинённое (для подвешенного состояния)
                 if (!collisions.x.happened &&
-                    !((obj_max.x + our_object->speed.x + our_object->looking_direction * 7 <= tile_min.x) ||
-                      (obj_min.x + our_object->speed.x + our_object->looking_direction * 7 >= tile_max.x) ||
+                    !((obj_max.x + our_object->speed.x + our_object->looking_direction * DISTANT_HANGING_VALUE <= tile_min.x) ||
+                      (obj_min.x + our_object->speed.x + our_object->looking_direction * DISTANT_HANGING_VALUE >= tile_max.x) ||
                       (obj_max.y <= tile_min.y) ||
                       (obj_min.y >= tile_max.y)))
                 {
@@ -1072,6 +1078,10 @@ bool deal_damage(Game_Object *taking_object, f32 damage)
     return result;
 }
 
+#define JUMP_ON_ENEMY_BOOST 15
+#define KNOCKBACK \
+    V2 { 25, 10 }
+
 void check_object_collision(Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_objects_count)
 {
     for (i32 game_object_index = 0; game_object_index < game_object_count; game_object_index++)
@@ -1125,7 +1135,7 @@ void check_object_collision(Game_Object *game_object, Game_Object_Type *triggeri
                         {
                             if (deal_damage(&game_objects[game_object_index], 1))
                             {
-                                game_object->speed.y = 15;
+                                game_object->speed.y = JUMP_ON_ENEMY_BOOST;
                             }
                         }
                         else
@@ -1134,15 +1144,7 @@ void check_object_collision(Game_Object *game_object, Game_Object_Type *triggeri
                             {
                                 timers[game_object->cant_control_timer] = 30;
                                 timers[game_object->invulnerable_timer] = 60;
-                                if (game_object->pos.x > collided_object.pos.x)
-                                {
-                                    game_object->speed.x = 25;
-                                }
-                                else
-                                {
-                                    game_object->speed.x = -25;
-                                }
-                                game_object->speed.y += 10;
+                                game_object->speed.y -= KNOCKBACK.y;
                             }
                         }
                     }
@@ -1326,6 +1328,626 @@ i32 check_for_interactive_tiles(Game_Object *game_object)
         result = index;
     }
     return result;
+}
+
+void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
+{
+#define RUNNING_ACCEL 3.8
+#define NORMAL_ACCEL 1.9
+#define CROUCHING_ACCEL 0.85
+#define JUMP_BUTTON_DURATION 15
+#define ADDITIONAL_JUMP_FRAMES 6
+#define HANGING_ANIMATION_TIME 16
+#define LOOKING_KEY_HOLDING 40
+#define CROUCHING_ANIMATION_TIME 8
+#define LOOKING_DISTANCE 200
+
+    if (game_object->type == Game_Object_PLAYER)
+    {
+        //предпологаемое состояние
+        Condition supposed_cond;
+
+        //движение игрока
+        if (timers[game_object->cant_control_timer] < 0)
+        {
+            if (input.z.went_down)
+            {
+                timers[game_object->jump] = JUMP_BUTTON_DURATION;
+            }
+
+            if (timers[game_object->jump] > 0)
+            {
+                input.z.went_down = true;
+            }
+
+            game_object->go_left = input.left.is_down;
+            game_object->go_right = input.right.is_down;
+        }
+        else
+        {
+            game_object->go_left = false;
+            game_object->go_right = false;
+            timers[game_object->jump] = 0;
+        }
+
+        //константы ускорения
+        if (input.shift.is_down)
+        {
+            game_object->accel = NORMAL_ACCEL;
+        }
+        else
+        {
+            game_object->accel = RUNNING_ACCEL;
+        }
+        if (game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING)
+        {
+            game_object->accel = CROUCHING_ACCEL;
+        }
+
+        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
+
+        //скорость по x
+        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
+
+        //прыжок
+        if (input.z.went_down && timers[game_object->can_jump] > 0)
+        {
+            timers[game_object->jump] = 0;
+            timers[game_object->can_jump] = 0;
+            if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
+            {
+                if (timers[game_object->hanging_animation_timer] > 0)
+                {
+                    timers[game_object->jump] = timers[game_object->hanging_animation_timer] + 2;
+                }
+                else
+                {
+                    if (!input.down.is_down)
+                    {
+                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                    }
+                    game_object->condition = Condition_FALLING;
+                }
+            }
+            else
+            {
+                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+            }
+        }
+
+        if (game_object->speed.y > 0 && !input.z.is_down)
+        {
+            gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration) * 2;
+        }
+
+        //гравитация
+        if (game_object->speed.y < TILE_SIZE_PIXELS / 2)
+        {
+            game_object->speed.y += gravity;
+        }
+
+        if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
+        {
+            game_object->speed.x = 0;
+            if (timers[game_object->hanging_animation_timer] <= 0)
+            {
+                game_object->speed.y = 0;
+            }
+            else
+            {
+                game_object->speed.y = -(game_object->hit_box.y + TILE_SIZE_PIXELS) / 2 / (HANGING_ANIMATION_TIME - 1);
+            }
+        }
+
+        //трение
+        game_object->speed.x *= game_object->friction;
+
+        //направление
+        if (game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP)
+        {
+            if (!(game_object->go_left && game_object->go_right))
+            {
+                if (game_object->go_right)
+                {
+                    game_object->looking_direction = Direction_RIGHT;
+                }
+                if (game_object->go_left)
+                {
+                    game_object->looking_direction = Direction_LEFT;
+                }
+            }
+        }
+
+        //столкновения и движение
+        Game_Object_Type triggers[1];
+        triggers[0] = Game_Object_ZOMBIE;
+        check_object_collision(game_object, triggers, 1);
+
+        Collisions collisions = check_collision(game_object);
+
+        if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_DOWN) && (game_object->speed.y != 0 || game_object->speed.x != 0) && timers[game_object->hanging_animation_timer] < 0)
+        {
+            game_object->condition = Condition_FALLING;
+        }
+
+        //состояние падает
+        supposed_cond = Condition_FALLING;
+
+        //состояние стоит
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
+        {
+            supposed_cond = Condition_IDLE;
+            timers[game_object->can_jump] = ADDITIONAL_JUMP_FRAMES;
+
+            //состояние ползком и смотрит вверх
+            if (input.down.is_down && !input.up.is_down)
+            {
+                supposed_cond = Condition_CROUCHING_IDLE;
+            }
+            else if (input.up.is_down && !input.down.is_down && fabs(game_object->speed.x) <= 1 && timers[game_object->crouching_animation_timer] <= 0)
+            {
+                supposed_cond = Condition_LOOKING_UP;
+            }
+
+            //состояния движения
+            if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
+            {
+
+                game_object->moved_through_pixels += game_object->speed.x;
+
+                if (supposed_cond == Condition_IDLE)
+                {
+                    supposed_cond = Condition_MOOVING;
+                }
+                else
+                {
+                    supposed_cond = Condition_CROUCHING_MOOVING;
+                }
+            }
+        }
+
+        if (input.left.went_down || input.right.went_down)
+        {
+            game_object->moved_through_pixels = 0;
+        }
+
+        //функции движения, связанные с коллизией
+        V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
+        V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+
+        i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
+        i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
+
+        //состояние весит
+        if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[collision_frontup_tile_index].solid)
+        {
+            if (game_object->speed.y < 0 &&
+                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
+                game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
+            {
+                supposed_cond = Condition_HANGING;
+
+                game_object->speed = {0, 0};
+
+                game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3;
+
+                game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5 + game_object->collision_box.x * 0.5);
+            }
+        }
+
+        //переход на стенку из состояния ползком
+        if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
+        {
+            V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
+            if (!tile_map[get_index(collisionY_front_tile_pos)].solid &&
+                ((game_object->pos.x + game_object->speed.x + game_object->collision_box.x * 0.5 <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(game_object->pos.x + game_object->collision_box.x * 0.5) >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
+                 (game_object->pos.x + game_object->speed.x - game_object->collision_box.x * 0.5 >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(game_object->pos.x - game_object->collision_box.x * 0.5) <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
+            {
+                game_object->pos.x = collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5 * game_object->looking_direction + game_object->collision_box.x * 0.5 * game_object->looking_direction;
+                supposed_cond = Condition_HANGING;
+                game_object->looking_direction = (Direction)(-game_object->looking_direction);
+                game_object->speed = {0, 0};
+                game_object->condition = Condition_IDLE;
+                timers[game_object->hanging_animation_timer] = HANGING_ANIMATION_TIME;
+            }
+        }
+
+        //состояние смежные с состоянием весит
+        if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP))
+        {
+
+            if (input.up.is_down && !input.down.is_down)
+            {
+                supposed_cond = Condition_HANGING_LOOKING_UP;
+            }
+            else if (input.down.is_down && !input.up.is_down)
+            {
+                supposed_cond = Condition_HANGING_LOOKING_DOWN;
+            }
+            else
+            {
+                supposed_cond = Condition_HANGING;
+            }
+        }
+
+        //работа с предполагаемым состоянием
+        if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
+            (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP) &&
+                (supposed_cond == Condition_HANGING || supposed_cond == Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_HANGING_LOOKING_UP))
+        {
+            //начинаем смотреть вверх и вниз
+            if ((game_object->condition != Condition_CROUCHING_IDLE && supposed_cond == Condition_CROUCHING_IDLE) ||
+                (game_object->condition != Condition_LOOKING_UP && supposed_cond == Condition_LOOKING_UP) ||
+                (game_object->condition != Condition_HANGING_LOOKING_UP && supposed_cond == Condition_HANGING_LOOKING_UP) ||
+                (game_object->condition != Condition_HANGING_LOOKING_DOWN && supposed_cond == Condition_HANGING_LOOKING_DOWN))
+            {
+                timers[game_object->looking_key_held_timer] = LOOKING_KEY_HOLDING;
+            }
+
+            //поднимаемся и встаём
+            if ((game_object->condition != Condition_CROUCHING_IDLE && game_object->condition != Condition_CROUCHING_MOOVING) && (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING))
+            {
+                if (timers[game_object->crouching_animation_timer] < 0)
+                {
+                    timers[game_object->crouching_animation_timer] = 0;
+                }
+                timers[game_object->crouching_animation_timer] = (CROUCHING_ANIMATION_TIME - timers[game_object->crouching_animation_timer] * 0.5) * 2;
+            }
+            if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING) && (supposed_cond != Condition_CROUCHING_IDLE && supposed_cond != Condition_CROUCHING_MOOVING))
+            {
+                if (timers[game_object->crouching_animation_timer] < 0)
+                {
+                    timers[game_object->crouching_animation_timer] = 0;
+                }
+                timers[game_object->crouching_animation_timer] = CROUCHING_ANIMATION_TIME - timers[game_object->crouching_animation_timer] * 0.5;
+            }
+            game_object->condition = supposed_cond;
+        }
+
+        //изменяем положение
+        game_object->pos += game_object->speed;
+
+        //что делают состояния
+        if (game_object->condition == Condition_IDLE || game_object->condition == Condition_MOOVING)
+        {
+            if (timers[game_object->crouching_animation_timer] > 0)
+            {
+                i32 step = ceil(timers[game_object->crouching_animation_timer] * 0.5);
+                game_object->sprite = img_PlayerStartsCrouching[step];
+            }
+            else if (game_object->condition == Condition_IDLE)
+            {
+                game_object->speed.x *= game_object->friction;
+                game_object->sprite = img_PlayerIdle;
+            }
+            else if (game_object->condition == Condition_MOOVING)
+            {
+                i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) / 35);
+                while (step > 5)
+                {
+                    step -= 6;
+                }
+
+                game_object->sprite = img_PlayerStep[step];
+            }
+        }
+
+        if (game_object->condition == Condition_CROUCHING_MOOVING || game_object->condition == Condition_CROUCHING_IDLE)
+        {
+            if (timers[game_object->crouching_animation_timer] > 0)
+            {
+                const i32 step = 4 - ceil(timers[game_object->crouching_animation_timer] * 0.25);
+                game_object->sprite = img_PlayerStartsCrouching[step];
+            }
+            else
+            {
+                if (game_object->condition == Condition_CROUCHING_IDLE)
+                {
+                    game_object->sprite = img_PlayerCrouchIdle;
+                }
+                if (game_object->condition == Condition_CROUCHING_MOOVING)
+                {
+                    i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.1);
+                    while (step > 5)
+                    {
+                        step -= 6;
+                    }
+                    game_object->sprite = img_PlayerCrouchStep[step];
+                }
+            }
+        }
+
+        if (game_object->condition == Condition_LOOKING_UP)
+        {
+            game_object->sprite = img_PlayerLookingUp;
+        }
+
+        if (game_object->condition == Condition_FALLING)
+        {
+            game_object->sprite = img_PlayerJump;
+        }
+
+        if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_DOWN)
+        {
+            if (game_object->condition == Condition_HANGING)
+            {
+                game_object->sprite = img_PlayerHanging;
+            }
+            else if (game_object->condition == Condition_HANGING_LOOKING_DOWN)
+            {
+                game_object->sprite = img_PlayerHangingDown;
+            }
+            else
+            {
+                game_object->sprite = img_PlayerHangingUp;
+            }
+
+            timers[game_object->can_jump] = 4;
+        }
+
+        //взаимодействие с тайлами
+
+        if (input.space.went_down)
+        {
+            i32 tile_index = check_for_interactive_tiles(game_object);
+            if (tile_index != -1)
+            {
+                Tile tile = tile_map[tile_index];
+                V2 tile_pos = get_tile_pos(tile_index);
+                if (tile.type == Tile_Type_EXIT)
+                {
+                    if (game_object->condition != Condition_FALLING)
+                    {
+                        game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS;
+                        game_object->speed = V2{0, 0};
+
+                        timers[game_object->cant_control_timer] = 9999;
+                        timers[game_object->invulnerable_timer] = 9999;
+                        timers[tile.interactive] = 60;
+
+                        game_object->layer = LAYER_BACKGROUND3;
+                    }
+                }
+            }
+        }
+
+        //камера
+        camera.target = game_object->pos;
+
+        //смотрим вниз и вверх
+        if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_HANGING_LOOKING_DOWN) && timers[game_object->looking_key_held_timer] <= 0)
+        {
+            camera.target.y = game_object->pos.y - screen.size.y / camera.scale.y * 0.5 + LOOKING_DISTANCE;
+        }
+
+        if ((game_object->condition == Condition_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_UP) && timers[game_object->looking_key_held_timer] <= 0)
+        {
+            camera.target.y = game_object->pos.y + screen.size.y / camera.scale.y * 0.5 - LOOKING_DISTANCE;
+        }
+
+        //границы для камеры
+        border_camera(screen);
+
+        //камера
+        camera.pos += (camera.target - camera.pos) * 0.25f;
+
+        //интерфейс
+
+#define BAR_HEIGHT 50
+#define BAR_WIDTH 150
+#define INTERVAL 10
+
+        V2 camera_shake = {random_float(-2 * (1 - game_object->healthpoints / game_object->max_healthpoints), 2 * (1 - game_object->healthpoints / game_object->max_healthpoints)), random_float(-5 * (1 - game_object->healthpoints / game_object->max_healthpoints), 5 * (1 - game_object->healthpoints / game_object->max_healthpoints))};
+
+        draw_bitmap(
+            camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
+            V2{game_object->healthpoints / game_object->max_healthpoints * BAR_WIDTH, BAR_HEIGHT},
+            0, img_Health, LAYER_UI);
+
+        draw_bitmap(camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
+                    V2{BAR_WIDTH, BAR_HEIGHT}, 0, img_HealthBar, LAYER_UI);
+
+        //прорисовка игрока
+
+        //хитбокс
+        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+
+        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->collision_box.y) * 0.5f}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, game_object->layer);
+
+        draw_light(screen, camera, game_object->pos, 200, 300);
+    }
+
+#define ZOMBIE_ACCEL 6
+#define JUMP_LATENCY 20
+#define VISION_BOX V2{5, 3} * TILE_SIZE_PIXELS
+
+    if (game_object->type == Game_Object_ZOMBIE)
+    {
+        //константы скорости
+        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
+
+        //движение
+        game_object->speed.x += (game_object->go_right - game_object->go_left) * game_object->accel;
+
+        //прыжок
+        if (game_object->condition != Condition_FALLING)
+        {
+            if (timers[game_object->jump] == 0)
+            {
+                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration * random_float(0.25, 1);
+                game_object->accel = ZOMBIE_ACCEL;
+            }
+            else if (timers[game_object->jump] > 0)
+            {
+                game_object->go_left = false;
+                game_object->go_right = false;
+            }
+        }
+
+        //гравитация и трение
+        game_object->speed.y += gravity;
+
+        game_object->speed.x *= game_object->friction;
+
+        //направление
+        if (!(game_object->go_left && game_object->go_right))
+        {
+            if (game_object->go_left)
+            {
+                game_object->looking_direction = Direction_LEFT;
+            }
+            if (game_object->go_right)
+            {
+                game_object->looking_direction = Direction_RIGHT;
+            }
+        }
+
+        //поведение, связанное с тайлами
+        Collisions collisions = check_collision(game_object);
+
+        //если стоит
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
+        {
+            game_object->accel = 1;
+            //состояния стоит и движение
+            if (fabs(game_object->speed.x) > 1)
+            {
+                if (game_object->moved_through_pixels > 0 && game_object->speed.x < 0 || game_object->moved_through_pixels < 0 && game_object->speed.x > 0)
+                {
+                    game_object->moved_through_pixels = 0;
+                }
+                game_object->moved_through_pixels += game_object->speed.x;
+                game_object->condition = Condition_MOOVING;
+            }
+            else
+            {
+                game_object->condition = Condition_IDLE;
+            }
+
+            //если не заряжает прыжок
+            if (timers[game_object->jump] < 0 && game_object->speed.y <= 0)
+            {
+                V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+
+                Tile downleft_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 0})];
+                Tile downright_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 0})];
+                Tile left_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 1})];
+                Tile right_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 1})];
+                //если доходит до края тайла, то разворачивается
+                if ((!downleft_tile.solid || left_tile.solid) && game_object->pos.x - game_object->collision_box.x * 0.5 - TILE_SIZE_PIXELS * 0.37 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)
+                {
+                    if (left_tile.solid)
+                    {
+                        game_object->looking_direction = Direction_RIGHT;
+                    }
+                    game_object->go_right = true;
+                    game_object->go_left = false;
+                }
+                if ((!downright_tile.solid || right_tile.solid) && game_object->pos.x + game_object->collision_box.x * 0.5 + TILE_SIZE_PIXELS * 0.37 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5)
+                {
+                    if (right_tile.solid)
+                    {
+                        game_object->looking_direction = Direction_LEFT;
+                    }
+                    game_object->go_right = false;
+                    game_object->go_left = true;
+                }
+                //если находится на одиночном тайле, то останавливается посередине
+                if ((!downleft_tile.solid || left_tile.solid) && (!downright_tile.solid || right_tile.solid))
+                {
+                    if (game_object->pos.x + TILE_SIZE_PIXELS * 0.2 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
+                    {
+                        game_object->go_right = true;
+                    }
+                    else if (game_object->pos.x - TILE_SIZE_PIXELS * 0.2 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
+                    {
+                        game_object->go_left = true;
+                    }
+                    else
+                    {
+                        game_object->go_right = false;
+                        game_object->go_left = false;
+                        if (!(left_tile.solid && right_tile.solid))
+                        {
+                            if (left_tile.solid)
+                            {
+                                game_object->looking_direction = Direction_RIGHT;
+                            }
+                            if (right_tile.solid)
+                            {
+                                game_object->looking_direction = Direction_LEFT;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            game_object->condition = Condition_FALLING;
+            timers[game_object->jump] = -1;
+        }
+
+        //эффекты состояний
+        if (game_object->condition == Condition_IDLE)
+        {
+            game_object->speed.x *= game_object->friction;
+            game_object->sprite = img_ZombieIdle;
+        }
+
+        if (game_object->condition == Condition_MOOVING)
+        {
+            i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.05);
+            while (step > 5)
+            {
+                step -= 6;
+            }
+
+            game_object->sprite = img_ZombieStep[step];
+        }
+
+        if (game_object->condition == Condition_FALLING)
+        {
+            bool bool_direction = (game_object->looking_direction + 1) * 0.5;
+            game_object->go_right = bool_direction;
+            game_object->go_left = !bool_direction;
+            game_object->sprite = img_ZombieIdle;
+        }
+
+        game_object->pos += game_object->speed;
+
+        Game_Object_Type triggers[1];
+        triggers[0] = Game_Object_PLAYER;
+
+        i32 trigger_index = -1;
+
+        if (check_vision_box(&trigger_index, game_object->pos, game_object->pos + V2{(TILE_SIZE_PIXELS * 5 + game_object->hit_box.x) * (f32)(game_object->looking_direction), 0} * 0.5, VISION_BOX, triggers, 1, false, false) &&
+            timers[game_object->jump] < 0)
+        {
+            timers[game_object->jump] = JUMP_LATENCY;
+            if (trigger_index != -1)
+            {
+                Game_Object trigger = game_objects[trigger_index];
+                if (trigger.pos.x > game_object->pos.x)
+                {
+                    game_object->looking_direction = Direction_RIGHT;
+                }
+                if (trigger.pos.x < game_object->pos.x)
+                {
+                    game_object->looking_direction = Direction_LEFT;
+                }
+            }
+        }
+
+        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
+        // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
+        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->collision_box.y) * 0.5f}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, game_object->layer);
+    }
+
+    if (game_object->healthpoints <= 0)
+    {
+        game_object->exists = false;
+    }
 }
 
 #define NORMAL_CHUNKS_COUNT 3
@@ -1933,606 +2555,6 @@ void generate_new_map(Bitmap screen)
     }
 }
 
-void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
-{
-    if (game_object->type == Game_Object_PLAYER)
-    {
-        //предпологаемое состояние
-        Condition supposed_cond;
-
-        //движение игрока
-        if (timers[game_object->cant_control_timer] < 0)
-        {
-            if (input.z.went_down)
-            {
-                timers[game_object->jump] = 8;
-            }
-
-            if (timers[game_object->jump] > 0)
-            {
-                input.z.went_down = true;
-            }
-
-            game_object->go_left = input.left.is_down;
-            game_object->go_right = input.right.is_down;
-        }
-        else
-        {
-            game_object->go_left = false;
-            game_object->go_right = false;
-            timers[game_object->jump] = 0;
-        }
-
-        //константы ускорения
-        if (input.shift.is_down)
-        {
-            game_object->accel = 1.9;
-        }
-        else
-        {
-            game_object->accel = 3.8;
-        }
-        if (game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING)
-        {
-            game_object->accel = 0.85;
-        }
-
-        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
-
-        //скорость по x
-        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
-
-        //прыжок
-        if (timers[game_object->jump] > 0 && timers[game_object->can_jump] > 0)
-        {
-            timers[game_object->jump] = 0;
-            timers[game_object->can_jump] = 0;
-            if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
-            {
-                if (timers[game_object->hanging_animation_timer] > 0)
-                {
-                    timers[game_object->jump] = timers[game_object->hanging_animation_timer] + 1;
-                }
-                else
-                {
-                    if (!input.down.is_down)
-                    {
-                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                    }
-                    game_object->condition = Condition_FALLING;
-                }
-            }
-            else
-            {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-            }
-        }
-
-        if (game_object->speed.y > 0 && !input.z.is_down)
-        {
-            gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration) * 2;
-        }
-
-        //гравитация
-        if (game_object->speed.y < TILE_SIZE_PIXELS / 2)
-        {
-            game_object->speed.y += gravity;
-        }
-
-        if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP)
-        {
-            game_object->speed.x = 0;
-            if (timers[game_object->hanging_animation_timer] <= 0)
-            {
-                game_object->speed.y = 0;
-            }
-        }
-
-        //трение
-        game_object->speed.x *= game_object->friction;
-
-        //направление
-        if (game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP)
-        {
-            if (!(game_object->go_left && game_object->go_right))
-            {
-                if (game_object->go_right)
-                {
-                    game_object->looking_direction = Direction_RIGHT;
-                }
-                if (game_object->go_left)
-                {
-                    game_object->looking_direction = Direction_LEFT;
-                }
-            }
-        }
-
-        //столкновения и движение
-        Game_Object_Type triggers[1];
-        triggers[0] = Game_Object_ZOMBIE;
-        check_object_collision(game_object, triggers, 1);
-
-        Collisions collisions = check_collision(game_object);
-
-        if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_DOWN) && (game_object->speed.y != 0 || game_object->speed.x != 0) && timers[game_object->hanging_animation_timer] < 0)
-        {
-            game_object->condition = Condition_FALLING;
-        }
-
-        //состояние падает
-        supposed_cond = Condition_FALLING;
-
-        //состояние стоит
-        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
-        {
-            supposed_cond = Condition_IDLE;
-            timers[game_object->can_jump] = 5;
-
-            //состояние ползком и смотрит вверх
-            if (input.down.is_down && !input.up.is_down)
-            {
-                supposed_cond = Condition_CROUCHING_IDLE;
-            }
-            else if (input.up.is_down && !input.down.is_down && fabs(game_object->speed.x) <= 1 && timers[game_object->crouching_animation_timer] <= 0)
-            {
-                supposed_cond = Condition_LOOKING_UP;
-            }
-
-            //состояния движения
-            if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
-            {
-
-                game_object->moved_through_pixels += game_object->speed.x;
-
-                if (supposed_cond == Condition_IDLE)
-                {
-                    supposed_cond = Condition_MOOVING;
-                }
-                else
-                {
-                    supposed_cond = Condition_CROUCHING_MOOVING;
-                }
-            }
-        }
-
-        if (input.left.went_down || input.right.went_down)
-        {
-            game_object->moved_through_pixels = 0;
-        }
-
-        //функции движения, связанные с коллизией
-        V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
-        V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
-
-        i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
-        i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
-
-        //состояние весит
-        if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[collision_frontup_tile_index].solid)
-        {
-            if (game_object->speed.y < 0 &&
-                game_object->pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
-                game_object->pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
-            {
-                supposed_cond = Condition_HANGING;
-
-                game_object->speed = {0, 0};
-
-                game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3;
-
-                game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5 + game_object->collision_box.x * 0.5);
-            }
-        }
-
-        //переход на стенку из состояния ползком
-        if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
-        {
-            V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
-            if (!tile_map[get_index(collisionY_front_tile_pos)].solid &&
-                ((game_object->pos.x + game_object->speed.x + game_object->collision_box.x * 0.5 <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(game_object->pos.x + game_object->collision_box.x * 0.5) >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
-                 (game_object->pos.x + game_object->speed.x - game_object->collision_box.x * 0.5 >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(game_object->pos.x - game_object->collision_box.x * 0.5) <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
-            {
-                game_object->pos.x = collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5 * game_object->looking_direction + game_object->collision_box.x * 0.5 * game_object->looking_direction;
-                supposed_cond = Condition_HANGING;
-                game_object->looking_direction = (Direction)(-game_object->looking_direction);
-                game_object->speed = {0, 0};
-                game_object->condition = Condition_IDLE;
-                timers[game_object->hanging_animation_timer] = 16;
-            }
-        }
-
-        //состояние смежные с состоянием весит
-        if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP))
-        {
-
-            if (input.up.is_down && !input.down.is_down)
-            {
-                supposed_cond = Condition_HANGING_LOOKING_UP;
-            }
-            else if (input.down.is_down && !input.up.is_down)
-            {
-                supposed_cond = Condition_HANGING_LOOKING_DOWN;
-            }
-            else
-            {
-                supposed_cond = Condition_HANGING;
-            }
-        }
-
-        //работа с предполагаемым состоянием
-        if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
-            (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP) &&
-                (supposed_cond == Condition_HANGING || supposed_cond == Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_HANGING_LOOKING_UP))
-        {
-            //начинаем смотреть вверх и вниз
-            if ((game_object->condition != Condition_CROUCHING_IDLE && supposed_cond == Condition_CROUCHING_IDLE) ||
-                (game_object->condition != Condition_LOOKING_UP && supposed_cond == Condition_LOOKING_UP) ||
-                (game_object->condition != Condition_HANGING_LOOKING_UP && supposed_cond == Condition_HANGING_LOOKING_UP) ||
-                (game_object->condition != Condition_HANGING_LOOKING_DOWN && supposed_cond == Condition_HANGING_LOOKING_DOWN))
-            {
-                timers[game_object->looking_key_held_timer] = 40;
-            }
-
-            //поднимаемся и встаём
-            if ((game_object->condition != Condition_CROUCHING_IDLE && game_object->condition != Condition_CROUCHING_MOOVING) && (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING))
-            {
-                if (timers[game_object->crouching_animation_timer] < 0)
-                {
-                    timers[game_object->crouching_animation_timer] = 0;
-                }
-                timers[game_object->crouching_animation_timer] = (7.5 - timers[game_object->crouching_animation_timer] * 0.5) * 2;
-            }
-            if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING) && (supposed_cond != Condition_CROUCHING_IDLE && supposed_cond != Condition_CROUCHING_MOOVING))
-            {
-                if (timers[game_object->crouching_animation_timer] < 0)
-                {
-                    timers[game_object->crouching_animation_timer] = 0;
-                }
-                timers[game_object->crouching_animation_timer] = 7.5 - timers[game_object->crouching_animation_timer] * 0.5;
-            }
-            game_object->condition = supposed_cond;
-        }
-
-        //изменяем положение
-        game_object->pos += game_object->speed;
-
-        //что делают состояния
-        if (game_object->condition == Condition_IDLE || game_object->condition == Condition_MOOVING)
-        {
-            if (timers[game_object->crouching_animation_timer] > 0)
-            {
-                i32 step = ceil(timers[game_object->crouching_animation_timer] * 0.5);
-                game_object->sprite = img_PlayerStartsCrouching[step];
-            }
-            else if (game_object->condition == Condition_IDLE)
-            {
-                game_object->speed.x *= game_object->friction;
-                game_object->sprite = img_PlayerIdle;
-            }
-            else if (game_object->condition == Condition_MOOVING)
-            {
-                i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) / 35);
-                while (step > 5)
-                {
-                    step -= 6;
-                }
-
-                game_object->sprite = img_PlayerStep[step];
-            }
-        }
-
-        if (game_object->condition == Condition_CROUCHING_MOOVING || game_object->condition == Condition_CROUCHING_IDLE)
-        {
-            if (timers[game_object->crouching_animation_timer] > 0)
-            {
-                const i32 step = 4 - ceil(timers[game_object->crouching_animation_timer] * 0.25);
-                game_object->sprite = img_PlayerStartsCrouching[step];
-            }
-            else
-            {
-                if (game_object->condition == Condition_CROUCHING_IDLE)
-                {
-                    game_object->sprite = img_PlayerCrouchIdle;
-                }
-                if (game_object->condition == Condition_CROUCHING_MOOVING)
-                {
-                    i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.1);
-                    while (step > 5)
-                    {
-                        step -= 6;
-                    }
-                    game_object->sprite = img_PlayerCrouchStep[step];
-                }
-            }
-        }
-
-        if (game_object->condition == Condition_LOOKING_UP)
-        {
-            game_object->sprite = img_PlayerLookingUp;
-        }
-
-        if (game_object->condition == Condition_FALLING)
-        {
-            game_object->sprite = img_PlayerJump;
-        }
-
-        if (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_DOWN)
-        {
-            if (game_object->condition == Condition_HANGING)
-            {
-                game_object->sprite = img_PlayerHanging;
-            }
-            else if (game_object->condition == Condition_HANGING_LOOKING_DOWN)
-            {
-                game_object->sprite = img_PlayerHangingDown;
-            }
-            else
-            {
-                game_object->sprite = img_PlayerHangingUp;
-            }
-
-            timers[game_object->can_jump] = 4;
-        }
-
-        //взаимодействие с тайлами
-
-        if (input.space.went_down)
-        {
-            i32 tile_index = check_for_interactive_tiles(game_object);
-            if (tile_index != -1)
-            {
-                Tile tile = tile_map[tile_index];
-                V2 tile_pos = get_tile_pos(tile_index);
-                if (tile.type == Tile_Type_EXIT)
-                {
-                    if (game_object->condition != Condition_FALLING)
-                    {
-                        game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS;
-                        game_object->speed = V2{0, 0};
-
-                        timers[game_object->cant_control_timer] = 600;
-
-                        generate_new_map(screen);
-                    }
-                }
-            }
-        }
-
-        //камера
-        camera.target = game_object->pos;
-
-        //смотрим вниз и вверх
-        if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_HANGING_LOOKING_DOWN) && timers[game_object->looking_key_held_timer] <= 0)
-        {
-            camera.target.y = game_object->pos.y - screen.size.y / camera.scale.y * 0.5 + 200;
-        }
-
-        if ((game_object->condition == Condition_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_UP) && timers[game_object->looking_key_held_timer] <= 0)
-        {
-            camera.target.y = game_object->pos.y + screen.size.y / camera.scale.y * 0.5 - 200;
-        }
-
-        //границы для камеры
-        border_camera(screen);
-
-        //камера
-        camera.pos += (camera.target - camera.pos) * 0.25f;
-
-        //интерфейс
-
-#define BAR_HEIGHT 50
-#define BAR_WIDTH 150
-#define INTERVAL 10
-
-        V2 camera_shake = {random_float(-2 * (1 - game_object->healthpoints / game_object->max_healthpoints), 2 * (1 - game_object->healthpoints / game_object->max_healthpoints)), random_float(-5 * (1 - game_object->healthpoints / game_object->max_healthpoints), 5 * (1 - game_object->healthpoints / game_object->max_healthpoints))};
-
-        draw_bitmap(
-            camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
-            V2{game_object->healthpoints / game_object->max_healthpoints * BAR_WIDTH, BAR_HEIGHT},
-            0, img_Health, LAYER_UI);
-
-        draw_bitmap(camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
-                    V2{BAR_WIDTH, BAR_HEIGHT}, 0, img_HealthBar, LAYER_UI);
-
-        //прорисовка игрока
-
-        //хитбокс
-        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
-
-        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->collision_box.y) * 0.5f}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
-
-        draw_light(screen, camera, game_object->pos, 200, 300);
-    }
-
-    if (game_object->type == Game_Object_ZOMBIE)
-    {
-        //константы скорости
-        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
-
-        //движение
-        game_object->speed.x += (game_object->go_right - game_object->go_left) * game_object->accel;
-
-        //прыжок
-        if (game_object->condition != Condition_FALLING)
-        {
-            if (timers[game_object->jump] == 0)
-            {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration * random_float(0.5, 1);
-                game_object->accel = 6;
-            }
-            else if (timers[game_object->jump] > 0)
-            {
-                game_object->go_left = false;
-                game_object->go_right = false;
-            }
-        }
-
-        //гравитация и трение
-        game_object->speed.y += gravity;
-
-        game_object->speed.x *= game_object->friction;
-
-        //направление
-        if (!(game_object->go_left && game_object->go_right))
-        {
-            if (game_object->go_left)
-            {
-                game_object->looking_direction = Direction_LEFT;
-            }
-            if (game_object->go_right)
-            {
-                game_object->looking_direction = Direction_RIGHT;
-            }
-        }
-
-        //поведение, связанное с тайлами
-        Collisions collisions = check_collision(game_object);
-
-        //если стоит
-        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
-        {
-            game_object->accel = 1;
-            //состояния стоит и движение
-            if (fabs(game_object->speed.x) > 1)
-            {
-                if (game_object->moved_through_pixels > 0 && game_object->speed.x < 0 || game_object->moved_through_pixels < 0 && game_object->speed.x > 0)
-                {
-                    game_object->moved_through_pixels = 0;
-                }
-                game_object->moved_through_pixels += game_object->speed.x;
-                game_object->condition = Condition_MOOVING;
-            }
-            else
-            {
-                game_object->condition = Condition_IDLE;
-            }
-
-            //если не заряжает прыжок
-            if (timers[game_object->jump] < 0 && game_object->speed.y <= 0)
-            {
-                V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
-
-                Tile downleft_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 0})];
-                Tile downright_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 0})];
-                Tile left_tile = tile_map[get_index(collided_y_tile_pos + V2{-1, 1})];
-                Tile right_tile = tile_map[get_index(collided_y_tile_pos + V2{1, 1})];
-                //если доходит до края тайла, то разворачивается
-                if ((!downleft_tile.solid || left_tile.solid) && game_object->pos.x - game_object->collision_box.x * 0.5 - TILE_SIZE_PIXELS * 0.37 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)
-                {
-                    if (left_tile.solid)
-                    {
-                        game_object->looking_direction = Direction_RIGHT;
-                    }
-                    game_object->go_right = true;
-                    game_object->go_left = false;
-                }
-                if ((!downright_tile.solid || right_tile.solid) && game_object->pos.x + game_object->collision_box.x * 0.5 + TILE_SIZE_PIXELS * 0.37 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5)
-                {
-                    if (right_tile.solid)
-                    {
-                        game_object->looking_direction = Direction_LEFT;
-                    }
-                    game_object->go_right = false;
-                    game_object->go_left = true;
-                }
-                //если находится на одиночном тайле, то останавливается посередине
-                if ((!downleft_tile.solid || left_tile.solid) && (!downright_tile.solid || right_tile.solid))
-                {
-                    if (game_object->pos.x + TILE_SIZE_PIXELS * 0.2 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                    {
-                        game_object->go_right = true;
-                    }
-                    else if (game_object->pos.x - TILE_SIZE_PIXELS * 0.2 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                    {
-                        game_object->go_left = true;
-                    }
-                    else
-                    {
-                        game_object->go_right = false;
-                        game_object->go_left = false;
-                        if (!(left_tile.solid && right_tile.solid))
-                        {
-                            if (left_tile.solid)
-                            {
-                                game_object->looking_direction = Direction_RIGHT;
-                            }
-                            if (right_tile.solid)
-                            {
-                                game_object->looking_direction = Direction_LEFT;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            game_object->condition = Condition_FALLING;
-            timers[game_object->jump] = -1;
-        }
-
-        //эффекты состояний
-        if (game_object->condition == Condition_IDLE)
-        {
-            game_object->speed.x *= game_object->friction;
-            game_object->sprite = img_ZombieIdle;
-        }
-
-        if (game_object->condition == Condition_MOOVING)
-        {
-            i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.05);
-            while (step > 5)
-            {
-                step -= 6;
-            }
-
-            game_object->sprite = img_ZombieStep[step];
-        }
-
-        if (game_object->condition == Condition_FALLING)
-        {
-            bool bool_direction = (game_object->looking_direction + 1) * 0.5;
-            game_object->go_right = bool_direction;
-            game_object->go_left = !bool_direction;
-            game_object->sprite = img_ZombieIdle;
-        }
-
-        game_object->pos += game_object->speed;
-
-        Game_Object_Type triggers[1];
-        triggers[0] = Game_Object_PLAYER;
-
-        i32 trigger_index = -1;
-
-        if (check_vision_box(&trigger_index, game_object->pos, game_object->pos + V2{(TILE_SIZE_PIXELS * 5 + game_object->hit_box.x) * (f32)(game_object->looking_direction), 0} * 0.5, V2{TILE_SIZE_PIXELS * 5, TILE_SIZE_PIXELS * 3}, triggers, 1, false, false) &&
-            timers[game_object->jump] < 0)
-        {
-            timers[game_object->jump] = 20;
-            if (trigger_index != -1)
-            {
-                Game_Object trigger = game_objects[trigger_index];
-                if (trigger.pos.x > game_object->pos.x)
-                {
-                    game_object->looking_direction = Direction_RIGHT;
-                }
-                if (trigger.pos.x < game_object->pos.x)
-                {
-                    game_object->looking_direction = Direction_LEFT;
-                }
-            }
-        }
-
-        // draw_rect(game_object->pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
-        // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
-        draw_bitmap(game_object->pos + V2{0, (game_object->sprite.size.y * 5 - game_object->collision_box.y) * 0.5f}, V2{game_object->sprite.size.x * game_object->looking_direction, game_object->sprite.size.y} * 5, 0, game_object->sprite, LAYER_GAME_OBJECT);
-    }
-
-    if (game_object->healthpoints <= 0)
-    {
-        game_object->exists = false;
-    }
-}
-
 void update_tile(i32 tile_index)
 {
     Tile *tile = &tile_map[tile_index];
@@ -2585,8 +2607,14 @@ void update_tile(i32 tile_index)
     break;
     case Tile_Type_EXIT:
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BACKGROUND3);
         draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, img_DoorBack.size * 5, 0, img_DoorBack, LAYER_BACKGROUND2);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS + V2{0, (f32)(tile_map[tile_index].sprite.size.y * 2.5 - TILE_SIZE_PIXELS * 0.5)}, tile_map[tile_index].sprite.size * 5, 0, tile_map[tile_index].sprite, LAYER_BACKGROUND3);
+
+        if (timers[tile->interactive] > 0)
+        {
+            i32 step = floor(timers[tile->interactive] / 60.0f * 6.0f);
+            tile->sprite = img_Door[step];
+        }
     }
     break;
     }
