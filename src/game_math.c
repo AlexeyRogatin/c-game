@@ -717,6 +717,16 @@ V4_8x operator*(f32_8x s, V4_8x a)
     return result;
 }
 
+V4_8x operator*(V4_8x a, V4_8x b)
+{
+    V4_8x result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y;
+    result.z = a.z * b.z;
+    result.w = a.w * b.w;
+    return result;
+}
+
 i32_8x v4_to_argb_8x(V4_8x color)
 {
     f32_8x one255 = set1_f32(255);
@@ -726,6 +736,28 @@ i32_8x v4_to_argb_8x(V4_8x color)
     i32_8x g = to_i32_8x(color.g * one255) << 8;
     i32_8x b = to_i32_8x(color.b * one255);
     result = a | r | g | b;
+    return result;
+}
+
+V4_8x set1(V4 v)
+{
+    V4_8x result = {
+        set1_f32(v.x),
+        set1_f32(v.y),
+        set1_f32(v.z),
+        set1_f32(v.w),
+    };
+    return result;
+}
+
+V4_8x clamp01(V4_8x v)
+{
+    V4_8x result = V4_8x{
+        min(set1_f32(1), max(v.x, set1_f32(0))),
+        min(set1_f32(1), max(v.y, set1_f32(0))),
+        min(set1_f32(1), max(v.z, set1_f32(0))),
+        min(set1_f32(1), max(v.w, set1_f32(0))),
+    };
     return result;
 }
 
