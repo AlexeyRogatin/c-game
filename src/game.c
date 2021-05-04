@@ -166,6 +166,8 @@ Bitmap img_Parapet = win32_read_bmp("../data/parapet.bmp");
 Bitmap img_HealthBar = win32_read_bmp("../data/health_bar.bmp");
 Bitmap img_Health = win32_read_bmp("../data/health.bmp");
 
+Bitmap img_Spikes = win32_read_bmp("../data/spikes.bmp");
+
 //получение перевёрнутых картинок
 Bitmap turn_bitmap(Bitmap bitmap, f64 angle)
 {
@@ -2099,7 +2101,7 @@ char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
     "       #  "
     "     N  # "
     "     T    "
-    "       TTT"
+    " ^     TTT"
     "T#TT   ==="
     "####   ###",
 
@@ -2137,7 +2139,7 @@ char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "  N       "
     " ###      "
     "       ## "
-    "    #     "
+    "  ^ #     "
     "####   ###"
     "####  ####"
     "#####  ###",
@@ -2492,6 +2494,14 @@ void generate_new_map(Bitmap screen)
                         sprite = img_Parapet;
                     }
                     break;
+                    case '^':
+                    {
+                        type = Tile_Type_SPIKES;
+                        solid = false;
+                        interactive = -1;
+                        sprite = img_Spikes;
+                    }
+                    break;
                     }
 
                     tile_map[index].type = type;
@@ -2703,6 +2713,11 @@ void update_tile(i32 tile_index)
         }
     }
     break;
+    case Tile_Type_SPIKES:
+    {
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, 1, LAYER_ON_BACKGROUND);
+    }
+    break;
     }
 
     if (!tile->solid)
@@ -2736,12 +2751,12 @@ void game_update(Bitmap screen, Input input)
 
     if (input.r.went_down)
     {
-        if (game_objects[0].exists == true)
-        {
+        // if (game_objects[0].exists == true)
+        // {
 
-            draw_darkness = !draw_darkness;
-        }
-        else
+        //     draw_darkness = !draw_darkness;
+        // }
+        // else
         {
             generate_new_map(screen);
         }
