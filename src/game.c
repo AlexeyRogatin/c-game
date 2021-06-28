@@ -838,8 +838,8 @@ Game_Object game_objects[512];
 
 typedef enum
 {
-    Side_RIGHT,
     Side_LEFT,
+    Side_RIGHT,
     Side_BOTTOM,
     Side_TOP,
 } Side;
@@ -848,7 +848,7 @@ typedef struct
 {
     bool happened;
     i32 tile_index;
-    Side tile_side;
+    f32 tile_side;
 } Collision;
 
 typedef struct
@@ -953,139 +953,65 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
 #define DISTANT_HANGING_VALUE 7
 
+void test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
+{
+    if (obj_speed_x != 0.0f)
+    {
+        f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
+        f32 y = obj_rel_pos_y + time * obj_speed_y;
+        if ((time >= 0.0f) && (time < *min_time))
+        {
+            if (y >= min_y && y <= max_y)
+            {
+                *min_time = time;
+            }
+        }
+    }
+}
+
 Collisions check_collision(Game_Object *game_object)
 {
-    Game_Object *our_object = game_object;
-
     Collisions collisions;
-
     collisions.x.happened = false;
     collisions.y.happened = false;
     collisions.expanded_collision = false;
 
-    V2 obj_tile_pos = our_object->pos;
-
-    V2 obj_end_tile_pos = (our_object->pos + our_object->speed);
-
-    V2 start_tile = min(obj_tile_pos, obj_end_tile_pos) - our_object->collision_box * 0.5;
-    V2 finish_tile = max(obj_tile_pos, obj_end_tile_pos) + our_object->collision_box * 0.5;
+    V2 start_tile = min(game_object->pos, game_object->pos + game_object->speed);
+    V2 finish_tile = max(game_object->pos, game_object->pos + game_object->speed);
 
     start_tile = floor(start_tile / TILE_SIZE_PIXELS);
     finish_tile = ceil(finish_tile / TILE_SIZE_PIXELS);
 
-    //проверка столкновений с тайлами
-    for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
+    f32 min_time = 1.0f;
+
+    if (length(game_object->speed) != 0)
     {
-        for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
+        i32 foo = 0;
+    }
+
+    for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y + 1; tile_y++)
+    {
+        for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x + 1; tile_x++)
         {
-            V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
-            i32 tile_index = get_index(V2{tile_pos.x, tile_pos.y});
-            Tile tile = tile_map[tile_index];
-            if (tile.type && tile.solid)
+            i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
+            Tile tile = tile_map[index];
+            if (tile.solid)
             {
+                V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
+                V2 tile_min = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * (-0.5) - V2{1, 1};
+                V2 tile_max = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5 + V2{1, 1};
 
-                V2 tile_min = tile_pos * TILE_SIZE_PIXELS - V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5;
-                V2 tile_max = tile_pos * TILE_SIZE_PIXELS + V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5;
+                V2 obj_rel_pos = game_object->pos - tile_pos;
 
-                V2 obj_min = our_object->pos + game_object->collision_box_pos - our_object->collision_box * 0.5;
-                V2 obj_max = our_object->pos + game_object->collision_box_pos + our_object->collision_box * 0.5;
-
-                f32 obj_side;
-                i32 tile_side;
-
-                if (our_object->speed.x != 0)
-                {
-                    if (our_object->speed.x > 0)
-                    {
-                        obj_side = obj_max.x;
-                        tile_side = tile_min.x;
-                    }
-                    else
-                    {
-                        obj_side = obj_min.x;
-                        tile_side = tile_max.x;
-                    }
-
-                    if (!((obj_max.x + our_object->speed.x <= tile_min.x) ||
-                          (obj_min.x + our_object->speed.x >= tile_max.x) ||
-                          (obj_max.y <= tile_min.y) ||
-                          (obj_min.y >= tile_max.y)))
-                    {
-                        our_object->speed.x = -obj_side + tile_side;
-
-                        obj_min.x += our_object->speed.x;
-                        obj_max.x += our_object->speed.x;
-
-                        collisions.x.happened = true;
-                        collisions.x.tile_index = tile_index;
-                        if (tile_side == tile_min.x)
-                        {
-                            collisions.x.tile_side = Side_LEFT;
-                        }
-                        else
-                        {
-                            collisions.x.tile_side = Side_RIGHT;
-                        }
-                    }
-                }
-                //столкновение удлинённое (для подвешенного состояния)
-                if (!collisions.x.happened &&
-                    !((obj_max.x + our_object->speed.x + our_object->looking_direction * DISTANT_HANGING_VALUE <= tile_min.x) ||
-                      (obj_min.x + our_object->speed.x + our_object->looking_direction * DISTANT_HANGING_VALUE >= tile_max.x) ||
-                      (obj_max.y <= tile_min.y) ||
-                      (obj_min.y >= tile_max.y)))
-                {
-                    collisions.x.tile_index = tile_index;
-                    if (our_object->looking_direction == Direction_RIGHT)
-                    {
-                        collisions.x.tile_side = Side_LEFT;
-                    }
-                    else
-                    {
-                        collisions.x.tile_side = Side_RIGHT;
-                    }
-
-                    collisions.expanded_collision = true;
-                }
-
-                if (our_object->speed.y != 0 && !(collisions.x.happened && collisions.x.tile_index == tile_index))
-                {
-                    if (our_object->speed.y > 0)
-                    {
-                        obj_side = obj_max.y;
-                        tile_side = tile_min.y;
-                    }
-                    else
-                    {
-                        obj_side = obj_min.y;
-                        tile_side = tile_max.y;
-                    }
-
-                    if (
-                        !(obj_max.y + our_object->speed.y <= tile_min.y ||
-                          obj_min.y + our_object->speed.y >= tile_max.y ||
-                          obj_max.x <= tile_min.x ||
-                          obj_min.x >= tile_max.x))
-                    {
-                        our_object->speed.y = -obj_side + tile_side;
-
-                        collisions.y.happened = true;
-                        collisions.y.tile_index = tile_index;
-                        if (tile_side == tile_min.y)
-                        {
-                            collisions.y.tile_side = Side_BOTTOM;
-                        }
-                        else
-                        {
-                            collisions.y.tile_side = Side_TOP;
-                        }
-                    }
-                }
+                test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y);
+                test_wall(tile_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y);
+                test_wall(tile_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x);
+                test_wall(tile_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x);
             }
         }
     }
 
-    game_object->speed = our_object->speed;
+    game_object->speed *= min_time;
 
     return collisions;
 }
@@ -1414,7 +1340,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //скорость по x
-        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
+        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, (input.up.is_down - input.down.is_down) * game_object->accel};
 
         //прыжок
         if (input.z.went_down && timers[game_object->can_jump] > 0)
@@ -1460,7 +1386,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //гравитация
         if (game_object->speed.y < TILE_SIZE_PIXELS / 2)
         {
-            game_object->speed.y += gravity;
+            // game_object->speed.y += gravity;
         }
 
         f32 sliding_speed = -(game_object->hit_box.y + TILE_SIZE_PIXELS) / 2 / (f32)(HANGING_ANIMATION_TIME);
@@ -1479,7 +1405,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //трение
-        game_object->speed.x *= game_object->friction;
+        game_object->speed *= game_object->friction;
 
         //направление
         if (game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP)
@@ -1503,7 +1429,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         supposed_cond = Condition_FALLING;
 
         //состояние стоит
-        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
+        if (collisions.y.happened && collisions.y.tile_side == TILE_SIZE_PIXELS * 0.5)
         {
             supposed_cond = Condition_IDLE;
             timers[game_object->can_jump] = ADDITIONAL_JUMP_FRAMES;
@@ -1873,7 +1799,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         Collisions collisions = check_collision(game_object);
 
         //если стоит
-        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
+        if (collisions.y.happened && collisions.y.tile_side == TILE_SIZE_PIXELS * 0.5)
         {
             game_object->accel = 1;
             //состояния стоит и движение
@@ -2034,182 +1960,230 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     }
 }
 
-#define NORMAL_CHUNKS_COUNT 3
+#define NORMAL_CHUNKS_COUNT 1
 char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
-    "###  #####"
-    "#     ####"
-    "TTT   ####"
-    "=== T  ###"
-    "##      ##"
-    "##    TT##"
-    "#    ===##"
-    "#  #######",
+    "          "
+    "          "
+    "          "
+    "          "
+    "          "
+    "          "
+    "          "
+    "          ",
+    // "###  #####"
+    // "#     ####"
+    // "TTT   ####"
+    // "=== T  ###"
+    // "##      ##"
+    // "##    TT##"
+    // "#    ===##"
+    // "#  #######",
 
-    "##    ## #"
-    "#       ##"
-    "##      ##"
-    "#      ###"
-    "##       #"
-    "#       ##"
-    "###    ###"
-    "###TTTT###",
+    // "##    ## #"
+    // "#       ##"
+    // "##      ##"
+    // "#      ###"
+    // "##       #"
+    // "#       ##"
+    // "###    ###"
+    // "###TTTT###",
 
-    "          "
-    "          "
-    "     ##   "
-    " TT TTTT  "
-    "          "
-    "#T TTTTTT "
-    "##        "
-    "###======#",
+    // "          "
+    // "          "
+    // "     ##   "
+    // " TT TTTT  "
+    // "          "
+    // "#T TTTTTT "
+    // "##        "
+    // "###======#",
 };
 
-#define DOWN_PASSAGE_CHUNKS_COUNT 3
+#define DOWN_PASSAGE_CHUNKS_COUNT 1
 char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
     "          "
     "          "
     "          "
-    "##     TT="
-    "   #      "
-    "     TTT#T"
-    "T#TT   #=="
-    "##### ####",
+    "          "
+    "          "
+    "          "
+    "          "
+    "          ",
+    // "          "
+    // "          "
+    // "          "
+    // "##     TT="
+    // "   #      "
+    // "     TTT#T"
+    // "T#TT   #=="
+    // "##### ####",
 
-    "##    ## #"
-    "        ##"
-    "##      ##"
-    "       ## "
-    "          "
-    "  === ### "
-    "###      ="
-    "###T   ###",
+    // "##    ## #"
+    // "        ##"
+    // "##      ##"
+    // "       ## "
+    // "          "
+    // "  === ### "
+    // "###      ="
+    // "###T   ###",
 
-    "          "
-    " =        "
-    "          "
-    "          "
-    "   #   #  "
-    "= ##   ## "
-    "####   ## "
-    "####   ###",
+    // "          "
+    // " =        "
+    // "          "
+    // "          "
+    // "   #   #  "
+    // "= ##   ## "
+    // "####   ## "
+    // "####   ###",
 };
 
-#define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 3
+#define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 1
 char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
-    "#      #  "
-    "#        #"
-    "       #  "
-    "     N  # "
-    "     T    "
-    " ^     TTT"
-    "T#TT   ==="
-    "####   ###",
-
     "          "
-    "  N       "
-    "TTTT      "
-    "       ## "
-    "    =     "
-    "####=  TT#"
-    "####=  ###"
-    "####=  ###",
-
-    "       #  "
-    "TT      ##"
     "          "
-    "    N     "
-    "    ##    "
-    "#TT=#  ###"
-    "###=    ##"
-    "#####  ###",
+    "          "
+    "     N    "
+    "     #    "
+    "          "
+    "          "
+    "          ",
+    // "#      #  "
+    // "#        #"
+    // "       #  "
+    // "     N  # "
+    // "     T    "
+    // " ^     TTT"
+    // "T#TT   ==="
+    // "####   ###",
+
+    // "          "
+    // "  N       "
+    // "TTTT      "
+    // "       ## "
+    // "    =     "
+    // "####=  TT#"
+    // "####=  ###"
+    // "####=  ###",
+
+    // "       #  "
+    // "TT      ##"
+    // "          "
+    // "    N     "
+    // "    ##    "
+    // "#TT=#  ###"
+    // "###=    ##"
+    // "#####  ###",
 };
 
-#define ENTER_CHUNKS_COUNT 3
+#define ENTER_CHUNKS_COUNT 1
 char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     "          "
     "          "
-    "    N     "
-    "   TTTT   "
-    "   =###=  "
-    "  =###### "
-    "TT########"
-    "##########",
-
+    "     N    "
+    "     #    "
     "          "
-    "  N       "
-    " ###      "
-    "       ## "
-    "  ^ #     "
-    "####   ###"
-    "####  ####"
-    "#####  ###",
-
-    "       #  "
-    " ##     # "
     "          "
-    "    N     "
-    "    ##    "
-    "#TT##  ## "
-    "####   ###"
-    "#####  ###",
+    "          "
+    "          ",
+    // "          "
+    // "          "
+    // "    N     "
+    // "   TTTT   "
+    // "   =###=  "
+    // "  =###### "
+    // "TT########"
+    // "##########",
+
+    // "          "
+    // "  N       "
+    // " ###      "
+    // "       ## "
+    // "  ^ #     "
+    // "####   ###"
+    // "####  ####"
+    // "#####  ###",
+
+    // "       #  "
+    // " ##     # "
+    // "          "
+    // "    N     "
+    // "    ##    "
+    // "#TT##  ## "
+    // "####   ###"
+    // "#####  ###",
 };
 
-#define PASSAGE_CHUNKS_COUNT 3
+#define PASSAGE_CHUNKS_COUNT 1
 char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
-    " PPPPPPP  "
-    " #######  "
     "          "
-    "         ="
     "          "
-    "   TT     "
-    "TTTTTTTTTT"
-    "#======###",
+    "          "
+    "          "
+    "          "
+    "          "
+    "          "
+    "          ",
+    // " PPPPPPP  "
+    // " #######  "
+    // "          "
+    // "         ="
+    // "          "
+    // "   TT     "
+    // "TTTTTTTTTT"
+    // "#======###",
 
-    "  ##   ## "
-    "#         "
-    "        # "
-    "       ## "
-    "  #    ###"
-    "TTTT  ####"
-    "##########"
-    "##########",
+    // "  ##   ## "
+    // "#         "
+    // "        # "
+    // "       ## "
+    // "  #    ###"
+    // "TTTT  ####"
+    // "##########"
+    // "##########",
 
-    "##     #  "
-    " #      ##"
-    "          "
-    "          "
-    "          "
-    "#TT#  ## #"
-    "###======#"
-    "###T######",
+    // "##     #  "
+    // " #      ##"
+    // "          "
+    // "          "
+    // "          "
+    // "#TT#  ## #"
+    // "###======#"
+    // "###T######",
 };
 
-#define END_CHUNKS_COUNT 3
+#define END_CHUNKS_COUNT 1
 char *exit_chunks[END_CHUNKS_COUNT] = {
     "          "
-    " #        "
-    "#         "
-    "      T  #"
     "          "
-    " #   X    "
-    "  TTTTTT  "
-    " ######## ",
     "          "
-    "#         "
-    "#         "
-    "         #"
-    "  X       "
-    " ####     "
-    "##TTTTTT  "
-    "##########",
-    "##      # "
-    "         #"
     "          "
-    "   X      "
-    " #####    "
     "          "
-    "  TTTTTT  "
-    " ======== ",
+    "          "
+    "          "
+    "          ",
+    // "          "
+    // " #        "
+    // "#         "
+    // "      T  #"
+    // "          "
+    // " #   X    "
+    // "  TTTTTT  "
+    // " ######## ",
+    // "          "
+    // "#         "
+    // "#         "
+    // "         #"
+    // "  X       "
+    // " ####     "
+    // "##TTTTTT  "
+    // "##########",
+    // "##      # "
+    // "         #"
+    // "          "
+    // "   X      "
+    // " #####    "
+    // "          "
+    // "  TTTTTT  "
+    // " ======== ",
 };
 
 i32 danger_points = random_int(8, 12);
@@ -2637,7 +2611,7 @@ void generate_new_map(Bitmap screen)
                     if (!(tile_map[right_tile_index].solid && tile_map[left_tile_index].solid))
                     {
                         V2 spawn_pos = pixel_tile_pos;
-                        add_game_object(Game_Object_ZOMBIE, spawn_pos);
+                        // add_game_object(Game_Object_ZOMBIE, spawn_pos);
                     }
                 }
             }
@@ -2671,7 +2645,7 @@ void update_tile(i32 tile_index)
     break;
     case Tile_Type_BORDER:
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, 1, LAYER_TILE);
+        // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, 1, LAYER_TILE);
     }
     break;
     case Tile_Type_FLOOR:
@@ -2722,7 +2696,7 @@ void update_tile(i32 tile_index)
 
     if (!tile->solid)
     {
-        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, 1, LAYER_BACKGROUND_MAIN);
+        // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, 1, LAYER_BACKGROUND_MAIN);
     }
 }
 
