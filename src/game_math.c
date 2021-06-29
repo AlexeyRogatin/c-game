@@ -17,6 +17,11 @@ V2 operator*(V2 a, f32 s)
     V2 result = {a.x * s, a.y * s};
     return result;
 }
+V2 operator*(f32 s, V2 a)
+{
+    V2 result = {a.x * s, a.y * s};
+    return result;
+}
 V2 operator*(V2 a, V2 b)
 {
     V2 result = {a.x * b.x, a.y * b.y};

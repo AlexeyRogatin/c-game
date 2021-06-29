@@ -953,8 +953,11 @@ Game_Object *add_game_object(Game_Object_Type type, V2 pos)
 
 #define DISTANT_HANGING_VALUE 7
 
-void test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
+bool test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
 {
+    bool hit = false;
+
+    f32 time_epsilon = 0.001f;
     if (obj_speed_x != 0.0f)
     {
         f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
@@ -963,57 +966,77 @@ void test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
         {
             if (y >= min_y && y <= max_y)
             {
-                *min_time = time;
+                *min_time = max(0.0f, time - time_epsilon);
+                hit = true;
             }
         }
     }
+
+    return hit;
 }
 
-Collisions check_collision(Game_Object *game_object)
+void check_collision(Game_Object *game_object)
 {
-    Collisions collisions;
-    collisions.x.happened = false;
-    collisions.y.happened = false;
-    collisions.expanded_collision = false;
-
-    V2 start_tile = min(game_object->pos, game_object->pos + game_object->speed);
-    V2 finish_tile = max(game_object->pos, game_object->pos + game_object->speed);
+    V2 old_pos = game_object->pos + game_object->collision_box_pos;
+    V2 new_pos = old_pos + game_object->speed;
+    V2 start_tile = min(old_pos - game_object->collision_box, new_pos - game_object->collision_box);
+    V2 finish_tile = max(old_pos + game_object->collision_box, new_pos + game_object->collision_box);
 
     start_tile = floor(start_tile / TILE_SIZE_PIXELS);
     finish_tile = ceil(finish_tile / TILE_SIZE_PIXELS);
 
-    f32 min_time = 1.0f;
-
-    if (length(game_object->speed) != 0)
+    if (length(game_object->speed) > 0)
     {
         i32 foo = 0;
     }
 
-    for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y + 1; tile_y++)
+    f32 remaining_time = 1.0f;
+    V2 total_speed = V2{0, 0};
+    for (i32 iterations = 0; iterations < 4 && remaining_time > 0.0f; iterations++)
     {
-        for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x + 1; tile_x++)
+        f32 min_time = 1.0f;
+        V2 wall_normal = V2{};
+
+        for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
         {
-            i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
-            Tile tile = tile_map[index];
-            if (tile.solid)
+            for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
             {
-                V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
-                V2 tile_min = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * (-0.5) - V2{1, 1};
-                V2 tile_max = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5 + V2{1, 1};
+                i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
+                Tile tile = tile_map[index];
+                if (tile.solid)
+                {
+                    V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
+                    V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
+                    V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
 
-                V2 obj_rel_pos = game_object->pos - tile_pos;
+                    V2 obj_rel_pos = old_pos + total_speed - tile_pos;
 
-                test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y);
-                test_wall(tile_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y);
-                test_wall(tile_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x);
-                test_wall(tile_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x);
+                    if (test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    {
+                        wall_normal = V2{-1, 0};
+                    }
+                    if (test_wall(tile_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    {
+                        wall_normal = V2{1, 0};
+                    }
+                    if (test_wall(tile_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    {
+                        wall_normal = V2{0, -1};
+                    }
+                    if (test_wall(tile_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    {
+                        wall_normal = V2{0, 1};
+                    }
+                }
             }
         }
+
+        total_speed += min_time * game_object->speed;
+        game_object->speed -= 1 * dot(game_object->speed, wall_normal) * wall_normal;
+        remaining_time -= min_time * remaining_time;
     }
 
-    game_object->speed *= min_time;
-
-    return collisions;
+    game_object->speed = total_speed;
 }
 
 bool deal_damage(Game_Object *dealing_object, Game_Object *taking_object, f32 damage)
@@ -1423,7 +1446,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
         }
 
-        Collisions collisions = check_collision(game_object);
+        Collisions collisions = {};
+        check_collision(game_object);
 
         //состояние падает
         supposed_cond = Condition_FALLING;
@@ -1741,7 +1765,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        // draw_rect(game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+        draw_rect(game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
 
         draw_bitmap(game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y}, 0, game_object->sprite, 1, game_object->layer);
 
@@ -1796,7 +1820,8 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //поведение, связанное с тайлами
-        Collisions collisions = check_collision(game_object);
+        Collisions collisions = {};
+        check_collision(game_object);
 
         //если стоит
         if (collisions.y.happened && collisions.y.tile_side == TILE_SIZE_PIXELS * 0.5)
@@ -2038,14 +2063,14 @@ char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
 
 #define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 1
 char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "          "
-    "     N    "
-    "     #    "
-    "          "
-    "          "
-    "          ",
+    " #        "
+    "#         "
+    " #        "
+    " #   N    "
+    " #   #####"
+    " #        "
+    " #        "
+    " #        ",
     // "#      #  "
     // "#        #"
     // "       #  "
@@ -2437,7 +2462,7 @@ void generate_new_map(Bitmap screen)
                         sprite = img_Door[0];
 
                         //addPlayer
-                        V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS;
+                        V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0, 100};
                         add_game_object(Game_Object_PLAYER, spawn_pos);
                         camera.target = spawn_pos;
                         border_camera(screen);
