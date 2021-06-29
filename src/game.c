@@ -991,7 +991,6 @@ void check_collision(Game_Object *game_object)
     }
 
     f32 remaining_time = 1.0f;
-    V2 total_speed = V2{0, 0};
     for (i32 iterations = 0; iterations < 4 && remaining_time > 0.0f; iterations++)
     {
         f32 min_time = 1.0f;
@@ -1009,7 +1008,7 @@ void check_collision(Game_Object *game_object)
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
                     V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
 
-                    V2 obj_rel_pos = old_pos + total_speed - tile_pos;
+                    V2 obj_rel_pos = game_object->pos - tile_pos;
 
                     if (test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
@@ -1031,12 +1030,10 @@ void check_collision(Game_Object *game_object)
             }
         }
 
-        total_speed += min_time * game_object->speed;
-        game_object->speed -= 1 * dot(game_object->speed, wall_normal) * wall_normal;
+        game_object->pos += min_time*game_object->speed;
+        game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal;
         remaining_time -= min_time * remaining_time;
     }
-
-    game_object->speed = total_speed;
 }
 
 bool deal_damage(Game_Object *dealing_object, Game_Object *taking_object, f32 damage)
@@ -1586,7 +1583,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //изменяем положение
-        game_object->pos += game_object->speed;
+        // game_object->pos += game_object->speed;
 
         //столкновения и движение
         Game_Object_Type triggers[1];
@@ -1713,7 +1710,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         border_camera(screen);
 
         //камера
-        camera.pos += (camera.target - camera.pos) * 0.25f;
+        camera.pos = camera.target;// += (camera.target - camera.pos) * 0.25f;
 
         //интерфейс
 
