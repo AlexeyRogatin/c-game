@@ -848,7 +848,7 @@ typedef struct
 {
     bool happened;
     i32 tile_index;
-    f32 tile_side;
+    Side tile_side;
 } Collision;
 
 typedef struct
@@ -975,8 +975,10 @@ bool test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     return hit;
 }
 
-void check_collision(Game_Object *game_object)
+Collisions check_collision(Game_Object *game_object)
 {
+    Collisions collisions = {};
+
     V2 old_pos = game_object->pos + game_object->collision_box_pos;
     V2 new_pos = old_pos + game_object->speed;
     V2 start_tile = min(old_pos - game_object->collision_box, new_pos - game_object->collision_box);
@@ -991,7 +993,6 @@ void check_collision(Game_Object *game_object)
     }
 
     f32 remaining_time = 1.0f;
-    V2 total_speed = V2{0, 0};
     for (i32 iterations = 0; iterations < 4 && remaining_time > 0.0f; iterations++)
     {
         f32 min_time = 1.0f;
@@ -1009,34 +1010,46 @@ void check_collision(Game_Object *game_object)
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
                     V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
 
-                    V2 obj_rel_pos = old_pos + total_speed - tile_pos;
+                    V2 obj_rel_pos = old_pos - tile_pos;
 
                     if (test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{-1, 0};
+                        collisions.x.happened = true;
+                        collisions.x.tile_index = index;
+                        collisions.x.tile_side = Side_LEFT;
                     }
                     if (test_wall(tile_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{1, 0};
+                        collisions.x.happened = true;
+                        collisions.x.tile_index = index;
+                        collisions.x.tile_side = Side_RIGHT;
                     }
                     if (test_wall(tile_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, -1};
+                        collisions.y.happened = true;
+                        collisions.y.tile_index = index;
+                        collisions.y.tile_side = Side_BOTTOM;
                     }
                     if (test_wall(tile_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, 1};
+                        collisions.y.happened = true;
+                        collisions.y.tile_index = index;
+                        collisions.y.tile_side = Side_TOP;
                     }
                 }
             }
         }
 
-        total_speed += min_time * game_object->speed;
+        game_object->pos += game_object->speed * min_time;
         game_object->speed -= 1 * dot(game_object->speed, wall_normal) * wall_normal;
         remaining_time -= min_time * remaining_time;
     }
 
-    game_object->speed = total_speed;
+    return collisions;
 }
 
 bool deal_damage(Game_Object *dealing_object, Game_Object *taking_object, f32 damage)
@@ -1363,7 +1376,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //скорость по x
-        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, (input.up.is_down - input.down.is_down) * game_object->accel};
+        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
 
         //прыжок
         if (input.z.went_down && timers[game_object->can_jump] > 0)
@@ -1407,9 +1420,11 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //гравитация
-        if (game_object->speed.y < TILE_SIZE_PIXELS / 2)
+        game_object->speed.y += gravity;
+
+        if (game_object->speed.y > TILE_SIZE_PIXELS * 0.5)
         {
-            // game_object->speed.y += gravity;
+            game_object->speed.y = TILE_SIZE_PIXELS * 0.5;
         }
 
         f32 sliding_speed = -(game_object->hit_box.y + TILE_SIZE_PIXELS) / 2 / (f32)(HANGING_ANIMATION_TIME);
@@ -1428,7 +1443,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         }
 
         //трение
-        game_object->speed *= game_object->friction;
+        game_object->speed.x *= game_object->friction;
 
         //направление
         if (game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP)
@@ -1446,14 +1461,16 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             }
         }
 
-        Collisions collisions = {};
-        check_collision(game_object);
+        //столкновения
+        Game_Object old_object = *game_object;
+        Collisions collisions = check_collision(game_object);
 
+        //функции движения, связанные с коллизией
         //состояние падает
         supposed_cond = Condition_FALLING;
 
         //состояние стоит
-        if (collisions.y.happened && collisions.y.tile_side == TILE_SIZE_PIXELS * 0.5)
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
         {
             supposed_cond = Condition_IDLE;
             timers[game_object->can_jump] = ADDITIONAL_JUMP_FRAMES;
@@ -1490,67 +1507,76 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             game_object->moved_through_pixels = 0;
         }
 
-        //функции движения, связанные с коллизией
-        V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
-        V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+        // V2 player_delta = game_object->pos - old_object.pos;
 
-        i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
-        i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
+        // //состояние весит
+        // if (collisions.x.happened || collisions.expanded_collision)
+        // {
+        //     V2 collided_x_tile_pos = get_tile_pos(collisions.x.tile_index);
+        //     i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
+        //     i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
 
-        //состояние весит
-        if ((collisions.x.happened || collisions.expanded_collision) && !tile_map[collision_up_tile_index].solid && !tile_map[collision_frontup_tile_index].solid)
-        {
-            if (game_object->speed.y < 0 &&
-                game_object->pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
-                game_object->pos.y + game_object->collision_box_pos.y + game_object->speed.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
-            {
-                supposed_cond = Condition_HANGING;
+        //     if (!tile_map[collision_up_tile_index].solid && !tile_map[collision_frontup_tile_index].solid)
+        //     {
+        //         if (player_delta.y < 0 &&
+        //             old_object.pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
+        //             old_object.pos.y + game_object->collision_box_pos.y + player_delta.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3)
+        //         {
+        //             supposed_cond = Condition_HANGING;
 
-                game_object->speed = {0, 0};
+        //             game_object->speed = {0, 0};
 
-                game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - game_object->collision_box_pos.y - 3;
+        //             game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - game_object->collision_box_pos.y - 3;
 
-                game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5 + game_object->collision_box.x * 0.5) + game_object->collision_box_pos.x;
-            }
-        }
+        //             game_object->pos.x = collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5 + game_object->collision_box.x * 0.5 + 0.001f) + game_object->collision_box_pos.x;
+        //         }
+        //     }
+        // }
 
-        //переход на стенку из состояния ползком
-        if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
-        {
-            V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
-            if (!tile_map[get_index(collisionY_front_tile_pos)].solid &&
-                ((game_object->pos.x + game_object->speed.x + game_object->collision_box.x * 0.5 + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(game_object->pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5) >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
-                 (game_object->pos.x + game_object->speed.x - game_object->collision_box.x * 0.5 + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(game_object->pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5) <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
-            {
-                game_object->pos.x = collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + game_object->collision_box_pos.x - TILE_SIZE_PIXELS * 0.5 * game_object->looking_direction + game_object->collision_box.x * 0.5 * game_object->looking_direction;
-                supposed_cond = Condition_HANGING;
-                game_object->looking_direction = (Direction)(-game_object->looking_direction);
-                game_object->speed.x = 0;
-                game_object->speed.y = sliding_speed;
-                game_object->condition = Condition_IDLE;
-                timers[game_object->hanging_animation_timer] = HANGING_ANIMATION_TIME;
-            }
-        }
+        // //переход на стенку из состояния ползком
+        // if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
+        // {
+        //     V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+        //     V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
+        //     i32 collisionY_front_tile_pos_index = get_index(collisionY_front_tile_pos);
 
-        //состояние смежные с состоянием весит
-        if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP))
-        {
+        //     if (!tile_map[collisionY_front_tile_pos_index].solid &&
+        //         ((old_object.pos.x + player_delta.x + game_object->collision_box.x * 0.5 + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) && (ceilf(old_object.pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5) >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5) ||
+        //          (old_object.pos.x + player_delta.x - game_object->collision_box.x * 0.5 + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5) && (floorf(old_object.pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5) <= collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5)))
+        //     {
+        //         game_object->pos.x = collisionY_front_tile_pos.x * TILE_SIZE_PIXELS - ((TILE_SIZE_PIXELS - game_object->collision_box.x) * 0.5 - 0.001f) * game_object->looking_direction;
 
-            if (input.up.is_down && !input.down.is_down)
-            {
-                supposed_cond = Condition_HANGING_LOOKING_UP;
-            }
-            else if (input.down.is_down && !input.up.is_down)
-            {
-                supposed_cond = Condition_HANGING_LOOKING_DOWN;
-            }
-            else
-            {
-                supposed_cond = Condition_HANGING;
-            }
-        }
+        //         supposed_cond = Condition_HANGING;
 
-        //работа с предполагаемым состоянием
+        //         game_object->looking_direction = (Direction)(-game_object->looking_direction);
+
+        //         game_object->speed.x = 0;
+        //         game_object->speed.y = sliding_speed;
+
+        //         game_object->condition = Condition_IDLE;
+        //         timers[game_object->hanging_animation_timer] = HANGING_ANIMATION_TIME;
+        //     }
+        // }
+
+        // //состояние смежные с состоянием весит
+        // if ((game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP))
+        // {
+
+        //     if (input.up.is_down && !input.down.is_down)
+        //     {
+        //         supposed_cond = Condition_HANGING_LOOKING_UP;
+        //     }
+        //     else if (input.down.is_down && !input.up.is_down)
+        //     {
+        //         supposed_cond = Condition_HANGING_LOOKING_DOWN;
+        //     }
+        //     else
+        //     {
+        //         supposed_cond = Condition_HANGING;
+        //     }
+        // }
+
+        //работа с предполагаемым состоянием (возможно нужно убрать)
 
         if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
             (game_object->condition == Condition_HANGING || game_object->condition == Condition_HANGING_LOOKING_DOWN || game_object->condition == Condition_HANGING_LOOKING_UP) &&
@@ -1585,10 +1611,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
             game_object->condition = supposed_cond;
         }
 
-        //изменяем положение
-        game_object->pos += game_object->speed;
-
-        //столкновения и движение
+        //столкновения с врагами
         Game_Object_Type triggers[1];
         triggers[0] = Game_Object_ZOMBIE;
         check_object_collision(game_object, triggers, 1);
@@ -1765,7 +1788,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         //прорисовка игрока
 
         //хитбокс
-        draw_rect(game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+        // draw_rect(game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
 
         draw_bitmap(game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y}, 0, game_object->sprite, 1, game_object->layer);
 
@@ -1824,7 +1847,7 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
         check_collision(game_object);
 
         //если стоит
-        if (collisions.y.happened && collisions.y.tile_side == TILE_SIZE_PIXELS * 0.5)
+        if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
         {
             game_object->accel = 1;
             //состояния стоит и движение
@@ -1985,230 +2008,230 @@ void update_game_object(Game_Object *game_object, Input input, Bitmap screen)
     }
 }
 
-#define NORMAL_CHUNKS_COUNT 1
+#define NORMAL_CHUNKS_COUNT 3
 char *normal_chunks[NORMAL_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          ",
-    // "###  #####"
-    // "#     ####"
-    // "TTT   ####"
-    // "=== T  ###"
-    // "##      ##"
-    // "##    TT##"
-    // "#    ===##"
-    // "#  #######",
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          ",
+    "###  #####"
+    "#     ####"
+    "TTT   ####"
+    "=== T  ###"
+    "##      ##"
+    "##    TT##"
+    "#    ===##"
+    "#  #######",
 
-    // "##    ## #"
-    // "#       ##"
-    // "##      ##"
-    // "#      ###"
-    // "##       #"
-    // "#       ##"
-    // "###    ###"
-    // "###TTTT###",
+    "##    ## #"
+    "#       ##"
+    "##      ##"
+    "#      ###"
+    "##       #"
+    "#       ##"
+    "###    ###"
+    "###TTTT###",
 
-    // "          "
-    // "          "
-    // "     ##   "
-    // " TT TTTT  "
-    // "          "
-    // "#T TTTTTT "
-    // "##        "
-    // "###======#",
+    "          "
+    "          "
+    "     ##   "
+    " TT TTTT  "
+    "          "
+    "#T TTTTTT "
+    "##        "
+    "###======#",
 };
 
-#define DOWN_PASSAGE_CHUNKS_COUNT 1
+#define DOWN_PASSAGE_CHUNKS_COUNT 3
 char *down_passage_chunks[DOWN_PASSAGE_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          ",
     // "          "
     // "          "
     // "          "
-    // "##     TT="
-    // "   #      "
-    // "     TTT#T"
-    // "T#TT   #=="
-    // "##### ####",
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          ",
+    "          "
+    "          "
+    "          "
+    "##     TT="
+    "   #      "
+    "     TTT#T"
+    "T#TT   #=="
+    "##### ####",
 
-    // "##    ## #"
-    // "        ##"
-    // "##      ##"
-    // "       ## "
-    // "          "
-    // "  === ### "
-    // "###      ="
-    // "###T   ###",
+    "##    ## #"
+    "        ##"
+    "##      ##"
+    "       ## "
+    "          "
+    "  === ### "
+    "###      ="
+    "###T   ###",
 
-    // "          "
-    // " =        "
-    // "          "
-    // "          "
-    // "   #   #  "
-    // "= ##   ## "
-    // "####   ## "
-    // "####   ###",
+    "          "
+    " =        "
+    "          "
+    "          "
+    "   #   #  "
+    "= ##   ## "
+    "####   ## "
+    "####   ###",
 };
 
-#define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 1
+#define ENTER_DOWN_PASSAGE_CHUNKS_COUNT 3
 char *enter_down_passage_chunks[ENTER_DOWN_PASSAGE_CHUNKS_COUNT] = {
-    " #        "
-    "#         "
-    " #        "
-    " #   N    "
-    " #   #####"
-    " #        "
-    " #        "
-    " #        ",
-    // "#      #  "
-    // "#        #"
-    // "       #  "
-    // "     N  # "
-    // "     T    "
-    // " ^     TTT"
-    // "T#TT   ==="
-    // "####   ###",
-
-    // "          "
-    // "  N       "
-    // "TTTT      "
-    // "       ## "
-    // "    =     "
-    // "####=  TT#"
-    // "####=  ###"
-    // "####=  ###",
-
-    // "       #  "
-    // "TT      ##"
-    // "          "
-    // "    N     "
-    // "    ##    "
-    // "#TT=#  ###"
-    // "###=    ##"
-    // "#####  ###",
-};
-
-#define ENTER_CHUNKS_COUNT 1
-char *enter_chunks[ENTER_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "     N    "
-    "     #    "
-    "          "
-    "          "
-    "          "
-    "          ",
-    // "          "
-    // "          "
-    // "    N     "
-    // "   TTTT   "
-    // "   =###=  "
-    // "  =###### "
-    // "TT########"
-    // "##########",
-
-    // "          "
-    // "  N       "
-    // " ###      "
-    // "       ## "
-    // "  ^ #     "
-    // "####   ###"
-    // "####  ####"
-    // "#####  ###",
-
-    // "       #  "
-    // " ##     # "
-    // "          "
-    // "    N     "
-    // "    ##    "
-    // "#TT##  ## "
-    // "####   ###"
-    // "#####  ###",
-};
-
-#define PASSAGE_CHUNKS_COUNT 1
-char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          ",
-    // " PPPPPPP  "
-    // " #######  "
-    // "          "
-    // "         ="
-    // "          "
-    // "   TT     "
-    // "TTTTTTTTTT"
-    // "#======###",
-
-    // "  ##   ## "
-    // "#         "
-    // "        # "
-    // "       ## "
-    // "  #    ###"
-    // "TTTT  ####"
-    // "##########"
-    // "##########",
-
-    // "##     #  "
-    // " #      ##"
-    // "          "
-    // "          "
-    // "          "
-    // "#TT#  ## #"
-    // "###======#"
-    // "###T######",
-};
-
-#define END_CHUNKS_COUNT 1
-char *exit_chunks[END_CHUNKS_COUNT] = {
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          "
-    "          ",
-    // "          "
     // " #        "
     // "#         "
-    // "      T  #"
+    // " #        "
+    // " #   N    "
+    // " #   #####"
+    // " #        "
+    // " #        "
+    // " #        ",
+    "#      #  "
+    "#        #"
+    "       #  "
+    "     N  # "
+    "     T    "
+    " ^     TTT"
+    "T#TT   ==="
+    "####   ###",
+
+    "          "
+    "  N       "
+    "TTTT      "
+    "       ## "
+    "    =     "
+    "####=  TT#"
+    "####=  ###"
+    "####=  ###",
+
+    "       #  "
+    "TT      ##"
+    "          "
+    "    N     "
+    "    ##    "
+    "#TT=#  ###"
+    "###=    ##"
+    "#####  ###",
+};
+
+#define ENTER_CHUNKS_COUNT 3
+char *enter_chunks[ENTER_CHUNKS_COUNT] = {
     // "          "
-    // " #   X    "
-    // "  TTTTTT  "
-    // " ######## ",
     // "          "
-    // "#         "
-    // "#         "
-    // "         #"
-    // "  X       "
-    // " ####     "
-    // "##TTTTTT  "
-    // "##########",
-    // "##      # "
-    // "         #"
+    // "     N    "
+    // "     #    "
     // "          "
-    // "   X      "
-    // " #####    "
     // "          "
-    // "  TTTTTT  "
-    // " ======== ",
+    // "          "
+    // "          ",
+    "          "
+    "          "
+    "    N     "
+    "   TTTT   "
+    "   =###=  "
+    "  =###### "
+    "TT########"
+    "##########",
+
+    "          "
+    "  N       "
+    " ###      "
+    "       ## "
+    "  ^ #     "
+    "####   ###"
+    "####  ####"
+    "#####  ###",
+
+    "       #  "
+    " ##     # "
+    "          "
+    "    N     "
+    "    ##    "
+    "#TT##  ## "
+    "####   ###"
+    "#####  ###",
+};
+
+#define PASSAGE_CHUNKS_COUNT 3
+char *passage_chunks[PASSAGE_CHUNKS_COUNT] = {
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          ",
+    " PPPPPPP  "
+    " #######  "
+    "          "
+    "         ="
+    "          "
+    "   TT     "
+    "TTTTTTTTTT"
+    "#======###",
+
+    "  ##   ## "
+    "#         "
+    "        # "
+    "       ## "
+    "  #    ###"
+    "TTTT  ####"
+    "##########"
+    "##########",
+
+    "##     #  "
+    " #      ##"
+    "          "
+    "          "
+    "          "
+    "#TT#  ## #"
+    "###======#"
+    "###T######",
+};
+
+#define END_CHUNKS_COUNT 3
+char *exit_chunks[END_CHUNKS_COUNT] = {
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          "
+    // "          ",
+    "          "
+    " #        "
+    "#         "
+    "      T  #"
+    "          "
+    " #   X    "
+    "  TTTTTT  "
+    " ######## ",
+    "          "
+    "#         "
+    "#         "
+    "         #"
+    "  X       "
+    " ####     "
+    "##TTTTTT  "
+    "##########",
+    "##      # "
+    "         #"
+    "          "
+    "   X      "
+    " #####    "
+    "          "
+    "  TTTTTT  "
+    " ======== ",
 };
 
 i32 danger_points = random_int(8, 12);
@@ -2670,7 +2693,7 @@ void update_tile(i32 tile_index)
     break;
     case Tile_Type_BORDER:
     {
-        // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, 1, LAYER_TILE);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile_map[tile_index].sprite, 1, LAYER_TILE);
     }
     break;
     case Tile_Type_FLOOR:
@@ -2721,7 +2744,7 @@ void update_tile(i32 tile_index)
 
     if (!tile->solid)
     {
-        // draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, 1, LAYER_BACKGROUND_MAIN);
+        draw_bitmap(tilePos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, img_BackGround, 1, LAYER_BACKGROUND_MAIN);
     }
 }
 
