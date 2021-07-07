@@ -1,30 +1,5 @@
-typedef char i8;
-typedef unsigned char u8;
-
-typedef short i16;
-typedef unsigned short u16;
-
-typedef int i32;
-typedef unsigned int u32;
-
-typedef long long int i64;
-typedef unsigned long long int u64;
-
-typedef float f32;
-typedef double f64;
-
-typedef u8 byte;
-
-#define true 1
-#define false 0
-
-//вызывает ошибку при условии
-#define assert(cond) \
-    if (!(cond))     \
-        *(int *)NULL = 12;
-
 #include "stdio.h"
-#include "game.c"
+#include "game.h"
 #include "Windows.h"
 
 void foo(const char *str)
@@ -92,7 +67,7 @@ typedef struct
 } Bmp_Info;
 #pragma pack(pop)
 
-Bitmap win32_read_bmp(char *file_name)
+READ_BMP(win32_read_bmp)
 {
     File_Buffer file = win32_read_entire_file(file_name);
     Bmp_Header *header = (Bmp_Header *)file.data;
@@ -243,9 +218,54 @@ void print_smth(void *data)
     OutputDebugStringA(buffer);
 }
 
+Game_state state = {0};
+
+typedef struct
+{
+    HMODULE game_code_dll;
+    Game_Update *game_update;
+
+    bool is_valid;
+} win32_game_code;
+
+win32_game_code win32_load_game_code(void)
+{
+    win32_game_code result = {};
+
+    CopyFile("../build/game.dll", "../build/game_temp.dll", FALSE);
+    result.game_code_dll = LoadLibraryA("game_temp.dll");
+    if (result.game_code_dll)
+    {
+        result.game_update = (Game_Update *)GetProcAddress(result.game_code_dll, "game_update");
+
+        result.is_valid = result.game_update;
+    }
+
+    if (!result.is_valid)
+    {
+        result.game_update = Game_Update_Stub;
+    }
+
+    return result;
+}
+
+void win32_unload_game_code(win32_game_code *game_code)
+{
+    if (game_code->game_code_dll)
+    {
+        FreeLibrary(game_code->game_code_dll);
+        game_code->game_code_dll = 0;
+    }
+    game_code->is_valid = false;
+    game_code->game_update = Game_Update_Stub;
+}
+
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
+
+    state.win32_read_bmp = &win32_read_bmp;
+
     time_t cur_time = time(NULL);
     __global_random_state = xorshift256_init(cur_time);
 
@@ -325,8 +345,19 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     f64 prev_time = win32_get_time();
 
+    win32_game_code game_code = win32_load_game_code();
+    u64 load_counter = 0;
+
     while (running)
     {
+        if (load_counter > 120)
+        {
+            win32_unload_game_code(&game_code);
+            game_code = win32_load_game_code();
+            load_counter = 0;
+        }
+        load_counter++;
+
         for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
         {
             Button *button = &input.buttons[button_index];
@@ -399,7 +430,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             }
         }
 
-        game_update(game_screen, input);
+        game_code.game_update(game_screen, &state, input);
 
         StretchDIBits(
             device_context,
@@ -421,7 +452,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         f64 time_per_frame = win32_get_time() - prev_time;
 
-        while (time_per_frame < target_time_per_frame)
+        while (time_per_frame < TARGET_TIME_PER_FRAME)
         {
             time_per_frame = win32_get_time() - prev_time;
         }
