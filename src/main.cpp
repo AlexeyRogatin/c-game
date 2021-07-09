@@ -222,18 +222,34 @@ Game_state state = {0};
 
 typedef struct
 {
+    FILETIME last_write_time;
     HMODULE game_code_dll;
     Game_Update *game_update;
 
     bool is_valid;
 } win32_game_code;
 
-win32_game_code win32_load_game_code(void)
+FILETIME get_last_write_time(char *src)
+{
+    FILETIME last_write_time = {};
+
+    WIN32_FIND_DATA find_data;
+    HANDLE find_handle = FindFirstFile(src, &find_data);
+    if (find_handle != INVALID_HANDLE_VALUE)
+    {
+        last_write_time = find_data.ftLastWriteTime;
+        FindClose(find_handle);
+    }
+    return last_write_time;
+}
+
+win32_game_code win32_load_game_code(char *source_dll_name, char *temp_dll_name)
 {
     win32_game_code result = {};
 
-    CopyFile("../build/game.dll", "../build/game_temp.dll", FALSE);
-    result.game_code_dll = LoadLibraryA("game_temp.dll");
+    result.last_write_time = get_last_write_time(source_dll_name);
+    CopyFile(source_dll_name, temp_dll_name, FALSE);
+    result.game_code_dll = LoadLibraryA(temp_dll_name);
     if (result.game_code_dll)
     {
         result.game_update = (Game_Update *)GetProcAddress(result.game_code_dll, "game_update");
@@ -260,9 +276,45 @@ void win32_unload_game_code(win32_game_code *game_code)
     game_code->game_update = Game_Update_Stub;
 }
 
+void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *source_b, i64 dest_count, char *dest)
+{
+    for (i32 index = 0; index < source_a_count; index++)
+    {
+        *dest++ = *source_a++;
+    }
+
+    for (i32 index = 0; index < source_b_count; index++)
+    {
+        *dest++ = *source_b++;
+    }
+
+    *dest++ = 0;
+}
+
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
+
+    char exe_file_name[MAX_PATH];
+    DWORD sizeof_file_name = GetModuleFileNameA(NULL, exe_file_name, MAX_PATH);
+    char *last_slash = exe_file_name;
+    for (char *scan = last_slash; *scan; scan++)
+    {
+        if (*scan == '\\')
+        {
+            last_slash = scan + 1;
+        }
+    }
+
+    char source_dll_name[] = "game.dll";
+    char source_dll_full_path[MAX_PATH];
+
+    cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(source_dll_name) - 1, source_dll_name, sizeof(source_dll_full_path), source_dll_full_path);
+
+    char temp_dll_name[] = "temp_game.dll";
+    char temp_dll_full_path[MAX_PATH];
+
+    cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(temp_dll_name) - 1, temp_dll_name, sizeof(temp_dll_full_path), temp_dll_full_path);
 
     state.win32_read_bmp = &win32_read_bmp;
 
@@ -345,18 +397,18 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     f64 prev_time = win32_get_time();
 
-    win32_game_code game_code = win32_load_game_code();
+    win32_game_code game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
     u64 load_counter = 0;
 
     while (running)
     {
-        if (load_counter > 120)
+        FILETIME new_write_time = get_last_write_time(source_dll_full_path);
+        if (CompareFileTime(&new_write_time, &game_code.last_write_time) != 0)
         {
             win32_unload_game_code(&game_code);
-            game_code = win32_load_game_code();
+            game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
             load_counter = 0;
         }
-        load_counter++;
 
         for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
         {

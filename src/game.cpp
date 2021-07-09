@@ -2538,12 +2538,3 @@ extern "C" GAME_UPDATE(game_update)
 
     update_timers(state);
 }
-
-#include "windows.h"
-BOOL WINAPI DllMain(
-    HINSTANCE hinstDLL,
-    DWORD fdwReason,
-    LPVOID lpReserved)
-{
-    return (TRUE);
-}
