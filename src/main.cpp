@@ -233,8 +233,8 @@ FILETIME get_last_write_time(char *src)
 {
     FILETIME last_write_time = {};
 
-    WIN32_FIND_DATA find_data;
-    HANDLE find_handle = FindFirstFile(src, &find_data);
+    WIN32_FIND_DATAA find_data;
+    HANDLE find_handle = FindFirstFileA(src, &find_data);
     if (find_handle != INVALID_HANDLE_VALUE)
     {
         last_write_time = find_data.ftLastWriteTime;
@@ -248,7 +248,7 @@ win32_game_code win32_load_game_code(char *source_dll_name, char *temp_dll_name)
     win32_game_code result = {};
 
     result.last_write_time = get_last_write_time(source_dll_name);
-    CopyFile(source_dll_name, temp_dll_name, FALSE);
+    CopyFileA(source_dll_name, temp_dll_name, FALSE);
     result.game_code_dll = LoadLibraryA(temp_dll_name);
     if (result.game_code_dll)
     {
