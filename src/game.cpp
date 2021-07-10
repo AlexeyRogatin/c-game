@@ -2496,7 +2496,7 @@ extern "C" GAME_UPDATE(game_update)
     }
 
     //прорисовка темноты
-    if (state->draw_darkness)
+    if (!state->draw_darkness)
     {
         draw_bitmap(state, state->camera.pos, state->darkness.size, 0, state->darkness, 1, LAYER_DARKNESS);
     }

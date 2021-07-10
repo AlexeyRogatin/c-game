@@ -213,7 +213,7 @@ DWORD WINAPI ThreadProc(LPVOID lpParameter)
 void print_smth(void *data)
 {
     char buffer[256];
-    sprintf_s(buffer, 256, "%d\n", (i32)data);
+    //sprintf_s(buffer, 256, "%d\n", (i32)data);
 
     OutputDebugStringA(buffer);
 }
@@ -398,16 +398,17 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     f64 prev_time = win32_get_time();
 
     win32_game_code game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
-    u64 load_counter = 0;
 
     while (running)
     {
         FILETIME new_write_time = get_last_write_time(source_dll_full_path);
-        if (CompareFileTime(&new_write_time, &game_code.last_write_time) != 0)
+        if (new_write_time.dwLowDateTime != game_code.last_write_time.dwLowDateTime)
         {
+            char buffer[256];
+            sprintf_s(buffer, sizeof(buffer), "saved time: %ld; new time: %ld\n", game_code.last_write_time.dwLowDateTime, new_write_time.dwLowDateTime);
+            OutputDebugStringA(buffer);
             win32_unload_game_code(&game_code);
             game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
-            load_counter = 0;
         }
 
         for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
@@ -514,6 +515,6 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         char buffer[256];
         sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        OutputDebugStringA(buffer);
+        // OutputDebugStringA(buffer);
     }
 }
