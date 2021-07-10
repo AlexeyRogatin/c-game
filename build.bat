@@ -1,5 +1,5 @@
 @echo off
-set commonCompilerFlags=-MT -nologo -Gm- -GR- -EHa- -Od -Oi -FC -Z7
+set commonCompilerFlags=-WX -W4 -wd4201 -wd4100 -wd4189 -MT -nologo -Gm- -GR- -EHa- -Od -Oi -FC -Z7
 
 
 IF NOT EXIST build mkdir build

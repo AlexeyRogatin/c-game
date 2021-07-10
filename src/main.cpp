@@ -86,16 +86,16 @@ READ_BMP(win32_read_bmp)
 
     u32 bitmap_start_offset = result.pitch + 1;
 
-    for (i32 y = 0; y < info->height; y++)
+    for (u32 y = 0; y < info->height; y++)
     {
-        for (i32 x = 0; x < info->width; x++)
+        for (u32 x = 0; x < info->width; x++)
         {
             ARGB pixel;
             pixel.argb = pixels[y * info->width + x];
-            f32 alpha = pixel.a / 0xFF;
-            pixel.r *= alpha;
-            pixel.g *= alpha;
-            pixel.b *= alpha;
+            f32 alpha = (f32)(pixel.a / 0xFF);
+            pixel.r = (u8)roundf(pixel.r * alpha);
+            pixel.g = (u8)roundf(pixel.g * alpha);
+            pixel.b = (u8)roundf(pixel.b * alpha);
 
             new_pixels[y * result.pitch + x + bitmap_start_offset] = pixel.argb;
         }
@@ -193,30 +193,30 @@ Task *take_task(Queue *queue)
     return result;
 }
 
-Queue queue = {0};
+// Queue queue = {0};
 
-DWORD WINAPI ThreadProc(LPVOID lpParameter)
-{
-    Queue *queue = (Queue *)lpParameter;
-    while (true)
-    {
-        Task *task = take_task(queue);
-        if (task)
-        {
-            task->fn(task->data);
-        }
-    }
+// DWORD WINAPI ThreadProc(LPVOID lpParameter)
+// {
+//     Queue *queue = (Queue *)lpParameter;
+//     while (true)
+//     {
+//         Task *task = take_task(queue);
+//         if (task)
+//         {
+//             task->fn(task->data);
+//         }
+//     }
 
-    return 0;
-};
+//     return 0;
+// };
 
-void print_smth(void *data)
-{
-    char buffer[256];
-    //sprintf_s(buffer, 256, "%d\n", (i32)data);
+// void print_smth(void *data)
+// {
+//     char buffer[256];
+//     //sprintf_s(buffer, 256, "%d\n", (i32)data);
 
-    OutputDebugStringA(buffer);
-}
+//     OutputDebugStringA(buffer);
+// }
 
 Game_state state = {0};
 
@@ -426,7 +426,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             case WM_KEYUP:
             case WM_KEYDOWN:
             {
-                DWORD key_code = message.wParam;
+                DWORD key_code = (DWORD)message.wParam;
                 bool key_went_up = (message.lParam & (1 << 31)) != 0;
                 switch (key_code)
                 {

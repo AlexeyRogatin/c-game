@@ -201,13 +201,13 @@ struct xoshiro256ss_state xorshift256_init(u64 seed)
 
 f32 random_float(f32 start, f32 end)
 {
-    f32 r01 = (f64)xoshiro256ss(&__global_random_state) / (f64)U64_MAX;
+    f32 r01 = (f32)xoshiro256ss(&__global_random_state) / (f32)U64_MAX;
     f32 result = r01 * (end - start) + start;
     return result;
 };
 i32 random_int(f32 start, f32 end)
 {
-    i32 result = round(random_float(start, end));
+    i32 result = (i32)round(random_float(start, end));
     return result;
 };
 
@@ -224,7 +224,7 @@ V2 rotate_vector(V2 vector, f32 angle)
 f32 angle_between_points(V2 a, V2 b)
 {
     f32 tg = (b.y - a.y) / (b.x - a.x);
-    f32 result = atan(tg);
+    f32 result = (f32)atan(tg);
     return result;
 };
 

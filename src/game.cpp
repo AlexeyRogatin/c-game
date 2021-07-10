@@ -24,8 +24,8 @@ Bitmap turn_bitmap(Bitmap bitmap, f64 angle)
     result.pitch = bitmap.pitch;
     result.size = bitmap.size;
 
-    u64 alignment = 8 * sizeof(u32);
-    u64 screen_buffer_size = 4 * (bitmap.size.x + 2) * (bitmap.size.y + 2);
+    u64 alignment = (u32)(8 * sizeof(u32));
+    u64 screen_buffer_size = (u32)(4 * (bitmap.size.x + 2) * (bitmap.size.y + 2));
     screen_buffer_size += alignment - (screen_buffer_size % alignment);
     u32 *pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
     memset(pixels, 0, screen_buffer_size);
@@ -175,7 +175,7 @@ void draw_bitmap(Game_state *state, V2 pos, V2 size, f32 angle, Bitmap bitmap, f
 
 void clear_screen(Game_state *state, Bitmap screen, Bitmap darkness)
 {
-    i32 pixelCount = screen.size.x * screen.size.y;
+    i32 pixelCount = (i32)(screen.size.x * screen.size.y);
     for (i32 i = 0; i < pixelCount; i++)
     {
         screen.pixels[i] = 0;
@@ -187,7 +187,7 @@ void clear_screen(Game_state *state, Bitmap screen, Bitmap darkness)
         for (i32 x = 0; x <= darkness.size.x; x++)
         {
             ARGB dark_pixel = {0xFF000000};
-            dark_pixel.a *= state->darkness_lvl;
+            dark_pixel.a = u8(dark_pixel.a * state->darkness_lvl);
             darkness.pixels[y * darkness.pitch + x] = dark_pixel.argb;
         }
     }
@@ -198,22 +198,22 @@ void border_camera(Game_state *state, Bitmap screen)
 {
     if (!(state->camera.target.x - screen.size.x / state->camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        state->camera.target.x = -TILE_SIZE_PIXELS * 0.5 + screen.size.x / state->camera.scale.x * 0.5;
+        state->camera.target.x = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.x / state->camera.scale.x * 0.5);
     }
 
     if (!(state->camera.target.x + screen.size.x / state->camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        state->camera.target.x = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / state->camera.scale.x * 0.5;
+        state->camera.target.x = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / state->camera.scale.x * 0.5);
     }
 
     if (!(state->camera.target.y - screen.size.y / state->camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        state->camera.target.y = -TILE_SIZE_PIXELS * 0.5 + screen.size.y / state->camera.scale.y * 0.5;
+        state->camera.target.y = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.y / state->camera.scale.y * 0.5);
     }
 
     if (!(state->camera.target.y + screen.size.y / state->camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        state->camera.target.y = -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / state->camera.scale.y * 0.5;
+        state->camera.target.y = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / state->camera.scale.y * 0.5);
     }
 }
 
@@ -221,7 +221,7 @@ V2 get_tile_pos(i32 index)
 {
     //size_x = CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2;
     //index = y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + x;
-    f32 y = floor(index / (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2));
+    f32 y = (f32)floor(index / (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2));
     f32 x = index - y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2);
     V2 result = {x, y};
     return result;
@@ -229,7 +229,7 @@ V2 get_tile_pos(i32 index)
 
 i32 get_index(V2 coords)
 {
-    i32 index = coords.y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + coords.x;
+    i32 index = (i32)(coords.y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + coords.x);
     return index;
 }
 
@@ -248,7 +248,7 @@ Bitmap create_empty_bitmap(V2 size)
 {
     Bitmap result;
     result.size = size;
-    result.pitch = size.x + 2;
+    result.pitch = (i32)size.x + 2;
     result.pixels = (u32 *)malloc((u32)(result.pitch * (size.y + 2) * sizeof(u32)));
     return result;
 }
@@ -268,7 +268,7 @@ Bilinear_Sample_8x get_bilinear_sample(Bitmap bitmap, V2_8x pos, i32_8x mask)
 {
     i32_8x x = to_i32_8x(pos.x);
     i32_8x y = to_i32_8x(pos.y);
-    i32_8x offsets = to_i32_8x(pos.y * set1_f32(bitmap.pitch) + pos.x);
+    i32_8x offsets = to_i32_8x(pos.y * set1_f32((f32)bitmap.pitch) + pos.x);
     i32_8x pixel_a = gather((const int *)bitmap.pixels, offsets, mask);
     i32_8x pixel_b = gather((const int *)bitmap.pixels + 1, offsets, mask);
     i32_8x pixel_c = gather((const int *)bitmap.pixels + bitmap.pitch, offsets, mask);
@@ -359,9 +359,9 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
-        for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
+        for (i32 y = (i32)paint_rect.min.y; y < paint_rect.max.y; y++)
         {
-            for (i32 x = paint_rect.min.x; x < paint_rect.max.x; x++)
+            for (i32 x = (i32)paint_rect.min.x; x < paint_rect.max.x; x++)
             {
                 V2 d = V2{(f32)x, (f32)y} - origin;
                 V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
@@ -423,9 +423,9 @@ void draw_item(Bitmap screen, Drawing drawing)
         {
             // TIMED_BLOCK(draw_pixel_slowly, (u64)get_area(paint_rect));
 
-            for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
+            for (i32 y = (i32)paint_rect.min.y; y < paint_rect.max.y; y++)
             {
-                for (i32 x = paint_rect.min.x; x < paint_rect.max.x; x++)
+                for (i32 x = (i32)paint_rect.min.x; x < paint_rect.max.x; x++)
                 {
                     V2 d = V2{(f32)x, (f32)y} - origin;
                     V2 uv01 = V2{dot(d, x_axis), dot(d, y_axis)} * inverted_sqr_rect_size;
@@ -454,7 +454,7 @@ void draw_item(Bitmap screen, Drawing drawing)
     if (drawing.type == DRAWING_TYPE_BITMAP)
     {
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND_MAIN;
-        f32_8x is_tile_multiplier = set1_f32(1 - is_tile);
+        f32_8x is_tile_multiplier = set1_f32(f32(1 - is_tile));
 
         Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
 
@@ -494,12 +494,12 @@ void draw_item(Bitmap screen, Drawing drawing)
 
         if ((i32)paint_rect.min.x & 7)
         {
-            paint_rect.min.x = (i32)paint_rect.min.x & ~7;
+            paint_rect.min.x = (f32)((i32)paint_rect.min.x & ~7);
         }
 
         if ((i32)paint_rect.max.x & 7)
         {
-            paint_rect.max.x = ((i32)paint_rect.max.x & ~7) + 8;
+            paint_rect.max.x = (f32)(((i32)paint_rect.max.x & ~7) + 8);
         }
 
         V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
@@ -523,15 +523,15 @@ void draw_item(Bitmap screen, Drawing drawing)
         if (has_area(paint_rect))
         {
             // TIMED_BLOCK(draw_pixel, (u64)get_area(paint_rect));
-            for (i32 y = paint_rect.min.y; y < paint_rect.max.y; y++)
+            for (i32 y = (i32)paint_rect.min.y; y < paint_rect.max.y; y++)
             {
                 u32 *pixel_ptr = screen.pixels + y * (i32)screen.size.x + (i32)paint_rect.min.x;
                 V2_8x d = V2_8x{
                               set1_f32(paint_rect.min.x) + zero_to_seven,
-                              set1_f32(y)} -
+                              set1_f32((f32)y)} -
                           origin_8x;
 
-                for (i32 x = paint_rect.min.x; x < paint_rect.max.x; x += 8)
+                for (i32 x = (i32)paint_rect.min.x; x < paint_rect.max.x; x += 8)
                 {
                     V2_8x uv01 = V2_8x{dot(d, x_axis_8x), dot(d, y_axis_8x)} * inverted_sqr_rect_size_8x;
                     V2_8x uv = uv01 * (texture_size_8x);
@@ -671,7 +671,7 @@ Game_Object *add_game_object(Game_state *state, Game_Object_Type type, V2 pos)
         game_object.cant_control_timer = add_timer(state, 0);
         game_object.invulnerable_timer = add_timer(state, 0);
 
-        game_object.jump_height = TILE_SIZE_PIXELS * 2.2 - game_object.collision_box.y;
+        game_object.jump_height = (f32)(TILE_SIZE_PIXELS * 2.2) - game_object.collision_box.y;
     }
 
     if (type == Game_Object_ZOMBIE)
@@ -748,9 +748,9 @@ void check_collision(Game_state *state, Game_Object *game_object)
         f32 min_time = 1.0f;
         V2 wall_normal = V2{};
 
-        for (i32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
+        for (i32 tile_y = (i32)start_tile.y; tile_y <= finish_tile.y; tile_y++)
         {
-            for (i32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
+            for (i32 tile_x = (i32)start_tile.x; tile_x <= finish_tile.x; tile_x++)
             {
                 i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
                 Tile tile = state->tile_map[index];
@@ -923,19 +923,19 @@ bool check_vision_box(Game_state *state, i32 *trigger_index, V2 vision_point, V2
                         //y=kx+b
                         V2 min_point = round(V2{min(vision_point.x, game_object.pos.x), min(vision_point.y, game_object.pos.y)} / TILE_SIZE_PIXELS);
                         V2 max_point = round(V2{max(vision_point.x, game_object.pos.x), max(vision_point.y, game_object.pos.y)} / TILE_SIZE_PIXELS);
-                        for (i32 y = min_point.y; y <= max_point.y; y++)
+                        for (i32 y = (i32)min_point.y; y <= max_point.y; y++)
                         {
-                            for (i32 x = min_point.x; x <= max_point.x; x++)
+                            for (i32 x = (i32)min_point.x; x <= max_point.x; x++)
                             {
                                 V2 tile_pos = V2{(f32)x, (f32)y};
                                 if (state->tile_map[get_index(tile_pos)].solid)
                                 {
                                     tile_pos *= TILE_SIZE_PIXELS;
                                     i32 collisions = 0;
-                                    f32 x1 = ((tile_pos.y - TILE_SIZE_PIXELS * 0.5) - b) / k;
-                                    f32 x2 = ((tile_pos.y + TILE_SIZE_PIXELS * 0.5) - b) / k;
-                                    f32 y1 = k * (tile_pos.x - TILE_SIZE_PIXELS * 0.5) + b;
-                                    f32 y2 = k * (tile_pos.x + TILE_SIZE_PIXELS * 0.5) + b;
+                                    f32 x1 = (f32)(((tile_pos.y - TILE_SIZE_PIXELS * 0.5) - b) / k);
+                                    f32 x2 = (f32)(((tile_pos.y + TILE_SIZE_PIXELS * 0.5) - b) / k);
+                                    f32 y1 = (f32)(k * (tile_pos.x - TILE_SIZE_PIXELS * 0.5) + b);
+                                    f32 y2 = (f32)(k * (tile_pos.x + TILE_SIZE_PIXELS * 0.5) + b);
                                     bool bx1 = x1 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5 && x1 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5;
                                     bool bx2 = x2 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5 && x2 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5;
                                     bool by1 = y1 >= tile_pos.y - TILE_SIZE_PIXELS * 0.5 && y1 <= tile_pos.y + TILE_SIZE_PIXELS * 0.5;
@@ -1066,7 +1066,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
     if (game_object->type == Game_Object_PLAYER)
     {
         //предпологаемое состояние
-        Condition supposed_cond;
+        // Condition supposed_cond;
 
         V2 recent_speed = game_object->speed;
 
@@ -1096,15 +1096,15 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         //константы ускорения
         if (input.shift.is_down)
         {
-            game_object->accel = NORMAL_ACCEL;
+            game_object->accel = (f32)NORMAL_ACCEL;
         }
         else
         {
-            game_object->accel = RUNNING_ACCEL;
+            game_object->accel = (f32)RUNNING_ACCEL;
         }
         if (game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_CROUCHING_MOOVING)
         {
-            game_object->accel = CROUCHING_ACCEL;
+            game_object->accel = (f32)CROUCHING_ACCEL;
         }
 
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
@@ -1128,7 +1128,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
                     if (!input.down.is_down)
                     {
                         game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                        state->timers[game_object->jump_timer] = game_object->jump_duration;
+                        state->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
                     }
                     game_object->condition = Condition_FALLING;
                 }
@@ -1136,7 +1136,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
             else
             {
                 game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                state->timers[game_object->jump_timer] = game_object->jump_duration;
+                state->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
             }
         }
 
@@ -1223,7 +1223,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         //     if (fabs(game_object->speed.x) > 1 && (supposed_cond == Condition_IDLE || supposed_cond == Condition_CROUCHING_IDLE))
         //     {
 
-        //         game_object->moved_through_pixels += game_object->speed.x;
+        //         game_object->moved_through_pixels += round(game_object->speed.x);
 
         //         if (supposed_cond == Condition_IDLE)
         //         {
@@ -1358,7 +1358,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         {
             if (state->timers[game_object->crouching_animation_timer] > 0)
             {
-                i32 step = ceil(state->timers[game_object->crouching_animation_timer] * 0.5);
+                i32 step = (i32)ceil(state->timers[game_object->crouching_animation_timer] * 0.5);
                 game_object->sprite = state->bitmaps[Bitmap_type_PLAYER_CROUCH_START + step];
             }
             else if (game_object->condition == Condition_IDLE)
@@ -1368,7 +1368,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
             }
             else if (game_object->condition == Condition_MOOVING)
             {
-                i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) / 35);
+                i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) / 35);
                 while (step > 5)
                 {
                     step -= 6;
@@ -1382,7 +1382,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         {
             if (state->timers[game_object->crouching_animation_timer] > 0)
             {
-                const i32 step = 4 - ceil(state->timers[game_object->crouching_animation_timer] * 0.25);
+                const i8 step = 4 - (i8)ceil(state->timers[game_object->crouching_animation_timer] * 0.25);
                 game_object->sprite = state->bitmaps[Bitmap_type_PLAYER_CROUCH_START + step];
             }
             else
@@ -1393,7 +1393,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
                 }
                 if (game_object->condition == Condition_CROUCHING_MOOVING)
                 {
-                    i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.1);
+                    i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.1);
                     while (step > 5)
                     {
                         step -= 6;
@@ -1444,12 +1444,12 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         //смотрим вниз и вверх
         if ((game_object->condition == Condition_CROUCHING_IDLE || game_object->condition == Condition_HANGING_LOOKING_DOWN) && state->timers[game_object->looking_key_held_timer] <= 0)
         {
-            state->camera.target.y = game_object->pos.y - screen.size.y / state->camera.scale.y * 0.5 + LOOKING_DISTANCE;
+            state->camera.target.y = game_object->pos.y - screen.size.y / state->camera.scale.y * 0.5f + f32(LOOKING_DISTANCE);
         }
 
         if ((game_object->condition == Condition_LOOKING_UP || game_object->condition == Condition_HANGING_LOOKING_UP) && state->timers[game_object->looking_key_held_timer] <= 0)
         {
-            state->camera.target.y = game_object->pos.y + screen.size.y / state->camera.scale.y * 0.5 - LOOKING_DISTANCE;
+            state->camera.target.y = game_object->pos.y + screen.size.y / state->camera.scale.y * 0.5f - f32(LOOKING_DISTANCE);
         }
 
         //искривление
@@ -1462,9 +1462,9 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
             game_object->target_deflection = V2{game_object->speed.y, -game_object->speed.y};
         }
 
-        game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3;
+        game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3f;
 
-        if (length(game_object->target_deflection - game_object->deflection) < 0.1)
+        if (length(game_object->target_deflection - game_object->deflection) < 0.1f)
         {
             game_object->target_deflection = V2{0, 0};
         }
@@ -1485,16 +1485,16 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
 
         if (game_object->healthpoints / game_object->max_healthpoints <= 0.5)
         {
-            camera_shake = {random_float(-10 * (0.5 - game_object->healthpoints / game_object->max_healthpoints), 10 * (0.5 - game_object->healthpoints / game_object->max_healthpoints)), random_float(-5 * (0.5 - game_object->healthpoints / game_object->max_healthpoints), 5 * (0.5 - game_object->healthpoints / game_object->max_healthpoints))};
+            camera_shake = {random_float(-10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints)), random_float(-5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints))};
         }
 
         draw_bitmap(state,
-                    state->camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / state->camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
+                    state->camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / state->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
                     V2{game_object->healthpoints / game_object->max_healthpoints * BAR_WIDTH, BAR_HEIGHT},
                     0, state->bitmaps[Bitmap_type_HEALTH], state->UI_alpha, LAYER_UI);
 
         draw_bitmap(state,
-                    state->camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / state->camera.scale * 0.5 + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
+                    state->camera.pos + camera_shake + V2{-screen.size.x, screen.size.y} / state->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
                     V2{BAR_WIDTH, BAR_HEIGHT}, 0, state->bitmaps[Bitmap_type_HEALTH_BAR], state->UI_alpha, LAYER_UI);
 
         //взаимодействие с тайлами
@@ -1555,7 +1555,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
         {
             if (state->timers[game_object->jump] == 0)
             {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration * random_float(0.4, 1);
+                game_object->speed.y = f32(2 * game_object->jump_height / game_object->jump_duration * random_float(0.4f, 1));
                 game_object->accel = ZOMBIE_ACCEL;
             }
             else if (state->timers[game_object->jump] > 0)
@@ -1598,7 +1598,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
                 {
                     game_object->moved_through_pixels = 0;
                 }
-                game_object->moved_through_pixels += game_object->speed.x;
+                game_object->moved_through_pixels += (i32)roundf(game_object->speed.x);
                 game_object->condition = Condition_MOOVING;
             }
             else
@@ -1679,7 +1679,7 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
 
         if (game_object->condition == Condition_MOOVING)
         {
-            i8 step = (i32)floor(fabsf(game_object->moved_through_pixels) * 0.05);
+            i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.05);
             while (step > 5)
             {
                 step -= 6;
@@ -1731,9 +1731,9 @@ void update_game_object(Game_state *state, Game_Object *game_object, Input input
             game_object->target_deflection = V2{game_object->speed.y, -game_object->speed.y};
         }
 
-        game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3;
+        game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3f;
 
-        if (length(game_object->target_deflection - game_object->deflection) < 0.1)
+        if (length(game_object->target_deflection - game_object->deflection) < 0.1f)
         {
             game_object->target_deflection = V2{0, 0};
         }
@@ -1991,7 +1991,7 @@ void generate_new_map(Game_state *state, Bitmap screen)
 
     //карта тайлов
     V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
-    i32 tile_count = map_size.x * map_size.y;
+    i32 tile_count = i32(map_size.x * map_size.y);
 
     for (i32 index = 0; index < tile_count; index++)
     {
@@ -2015,7 +2015,7 @@ void generate_new_map(Game_state *state, Bitmap screen)
         chunks_strings[index] = normal_chunks[random_int(1, ARRAY_COUNT(normal_chunks)) - 1];
     }
 
-    i8 direction = random_int(Direction_LEFT, Direction_RIGHT);
+    i8 direction = (i8)random_int(Direction_LEFT, Direction_RIGHT);
     if ((direction == Direction_RIGHT && chunk_pos.x == CHUNK_COUNT_X - 1) || (direction == Direction_LEFT && chunk_pos.x == 0))
     {
         direction = -direction;
@@ -2037,7 +2037,7 @@ void generate_new_map(Game_state *state, Bitmap screen)
             }
             chunk_pos.y--;
 
-            direction = random_int(0, 1) * 2 - 1;
+            direction = (i8)random_int(0, 1) * 2 - 1;
         }
         else
         {
@@ -2048,15 +2048,7 @@ void generate_new_map(Game_state *state, Bitmap screen)
 
             if (chunk_pos.y == 0)
             {
-                direction = end_chunk_pos.x - chunk_pos.x;
-                if (direction > 0)
-                {
-                    direction = Direction_RIGHT;
-                }
-                else
-                {
-                    direction = Direction_LEFT;
-                }
+                direction = (i8)unit(V2{end_chunk_pos.x - chunk_pos.x, 0}).x;
             }
 
             if (direction != Direction_VERTICAL)
@@ -2222,8 +2214,6 @@ void generate_new_map(Game_state *state, Bitmap screen)
             Bitmap bottom_tile = state->tile_map[get_index(tile_pos + V2{0, -1})].sprite;
             Bitmap bottomleft_tile = state->tile_map[get_index(tile_pos + V2{-1, -1})].sprite;
             Bitmap bottomright_tile = state->tile_map[get_index(tile_pos + V2{1, -1})].sprite;
-
-            i32 bitmap_size = state->bitmaps[Bitmap_type_TILED_FLOOR].pitch * (state->bitmaps[Bitmap_type_TILED_FLOOR].size.y + 2) * sizeof(u32);
 
             if (left_tile.pixels == state->bitmaps[Bitmap_type_TILED_FLOOR].pixels ||
                 bottom_tile.pixels == state->bitmaps[Bitmap_type_TILED_FLOOR].pixels ||
@@ -2395,7 +2385,7 @@ void update_tile(Game_state *state, i32 tile_index)
 
         if (state->timers[tile->interactive] > 0)
         {
-            i32 step = floor(state->timers[tile->interactive] / 60.0f * 6.0f);
+            i8 step = (i8)floor(state->timers[tile->interactive] / 60.0f * 6.0f);
             tile->sprite = state->bitmaps[Bitmap_type_DOOR + step];
         }
         else if (state->timers[tile->interactive] == 0)
@@ -2420,7 +2410,7 @@ void update_tile(Game_state *state, i32 tile_index)
 extern "C" GAME_UPDATE(game_update)
 {
     V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
-    i32 tile_count = map_size.x * map_size.y;
+    i32 tile_count = i32(map_size.x * map_size.y);
 
     i32 interval = SPRITE_SCALE;
 
@@ -2438,7 +2428,7 @@ extern "C" GAME_UPDATE(game_update)
         state->darkness = create_empty_bitmap(screen.size / state->camera.scale);
 
         state->light_lvl = 1;
-        state->darkness_lvl = DARKNESS_USUAL_LVL;
+        state->darkness_lvl = (f32)DARKNESS_USUAL_LVL;
         state->UI_alpha = 1;
         state->draw_darkness = false;
 
@@ -2479,10 +2469,10 @@ extern "C" GAME_UPDATE(game_update)
     //плавный переход
     if (state->transition_is_on)
     {
-        state->darkness_lvl += (1 - state->darkness_lvl) * 0.1;
-        state->light_lvl += (0 - state->light_lvl) * 0.1;
-        state->UI_alpha += (0 - state->UI_alpha) * 0.1;
-        if (state->light_lvl < 0.001)
+        state->darkness_lvl += (1 - state->darkness_lvl) * 0.1f;
+        state->light_lvl += (0 - state->light_lvl) * 0.1f;
+        state->UI_alpha += (0 - state->UI_alpha) * 0.1f;
+        if (state->light_lvl < 0.001f)
         {
             state->transition_is_on = false;
             generate_new_map(state, screen);
@@ -2490,13 +2480,13 @@ extern "C" GAME_UPDATE(game_update)
     }
     else
     {
-        state->darkness_lvl += (DARKNESS_USUAL_LVL - state->darkness_lvl) * 0.1;
-        state->light_lvl += (1 - state->light_lvl) * 0.1;
-        state->UI_alpha += (1 - state->UI_alpha) * 0.1;
+        state->darkness_lvl += (f32)(DARKNESS_USUAL_LVL - state->darkness_lvl) * 0.1f;
+        state->light_lvl += (1 - state->light_lvl) * 0.1f;
+        state->UI_alpha += (1 - state->UI_alpha) * 0.1f;
     }
 
     //прорисовка темноты
-    if (!state->draw_darkness)
+    if (state->draw_darkness)
     {
         draw_bitmap(state, state->camera.pos, state->darkness.size, 0, state->darkness, 1, LAYER_DARKNESS);
     }
