@@ -59,7 +59,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 9
+#define BUTTON_COUNT 10
 
 typedef union
 {
@@ -72,6 +72,7 @@ typedef union
         Button z;
         Button x;
         Button r;
+        Button l;
         Button shift;
         Button space;
     };
@@ -294,10 +295,19 @@ typedef struct
     Bitmap bitmaps[Bitmap_type_COUNT];
 
     Read_BMP *win32_read_bmp;
-} Game_state;
+} Game_memory;
 
-#define GAME_UPDATE(name) void name(Bitmap screen, Game_state *state, Input input)
+#define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)
 typedef GAME_UPDATE(Game_Update);
 GAME_UPDATE(Game_Update_Stub)
 {
 }
+
+typedef struct
+{
+    void *recording_handle;
+    void *play_back_handle;
+    i32 input_recording_index;
+    i32 input_playing_index;
+    Game_memory *memory;
+} win32_State;

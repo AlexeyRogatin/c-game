@@ -13,6 +13,35 @@ typedef struct
     u32 size;
 } File_Buffer;
 
+bool win32_write_entire_file(char *file_name)
+{
+    bool result = false;
+
+    HANDLE file = CreateFileA(
+        file_name,
+        GENERIC_WRITE,
+        NULL,
+        NULL,
+        CREATE_ALWAYS,
+        NULL,
+        NULL);
+
+    assert(file != INVALID_HANDLE_VALUE);
+
+    DWORD file_size_high;
+    DWORD file_size = GetFileSize(file, &file_size_high);
+
+    byte *file_memory = (byte *)malloc(file_size);
+    DWORD bytes_written;
+
+    if (WriteFile(file, file_memory, file_size, &bytes_written, NULL))
+    {
+        result = true;
+    }
+
+    return result;
+}
+
 File_Buffer win32_read_entire_file(char *file_name)
 {
     HANDLE file = CreateFileA(
@@ -125,7 +154,19 @@ LRESULT CALLBACK WindowProc(
     {
         running = false;
     }
+
     break;
+        // case WM_ACTIVATEAPP:
+        // {
+        //     if (wParam)
+        //     {
+        //         SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
+        //     }
+        //     else
+        //     {
+        //         SetLayeredWindowAttributes(window, RGB(0, 0, 0), 50, LWA_ALPHA);
+        //     }
+        // }
 
     default:
     {
@@ -158,6 +199,86 @@ f64 win32_get_time()
     QueryPerformanceCounter(&ticks);
     f64 result = (f64)ticks.QuadPart / (f64)performance_frequency;
     return result;
+}
+
+void process_messages(HWND window, Input *input)
+{
+    for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
+    {
+        Button *button = &input->buttons[button_index];
+        button->went_up = false;
+        button->went_down = false;
+    }
+
+    MSG message;
+    while (PeekMessageA(&message, window, 0, 0, PM_REMOVE))
+    {
+        switch (message.message)
+        {
+        case WM_KEYUP:
+        case WM_KEYDOWN:
+        {
+            DWORD key_code = (DWORD)message.wParam;
+            bool key_went_up = (message.lParam & (1 << 31)) != 0;
+            switch (key_code)
+            {
+            case VK_LEFT:
+            {
+                handle_button(&input->left, key_went_up);
+            }
+            break;
+            case VK_RIGHT:
+            {
+                handle_button(&input->right, key_went_up);
+            }
+            break;
+            case VK_DOWN:
+            {
+                handle_button(&input->down, key_went_up);
+            }
+            break;
+            case VK_UP:
+            {
+                handle_button(&input->up, key_went_up);
+            }
+            break;
+            case 'Z':
+            {
+                handle_button(&input->z, key_went_up);
+            }
+            break;
+            case 'X':
+            {
+                handle_button(&input->x, key_went_up);
+            }
+            break;
+            case 'R':
+            {
+                handle_button(&input->r, key_went_up);
+            }
+            break;
+            case 'L':
+            {
+                handle_button(&input->l, key_went_up);
+            }
+            break;
+            case VK_SHIFT:
+            {
+                handle_button(&input->shift, key_went_up);
+            }
+            break;
+            case VK_SPACE:
+            {
+                handle_button(&input->space, key_went_up);
+            }
+            break;
+            }
+        }
+        break;
+        default:
+            DefWindowProc(window, message.message, message.wParam, message.lParam);
+        }
+    }
 }
 
 #define TASK_QUEUE_SIZE 1024
@@ -217,8 +338,6 @@ Task *take_task(Queue *queue)
 
 //     OutputDebugStringA(buffer);
 // }
-
-Game_state state = {0};
 
 typedef struct
 {
@@ -291,6 +410,84 @@ void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *s
     *dest++ = 0;
 }
 
+void begin_record_input(win32_State *win32_state, i32 input_recording_index)
+{
+    //открываем файл для записи движений
+    win32_state->input_recording_index = input_recording_index;
+
+    char *file_name = "foo.hmi";
+
+    win32_state->recording_handle = CreateFileA(
+        file_name,
+        GENERIC_WRITE,
+        NULL,
+        NULL,
+        CREATE_ALWAYS,
+        NULL,
+        NULL);
+
+    DWORD bytes_written;
+    WriteFile(win32_state->recording_handle, win32_state->memory, sizeof(Game_memory), &bytes_written, 0);
+}
+
+void end_record_input(win32_State *win32_state)
+{
+    //закрываем файл для записи движений
+    CloseHandle(win32_state->recording_handle);
+    win32_state->input_recording_index = 0;
+}
+
+void begin_input_play_back(win32_State *win32_state, i32 input_playing_index)
+{
+    //открываем файл для чтения движений
+    win32_state->input_playing_index = input_playing_index;
+
+    char *file_name = "../build/foo.hmi";
+
+    win32_state->play_back_handle = CreateFileA(
+        file_name,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
+    DWORD bytes_read;
+    assert(ReadFile(win32_state->play_back_handle, win32_state->memory, sizeof(Game_memory), &bytes_read, 0));
+    assert(bytes_read == sizeof(Game_memory));
+}
+
+void end_input_play_back(win32_State *win32_state)
+{
+    //закрываем файл для чтения движений
+    CloseHandle(win32_state->play_back_handle);
+    win32_state->input_playing_index = 0;
+}
+
+void win32_record_input(win32_State *win32_state, Input *input)
+{
+    //продолжаем записывать движения
+    DWORD bytes_written;
+    WriteFile(win32_state->recording_handle, input, sizeof(Input), &bytes_written, 0);
+}
+
+void win32_play_back_input(win32_State *win32_state, Input *input)
+{
+    DWORD bytes_read;
+    if (ReadFile(win32_state->play_back_handle, input, sizeof(Input), &bytes_read, 0))
+    {
+        if (bytes_read == 0)
+        {
+            //повторяем проход
+            i32 playing_index = win32_state->input_playing_index;
+            end_input_play_back(win32_state);
+            begin_input_play_back(win32_state, playing_index);
+            ReadFile(win32_state->play_back_handle, input, sizeof(Input), &bytes_read, 0);
+        }
+    }
+}
+
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             PSTR lpCmdLine, INT nCmdShow)
 {
@@ -308,15 +505,17 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     char source_dll_name[] = "game.dll";
     char source_dll_full_path[MAX_PATH];
-
     cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(source_dll_name) - 1, source_dll_name, sizeof(source_dll_full_path), source_dll_full_path);
 
     char temp_dll_name[] = "temp_game.dll";
     char temp_dll_full_path[MAX_PATH];
-
     cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(temp_dll_name) - 1, temp_dll_name, sizeof(temp_dll_full_path), temp_dll_full_path);
 
-    state.win32_read_bmp = &win32_read_bmp;
+    win32_State win32_state = {};
+    win32_state.memory = (Game_memory *)malloc(sizeof(Game_memory));
+    memset(win32_state.memory, 0, sizeof(Game_memory));
+
+    win32_state.memory->win32_read_bmp = &win32_read_bmp;
 
     time_t cur_time = time(NULL);
     __global_random_state = xorshift256_init(cur_time);
@@ -356,7 +555,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     HWND window = CreateWindowExA(
         0,
         wndClass.lpszClassName,
-        "Auch",
+        "A real game",
         WS_VISIBLE | WS_POPUP | WS_MAXIMIZE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
@@ -367,9 +566,11 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         wndClass.hInstance,
         NULL);
 
+    HDC device_context = GetDC(window);
+    ReleaseDC(window, device_context);
+
     RECT rect;
     GetClientRect(window, &rect);
-    HDC device_context = GetDC(window);
     i32 game_width = 512;
     i32 game_height = 288;
     i32 window_width = rect.right - rect.left;
@@ -411,79 +612,31 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
         }
 
-        for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
-        {
-            Button *button = &input.buttons[button_index];
-            button->went_up = false;
-            button->went_down = false;
-        }
+        process_messages(window, &input);
 
-        MSG message;
-        while (PeekMessageA(&message, window, 0, 0, PM_REMOVE))
+        if (input.l.went_down)
         {
-            switch (message.message)
+            if (win32_state.input_recording_index == 0)
             {
-            case WM_KEYUP:
-            case WM_KEYDOWN:
-            {
-                DWORD key_code = (DWORD)message.wParam;
-                bool key_went_up = (message.lParam & (1 << 31)) != 0;
-                switch (key_code)
-                {
-                case VK_LEFT:
-                {
-                    handle_button(&input.left, key_went_up);
-                }
-                break;
-                case VK_RIGHT:
-                {
-                    handle_button(&input.right, key_went_up);
-                }
-                break;
-                case VK_DOWN:
-                {
-                    handle_button(&input.down, key_went_up);
-                }
-                break;
-                case VK_UP:
-                {
-                    handle_button(&input.up, key_went_up);
-                }
-                break;
-                case 0x5A:
-                {
-                    handle_button(&input.z, key_went_up);
-                }
-                break;
-                case 0x58:
-                {
-                    handle_button(&input.x, key_went_up);
-                }
-                break;
-                case 0x52:
-                {
-                    handle_button(&input.r, key_went_up);
-                }
-                break;
-                case VK_SHIFT:
-                {
-                    handle_button(&input.shift, key_went_up);
-                }
-                break;
-                case VK_SPACE:
-                {
-                    handle_button(&input.space, key_went_up);
-                }
-                break;
-                }
+                begin_record_input(&win32_state, 1);
             }
-            break;
-            default:
-                DefWindowProc(window, message.message, message.wParam, message.lParam);
+            else
+            {
+                end_record_input(&win32_state);
+                begin_input_play_back(&win32_state, 1);
             }
         }
 
-        game_code.game_update(game_screen, &state, input);
+        if (win32_state.input_recording_index)
+        {
+            win32_record_input(&win32_state, &input);
+        }
+        if (win32_state.input_playing_index)
+        {
+            win32_play_back_input(&win32_state, &input);
+        }
+
+        game_code.game_update(game_screen, win32_state.memory, input);
 
         StretchDIBits(
             device_context,
