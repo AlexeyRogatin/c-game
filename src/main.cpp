@@ -206,7 +206,7 @@ f64 win32_get_time()
     return result;
 }
 
-void process_messages(HWND window, Input *input)
+void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
 {
     for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
     {
@@ -284,7 +284,41 @@ void process_messages(HWND window, Input *input)
             break;
             case VK_F11:
             {
-                handle_button(&input->F11, key_went_up);
+                if (key_went_up)
+                {
+                    //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
+                    DWORD window_style = GetWindowLong(window, GWL_STYLE);
+                    DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
+                    if (window_style & WS_OVERLAPPEDWINDOW)
+                    {
+                        MONITORINFO monitor_info = {sizeof(monitor_info)};
+                        if (GetWindowPlacement(window, g_wpPrev) &&
+                            GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
+                        {
+                            SetWindowLong(window, GWL_STYLE,
+                                          window_style & ~WS_OVERLAPPEDWINDOW);
+                            SetWindowLong(window, GWL_EXSTYLE,
+                                          window_ex_style & ~(WS_EX_LAYERED | WS_EX_TOPMOST));
+
+                            SetWindowPos(window, HWND_TOP,
+                                         monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                                         monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                                         monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                        }
+                    }
+                    else
+                    {
+                        SetWindowLong(window, GWL_STYLE,
+                                      window_style | WS_OVERLAPPEDWINDOW);
+                        SetWindowLong(window, GWL_EXSTYLE,
+                                      window_ex_style | (WS_EX_LAYERED | WS_EX_TOPMOST));
+                        SetWindowPlacement(window, g_wpPrev);
+                        SetWindowPos(window, NULL, 0, 0, 0, 0,
+                                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                    }
+                }
             }
             break;
             case VK_ESCAPE:
@@ -701,49 +735,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
         }
 
-        process_messages(window, &input);
-
-        DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
-        if (window_ex_style & WS_EX_LAYERED)
-        {
-            i32 foo = 0;
-        }
-
-        if (input.F11.went_down)
-        {
-            //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
-            DWORD window_style = GetWindowLong(window, GWL_STYLE);
-            window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
-            if (window_style & WS_OVERLAPPEDWINDOW)
-            {
-                MONITORINFO monitor_info = {sizeof(monitor_info)};
-                if (GetWindowPlacement(window, &g_wpPrev) &&
-                    GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
-                {
-                    SetWindowLong(window, GWL_STYLE,
-                                  window_style & ~WS_OVERLAPPEDWINDOW);
-                    SetWindowLong(window, GWL_EXSTYLE,
-                                  window_ex_style & ~(WS_EX_LAYERED | WS_EX_TOPMOST));
-
-                    SetWindowPos(window, HWND_TOP,
-                                 monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
-                                 monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
-                                 monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-                }
-            }
-            else
-            {
-                SetWindowLong(window, GWL_STYLE,
-                              window_style | WS_OVERLAPPEDWINDOW);
-                SetWindowLong(window, GWL_EXSTYLE,
-                              window_ex_style | (WS_EX_LAYERED | WS_EX_TOPMOST));
-                SetWindowPlacement(window, &g_wpPrev);
-                SetWindowPos(window, NULL, 0, 0, 0, 0,
-                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-            }
-        }
+        process_messages(window, &input, &g_wpPrev);
 
         loop_editing_render(&win32_state, &input);
 
