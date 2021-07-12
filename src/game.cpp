@@ -60,9 +60,9 @@ Bitmap turn_bitmap(Bitmap bitmap, f64 angle)
 
 void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
 {
-    memory->bitmaps[0] = win32_read_bmp("../data/none.bmp");
-    memory->bitmaps[1] = win32_read_bmp("../data/test.bmp");
-    memory->bitmaps[2] = win32_read_bmp("../data/lexaIdle.bmp");
+    memory->bitmaps[0] = win32_read_bmp("none.bmp");
+    memory->bitmaps[1] = win32_read_bmp("test.bmp");
+    memory->bitmaps[2] = win32_read_bmp("lexaIdle.bmp");
     memory->bitmaps[3] = win32_read_bmp("../data/lexaJump.bmp");
     memory->bitmaps[4] = win32_read_bmp("../data/lexaCrouchIdle.bmp");
     memory->bitmaps[5] = win32_read_bmp("../data/lexaWall.bmp");
@@ -643,10 +643,10 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         TILE_SIZE_PIXELS * 2, //высота прыжка
         19,                   //время прыжка
 
-        0,                                     //пройденный путь в пикселях
-        (Direction)(random_int(0, 1) * 2 - 1), //направление
-        Condition_IDLE,                        //состояние
-        memory->bitmaps[Bitmap_type_NONE],     //спрайт
+        0,                                                                     //пройденный путь в пикселях
+        (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1), //направление
+        Condition_IDLE,                                                        //состояние
+        memory->bitmaps[Bitmap_type_NONE],                                     //спрайт
 
         NULL, //таймеры
 
@@ -683,7 +683,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.jump_duration = 15;
 
-        game_object.go_left = random_int(0, 1);
+        game_object.go_left = random_int(&memory->__global_random_state, 0, 1);
         game_object.go_right = !game_object.go_left;
     }
 
@@ -1485,7 +1485,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 
         if (game_object->healthpoints / game_object->max_healthpoints <= 0.5)
         {
-            camera_shake = {random_float(-10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints)), random_float(-5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints))};
+            camera_shake = {random_float(&memory->__global_random_state, -10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints)), random_float(&memory->__global_random_state, -5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints))};
         }
 
         draw_bitmap(memory,
@@ -1555,7 +1555,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
         {
             if (memory->timers[game_object->jump] == 0)
             {
-                game_object->speed.y = f32(2 * game_object->jump_height / game_object->jump_duration * random_float(0.4f, 1));
+                game_object->speed.y = f32(2 * game_object->jump_height / game_object->jump_duration * random_float(&memory->__global_random_state, 0.4f, 1));
                 game_object->accel = ZOMBIE_ACCEL;
             }
             else if (memory->timers[game_object->jump] > 0)
@@ -2005,17 +2005,17 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     char *chunks_strings[CHUNK_COUNT_X * CHUNK_COUNT_Y];
 
     //путь через тайлы
-    V2 enter_chunk_pos = {(f32)random_int(0, CHUNK_COUNT_X - 1), CHUNK_COUNT_Y - 1};
+    V2 enter_chunk_pos = {(f32)random_int(&memory->__global_random_state, 0, CHUNK_COUNT_X - 1), CHUNK_COUNT_Y - 1};
     V2 chunk_pos = enter_chunk_pos;
-    V2 end_chunk_pos = {(f32)random_int(0, CHUNK_COUNT_X - 1), 0};
+    V2 end_chunk_pos = {(f32)random_int(&memory->__global_random_state, 0, CHUNK_COUNT_X - 1), 0};
 
     //заполняем чанки
     for (i32 index = 0; index < CHUNK_COUNT_X * CHUNK_COUNT_Y; index++)
     {
-        chunks_strings[index] = normal_chunks[random_int(1, ARRAY_COUNT(normal_chunks)) - 1];
+        chunks_strings[index] = normal_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(normal_chunks)) - 1];
     }
 
-    i8 direction = (i8)random_int(Direction_LEFT, Direction_RIGHT);
+    i8 direction = (i8)random_int(&memory->__global_random_state, Direction_LEFT, Direction_RIGHT);
     if ((direction == Direction_RIGHT && chunk_pos.x == CHUNK_COUNT_X - 1) || (direction == Direction_LEFT && chunk_pos.x == 0))
     {
         direction = -direction;
@@ -2023,21 +2023,21 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 
     while (chunk_pos != end_chunk_pos)
     {
-        if ((random_float(0, 1) <= down_chunk_chance || direction == Direction_VERTICAL) && chunk_pos.y > 0)
+        if ((random_float(&memory->__global_random_state, 0, 1) <= down_chunk_chance || direction == Direction_VERTICAL) && chunk_pos.y > 0)
         {
             if (chunk_pos == enter_chunk_pos)
             {
                 //чанк-вход с проходом вниз
-                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_down_passage_chunks[random_int(1, ARRAY_COUNT(enter_down_passage_chunks)) - 1];
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_down_passage_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(enter_down_passage_chunks)) - 1];
             }
             else
             {
                 //чанк-проход вниз
-                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = down_passage_chunks[random_int(1, ARRAY_COUNT(down_passage_chunks)) - 1];
+                chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = down_passage_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(down_passage_chunks)) - 1];
             }
             chunk_pos.y--;
 
-            direction = (i8)random_int(0, 1) * 2 - 1;
+            direction = (i8)random_int(&memory->__global_random_state, 0, 1) * 2 - 1;
         }
         else
         {
@@ -2056,12 +2056,12 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                 if (chunk_pos == enter_chunk_pos)
                 {
                     //чанк-вход
-                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_chunks[random_int(1, ARRAY_COUNT(enter_chunks)) - 1];
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = enter_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(enter_chunks)) - 1];
                 }
                 else
                 {
                     //проходной чанк
-                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = passage_chunks[random_int(1, ARRAY_COUNT(passage_chunks)) - 1];
+                    chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = passage_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(passage_chunks)) - 1];
                 }
                 chunk_pos.x += direction;
             }
@@ -2069,7 +2069,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         //чанк-выход
         if (chunk_pos == end_chunk_pos)
         {
-            chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = exit_chunks[random_int(1, ARRAY_COUNT(exit_chunks)) - 1];
+            chunks_strings[(i32)(chunk_pos.y * CHUNK_COUNT_X + chunk_pos.x)] = exit_chunks[random_int(&memory->__global_random_state, 1, ARRAY_COUNT(exit_chunks)) - 1];
         }
     }
 
@@ -2108,12 +2108,12 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         solid = true;
                         interactive = -1;
 
-                        f32 chance = random_float(0, 1);
+                        f32 chance = random_float(&memory->__global_random_state, 0, 1);
                         if (chance < 0.95)
                         {
                             if (chance > 0.15)
                             {
-                                sprite = memory->bitmaps[Bitmap_type_BRICKS + random_int(0, 6)];
+                                sprite = memory->bitmaps[Bitmap_type_BRICKS + random_int(&memory->__global_random_state, 0, 6)];
                             }
                             else
                             {
@@ -2122,7 +2122,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         }
                         else
                         {
-                            sprite = memory->bitmaps[Bitmap_type_BRICKS + random_int(7, 11)];
+                            sprite = memory->bitmaps[Bitmap_type_BRICKS + random_int(&memory->__global_random_state, 7, 11)];
                         }
                     }
                     break;
@@ -2231,7 +2231,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
             }
             else
             {
-                if (random_int(0, 1) == 0)
+                if (random_int(&memory->__global_random_state, 0, 1) == 0)
                 {
                     sprite = memory->bitmaps[Bitmap_type_TILED_FLOOR];
                 }
@@ -2313,7 +2313,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 
         if (distance_between_points(pixel_tile_pos, memory->game_objects[0].pos) > 400)
         {
-            if (!memory->tile_map[index].solid && random_float(0, 1) < 0.15)
+            if (!memory->tile_map[index].solid && random_float(&memory->__global_random_state, 0, 1) < 0.15)
             {
                 if (memory->tile_map[bottom_tile_index].solid)
                 {
@@ -2486,7 +2486,7 @@ extern "C" GAME_UPDATE(game_update)
     }
 
     //прорисовка темноты
-    if (!memory->draw_darkness)
+    if (memory->draw_darkness)
     {
         draw_bitmap(memory, memory->camera.pos, memory->darkness.size, 0, memory->darkness, 1, LAYER_DARKNESS);
     }

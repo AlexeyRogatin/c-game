@@ -59,7 +59,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 10
+#define BUTTON_COUNT 11
 
 typedef union
 {
@@ -75,6 +75,7 @@ typedef union
         Button l;
         Button shift;
         Button space;
+        Button F11;
     };
     Button buttons[BUTTON_COUNT];
 } Input;
@@ -295,6 +296,7 @@ typedef struct
     Bitmap bitmaps[Bitmap_type_COUNT];
 
     Read_BMP *win32_read_bmp;
+    xoshiro256ss_state __global_random_state;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)
@@ -303,11 +305,12 @@ GAME_UPDATE(Game_Update_Stub)
 {
 }
 
-typedef struct
+i32 string_length(char *string)
 {
-    void *recording_handle;
-    void *play_back_handle;
-    i32 input_recording_index;
-    i32 input_playing_index;
-    Game_memory *memory;
-} win32_State;
+    i32 count = 0;
+    while (*string++)
+    {
+        ++count;
+    }
+    return count;
+}

@@ -150,23 +150,24 @@ LRESULT CALLBACK WindowProc(
 
     switch (message)
     {
+    case WM_ACTIVATE:
+    {
+        // if (wParam == WA_ACTIVE)
+        // {
+        //     SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
+        // }
+        // else
+        // {
+        //     SetLayeredWindowAttributes(window, RGB(0, 0, 0), 50, LWA_ALPHA);
+        // }
+    }
+    break;
+
     case WM_CLOSE:
     {
         running = false;
     }
-
     break;
-        // case WM_ACTIVATEAPP:
-        // {
-        //     if (wParam)
-        //     {
-        //         SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
-        //     }
-        //     else
-        //     {
-        //         SetLayeredWindowAttributes(window, RGB(0, 0, 0), 50, LWA_ALPHA);
-        //     }
-        // }
 
     default:
     {
@@ -270,6 +271,11 @@ void process_messages(HWND window, Input *input)
             case VK_SPACE:
             {
                 handle_button(&input->space, key_went_up);
+            }
+            break;
+            case VK_F11:
+            {
+                handle_button(&input->F11, key_went_up);
             }
             break;
             }
@@ -410,15 +416,35 @@ void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *s
     *dest++ = 0;
 }
 
+typedef struct
+{
+    HANDLE recording_handle;
+    HANDLE play_back_handle;
+    i32 input_recording_index;
+    i32 input_playing_index;
+    Game_memory *memory;
+    char exe_file_name[MAX_PATH];
+    char *exe_file_one_past_last_slash;
+} win32_State;
+
+void get_file_path(win32_State *win32_state, char *file_name, i32 dest_count, char *dest)
+{
+    cat_strings(win32_state->exe_file_one_past_last_slash - win32_state->exe_file_name, win32_state->exe_file_name, string_length(file_name), file_name, dest_count, dest);
+}
+
 void begin_record_input(win32_State *win32_state, i32 input_recording_index)
 {
     //открываем файл для записи движений
     win32_state->input_recording_index = input_recording_index;
 
-    char *file_name = "foo.hmi";
+    char file_name[256];
+    sprintf_s(file_name, 256, "loop_edit%i.gmi", input_recording_index);
+
+    char file_path[MAX_PATH];
+    get_file_path(win32_state, file_name, sizeof(file_path), file_path);
 
     win32_state->recording_handle = CreateFileA(
-        file_name,
+        file_path,
         GENERIC_WRITE,
         NULL,
         NULL,
@@ -442,10 +468,14 @@ void begin_input_play_back(win32_State *win32_state, i32 input_playing_index)
     //открываем файл для чтения движений
     win32_state->input_playing_index = input_playing_index;
 
-    char *file_name = "../build/foo.hmi";
+    char file_name[256];
+    sprintf_s(file_name, 256, "loop_edit%i.gmi", input_playing_index);
+
+    char file_path[MAX_PATH];
+    get_file_path(win32_state, file_name, sizeof(file_path), file_path);
 
     win32_state->play_back_handle = CreateFileA(
-        file_name,
+        file_path,
         GENERIC_READ,
         FILE_SHARE_READ,
         NULL,
@@ -488,37 +518,34 @@ void win32_play_back_input(win32_State *win32_state, Input *input)
     }
 }
 
-INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-            PSTR lpCmdLine, INT nCmdShow)
+void win32_get_exe_file_name(win32_State *win32_state)
 {
-
-    char exe_file_name[MAX_PATH];
-    DWORD sizeof_file_name = GetModuleFileNameA(NULL, exe_file_name, MAX_PATH);
-    char *last_slash = exe_file_name;
-    for (char *scan = last_slash; *scan; scan++)
+    DWORD sizeof_file_name = GetModuleFileNameA(NULL, win32_state->exe_file_name, MAX_PATH);
+    win32_state->exe_file_one_past_last_slash = win32_state->exe_file_name;
+    for (char *scan = win32_state->exe_file_one_past_last_slash; *scan; scan++)
     {
         if (*scan == '\\')
         {
-            last_slash = scan + 1;
+            win32_state->exe_file_one_past_last_slash = scan + 1;
         }
     }
+}
 
-    char source_dll_name[] = "game.dll";
-    char source_dll_full_path[MAX_PATH];
-    cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(source_dll_name) - 1, source_dll_name, sizeof(source_dll_full_path), source_dll_full_path);
-
-    char temp_dll_name[] = "temp_game.dll";
-    char temp_dll_full_path[MAX_PATH];
-    cat_strings(last_slash - exe_file_name, exe_file_name, sizeof(temp_dll_name) - 1, temp_dll_name, sizeof(temp_dll_full_path), temp_dll_full_path);
-
+INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+            PSTR lpCmdLine, INT nCmdShow)
+{
     win32_State win32_state = {};
     win32_state.memory = (Game_memory *)malloc(sizeof(Game_memory));
     memset(win32_state.memory, 0, sizeof(Game_memory));
-
     win32_state.memory->win32_read_bmp = &win32_read_bmp;
+    win32_state.memory->__global_random_state = xorshift256_init(time(NULL));
 
-    time_t cur_time = time(NULL);
-    __global_random_state = xorshift256_init(cur_time);
+    //файлы для динамичной перезагрузки
+    win32_get_exe_file_name(&win32_state);
+    char source_dll_full_path[MAX_PATH];
+    get_file_path(&win32_state, "game.dll", sizeof(source_dll_full_path), source_dll_full_path);
+    char temp_dll_full_path[MAX_PATH];
+    get_file_path(&win32_state, "temp_game.dll", sizeof(temp_dll_full_path), temp_dll_full_path);
 
     LARGE_INTEGER perf_frequency_li;
     QueryPerformanceFrequency(&perf_frequency_li);
@@ -548,7 +575,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     wndClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wndClass.lpfnWndProc = WindowProc;
     wndClass.hInstance = hInstance;
-    wndClass.lpszClassName = "WHat a crap";
+    wndClass.lpszClassName = "Auch";
 
     ATOM registeredClass = RegisterClassA(&wndClass);
 
@@ -556,11 +583,11 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         0,
         wndClass.lpszClassName,
         "A real game",
-        WS_VISIBLE | WS_POPUP | WS_MAXIMIZE,
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT, //x
         CW_USEDEFAULT, //y
-        1920,          //width
-        1080,          //height
+        CW_USEDEFAULT, //width
+        CW_USEDEFAULT, //height
         NULL,
         NULL,
         wndClass.hInstance,
@@ -570,11 +597,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ReleaseDC(window, device_context);
 
     RECT rect;
-    GetClientRect(window, &rect);
     i32 game_width = 512;
     i32 game_height = 288;
-    i32 window_width = rect.right - rect.left;
-    i32 window_height = rect.bottom - rect.top;
 
     BITMAPINFO bitmap_info = {0};
     bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -600,8 +624,15 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     win32_game_code game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
 
+    //переменная для getWindowPlacement и setWindowPlacement
+    WINDOWPLACEMENT g_wpPrev = {sizeof(g_wpPrev)};
+
     while (running)
     {
+        GetClientRect(window, &rect);
+        i32 window_width = rect.right - rect.left;
+        i32 window_height = rect.bottom - rect.top;
+
         FILETIME new_write_time = get_last_write_time(source_dll_full_path);
         if (new_write_time.dwLowDateTime != game_code.last_write_time.dwLowDateTime)
         {
@@ -613,6 +644,36 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
 
         process_messages(window, &input);
+
+        if (input.F11.went_down)
+        {
+            //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
+            DWORD window_style = GetWindowLong(window, GWL_STYLE);
+            if (window_style & WS_OVERLAPPEDWINDOW)
+            {
+                MONITORINFO mi = {sizeof(mi)};
+                if (GetWindowPlacement(window, &g_wpPrev) &&
+                    GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &mi))
+                {
+                    SetWindowLong(window, GWL_STYLE,
+                                  window_style & ~WS_OVERLAPPEDWINDOW);
+                    SetWindowPos(window, HWND_TOP,
+                                 mi.rcMonitor.left, mi.rcMonitor.top,
+                                 mi.rcMonitor.right - mi.rcMonitor.left,
+                                 mi.rcMonitor.bottom - mi.rcMonitor.top,
+                                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                }
+            }
+            else
+            {
+                SetWindowLong(window, GWL_STYLE,
+                              window_style | WS_OVERLAPPEDWINDOW);
+                SetWindowPlacement(window, &g_wpPrev);
+                SetWindowPos(window, NULL, 0, 0, 0, 0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            }
+        }
 
         if (input.l.went_down)
         {

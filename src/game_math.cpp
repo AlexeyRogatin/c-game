@@ -148,7 +148,6 @@ struct xoshiro256ss_state
     u64 s[4];
 };
 
-xoshiro256ss_state __global_random_state;
 #define U64_MAX 0xffffffffffffffff
 
 u64 xoshiro256ss(struct xoshiro256ss_state *state)
@@ -199,15 +198,15 @@ struct xoshiro256ss_state xorshift256_init(u64 seed)
     return result;
 }
 
-f32 random_float(f32 start, f32 end)
+f32 random_float(xoshiro256ss_state *__global_random_state, f32 start, f32 end)
 {
-    f32 r01 = (f32)xoshiro256ss(&__global_random_state) / (f32)U64_MAX;
+    f32 r01 = (f32)xoshiro256ss(__global_random_state) / (f32)U64_MAX;
     f32 result = r01 * (end - start) + start;
     return result;
 };
-i32 random_int(f32 start, f32 end)
+i32 random_int(xoshiro256ss_state *__global_random_state, f32 start, f32 end)
 {
-    i32 result = (i32)round(random_float(start, end));
+    i32 result = (i32)round(random_float(__global_random_state, start, end));
     return result;
 };
 
