@@ -59,7 +59,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 11
+#define BUTTON_COUNT 12
 
 typedef union
 {
@@ -73,6 +73,7 @@ typedef union
         Button x;
         Button r;
         Button l;
+        Button p;
         Button shift;
         Button space;
         Button F11;

@@ -150,16 +150,20 @@ LRESULT CALLBACK WindowProc(
 
     switch (message)
     {
-    case WM_ACTIVATE:
+    case WM_ACTIVATEAPP:
     {
-        // if (wParam == WA_ACTIVE)
-        // {
-        //     SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
-        // }
-        // else
-        // {
-        //     SetLayeredWindowAttributes(window, RGB(0, 0, 0), 50, LWA_ALPHA);
-        // }
+        DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
+        if (window_ex_style & WS_EX_LAYERED)
+        {
+            if (wParam)
+            {
+                SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
+            }
+            else
+            {
+                SetLayeredWindowAttributes(window, RGB(0, 0, 0), 100, LWA_ALPHA);
+            }
+        }
     }
     break;
 
@@ -263,6 +267,11 @@ void process_messages(HWND window, Input *input)
                 handle_button(&input->l, key_went_up);
             }
             break;
+            case 'P':
+            {
+                handle_button(&input->p, key_went_up);
+            }
+            break;
             case VK_SHIFT:
             {
                 handle_button(&input->shift, key_went_up);
@@ -276,6 +285,11 @@ void process_messages(HWND window, Input *input)
             case VK_F11:
             {
                 handle_button(&input->F11, key_went_up);
+            }
+            break;
+            case VK_ESCAPE:
+            {
+                running = false;
             }
             break;
             }
@@ -518,6 +532,50 @@ void win32_play_back_input(win32_State *win32_state, Input *input)
     }
 }
 
+void loop_editing_render(win32_State *win32_state, Input *input)
+{
+    if (input->l.went_down)
+    {
+        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
+        {
+            begin_record_input(win32_state, 1);
+        }
+        else if (win32_state->input_recording_index)
+        {
+            end_record_input(win32_state);
+            // begin_input_play_back(win32_state, 1);
+        }
+
+        // //начать сначала
+        // if (win32_state->input_playing_index)
+        // {
+        //     end_record_input(win32_state);
+        //     begin_input_play_back(win32_state, 1);
+        // }
+    }
+
+    if (input->p.went_down)
+    {
+        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
+        {
+            begin_input_play_back(win32_state, 1);
+        }
+        // else if (win32_state->input_playing_index)
+        // {
+        //     end_input_play_back(win32_state);
+        // }
+    }
+
+    if (win32_state->input_recording_index)
+    {
+        win32_record_input(win32_state, input);
+    }
+    if (win32_state->input_playing_index)
+    {
+        win32_play_back_input(win32_state, input);
+    }
+}
+
 void win32_get_exe_file_name(win32_State *win32_state)
 {
     DWORD sizeof_file_name = GetModuleFileNameA(NULL, win32_state->exe_file_name, MAX_PATH);
@@ -580,14 +638,14 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ATOM registeredClass = RegisterClassA(&wndClass);
 
     HWND window = CreateWindowExA(
-        0,
+        WS_EX_LAYERED | WS_EX_TOPMOST,
         wndClass.lpszClassName,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        CW_USEDEFAULT, //x
-        CW_USEDEFAULT, //y
-        CW_USEDEFAULT, //width
-        CW_USEDEFAULT, //height
+        1000, //x
+        500,  //y
+        512,  //width
+        288,  //height
         NULL,
         NULL,
         wndClass.hInstance,
@@ -645,22 +703,32 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         process_messages(window, &input);
 
+        DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
+        if (window_ex_style & WS_EX_LAYERED)
+        {
+            i32 foo = 0;
+        }
+
         if (input.F11.went_down)
         {
             //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
             DWORD window_style = GetWindowLong(window, GWL_STYLE);
+            window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
             if (window_style & WS_OVERLAPPEDWINDOW)
             {
-                MONITORINFO mi = {sizeof(mi)};
+                MONITORINFO monitor_info = {sizeof(monitor_info)};
                 if (GetWindowPlacement(window, &g_wpPrev) &&
-                    GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &mi))
+                    GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
                 {
                     SetWindowLong(window, GWL_STYLE,
                                   window_style & ~WS_OVERLAPPEDWINDOW);
+                    SetWindowLong(window, GWL_EXSTYLE,
+                                  window_ex_style & ~(WS_EX_LAYERED | WS_EX_TOPMOST));
+
                     SetWindowPos(window, HWND_TOP,
-                                 mi.rcMonitor.left, mi.rcMonitor.top,
-                                 mi.rcMonitor.right - mi.rcMonitor.left,
-                                 mi.rcMonitor.bottom - mi.rcMonitor.top,
+                                 monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                                 monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                                 monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
                                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
                 }
             }
@@ -668,6 +736,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             {
                 SetWindowLong(window, GWL_STYLE,
                               window_style | WS_OVERLAPPEDWINDOW);
+                SetWindowLong(window, GWL_EXSTYLE,
+                              window_ex_style | (WS_EX_LAYERED | WS_EX_TOPMOST));
                 SetWindowPlacement(window, &g_wpPrev);
                 SetWindowPos(window, NULL, 0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
@@ -675,27 +745,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             }
         }
 
-        if (input.l.went_down)
-        {
-            if (win32_state.input_recording_index == 0)
-            {
-                begin_record_input(&win32_state, 1);
-            }
-            else
-            {
-                end_record_input(&win32_state);
-                begin_input_play_back(&win32_state, 1);
-            }
-        }
-
-        if (win32_state.input_recording_index)
-        {
-            win32_record_input(&win32_state, &input);
-        }
-        if (win32_state.input_playing_index)
-        {
-            win32_play_back_input(&win32_state, &input);
-        }
+        loop_editing_render(&win32_state, &input);
 
         game_code.game_update(game_screen, win32_state.memory, input);
 
