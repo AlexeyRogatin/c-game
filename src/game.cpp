@@ -374,7 +374,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
+    if (drawing.type == DRAWING_TYPE_BITMAP)
     {
 
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND_MAIN;
@@ -451,7 +451,7 @@ void draw_item(Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_BITMAP)
+    if (drawing.type == DRAWING_TYPE_OLD_BITMAP)
     {
         bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND_MAIN;
         f32_8x is_tile_multiplier = set1_f32(f32(1 - is_tile));
@@ -743,6 +743,7 @@ void check_collision(Game_memory *memory, Game_Object *game_object)
     finish_tile = ceil(finish_tile / TILE_SIZE_PIXELS);
 
     f32 remaining_time = 1.0f;
+    V2 total_speed = game_object->speed;
     for (i32 iterations = 0; iterations < 4 && remaining_time > 0.0f; iterations++)
     {
         f32 min_time = 1.0f;
@@ -760,21 +761,21 @@ void check_collision(Game_memory *memory, Game_Object *game_object)
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
                     V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
 
-                    V2 obj_rel_pos = old_pos - tile_pos;
+                    V2 obj_rel_pos = game_object->pos + game_object->collision_box_pos - tile_pos;
 
-                    if (test_wall(tile_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    if (test_wall(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{-1, 0};
                     }
-                    if (test_wall(tile_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    if (test_wall(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{1, 0};
                     }
-                    if (test_wall(tile_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    if (test_wall(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, -1};
                     }
-                    if (test_wall(tile_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    if (test_wall(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, 1};
                     }
@@ -782,8 +783,16 @@ void check_collision(Game_memory *memory, Game_Object *game_object)
             }
         }
 
-        game_object->pos += min_time * game_object->speed;
+        //передвигаем персонажа до точки столкновения
+        game_object->pos += min_time * total_speed;
+
+        //убираем часть скорости, которую мы уже прошли
+        total_speed *= (1.0f - min_time) * remaining_time;
+
+        //удаляем скорость столкновения
         game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal;
+        total_speed -= dot(total_speed, wall_normal) * wall_normal;
+
         remaining_time -= min_time * remaining_time;
     }
 }
@@ -1526,7 +1535,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
         //прорисовка игрока
 
         //хитбокс
-        // draw_rect(game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+        draw_rect(memory, game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
 
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f},
                     V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction,

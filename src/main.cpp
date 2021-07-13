@@ -272,17 +272,7 @@ void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
                 handle_button(&input->p, key_went_up);
             }
             break;
-            case VK_SHIFT:
-            {
-                handle_button(&input->shift, key_went_up);
-            }
-            break;
-            case VK_SPACE:
-            {
-                handle_button(&input->space, key_went_up);
-            }
-            break;
-            case VK_F11:
+            case 'F':
             {
                 if (key_went_up)
                 {
@@ -298,13 +288,13 @@ void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
                             SetWindowLong(window, GWL_STYLE,
                                           window_style & ~WS_OVERLAPPEDWINDOW);
                             SetWindowLong(window, GWL_EXSTYLE,
-                                          window_ex_style & ~(WS_EX_LAYERED | WS_EX_TOPMOST));
+                                          window_ex_style & ~WS_EX_LAYERED);
 
-                            SetWindowPos(window, HWND_TOP,
+                            SetWindowPos(window, HWND_NOTOPMOST,
                                          monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
                                          monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                                          monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                                         SWP_FRAMECHANGED);
                         }
                     }
                     else
@@ -312,13 +302,22 @@ void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
                         SetWindowLong(window, GWL_STYLE,
                                       window_style | WS_OVERLAPPEDWINDOW);
                         SetWindowLong(window, GWL_EXSTYLE,
-                                      window_ex_style | (WS_EX_LAYERED | WS_EX_TOPMOST));
+                                      window_ex_style | WS_EX_LAYERED);
                         SetWindowPlacement(window, g_wpPrev);
-                        SetWindowPos(window, NULL, 0, 0, 0, 0,
-                                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                        SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0,
+                                     SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
                     }
                 }
+            }
+            break;
+            case VK_SHIFT:
+            {
+                handle_button(&input->shift, key_went_up);
+            }
+            break;
+            case VK_SPACE:
+            {
+                handle_button(&input->space, key_went_up);
             }
             break;
             case VK_ESCAPE:
@@ -577,7 +576,7 @@ void loop_editing_render(win32_State *win32_state, Input *input)
         else if (win32_state->input_recording_index)
         {
             end_record_input(win32_state);
-            // begin_input_play_back(win32_state, 1);
+            begin_input_play_back(win32_state, 1);
         }
 
         // //начать сначала
@@ -588,17 +587,18 @@ void loop_editing_render(win32_State *win32_state, Input *input)
         // }
     }
 
-    if (input->p.went_down)
-    {
-        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
-        {
-            begin_input_play_back(win32_state, 1);
-        }
-        // else if (win32_state->input_playing_index)
-        // {
-        //     end_input_play_back(win32_state);
-        // }
-    }
+    // if (input->p.went_down)
+    // {
+    //     if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
+    //     {
+    //         begin_input_play_back(win32_state, 1);
+    //     }
+    //     else if (win32_state->input_playing_index)
+    //     {
+    //         end_input_play_back(win32_state);
+    //         input = {0};
+    //     }
+    // }
 
     if (win32_state->input_recording_index)
     {
@@ -676,10 +676,10 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         wndClass.lpszClassName,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        1000, //x
-        500,  //y
-        512,  //width
-        288,  //height
+        920, //x
+        480, //y
+        512, //width
+        325, //height
         NULL,
         NULL,
         wndClass.hInstance,
@@ -722,8 +722,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     while (running)
     {
         GetClientRect(window, &rect);
-        i32 window_width = rect.right - rect.left;
         i32 window_height = rect.bottom - rect.top;
+        i32 window_width = window_height / 9 * 16;
 
         FILETIME new_write_time = get_last_write_time(source_dll_full_path);
         if (new_write_time.dwLowDateTime != game_code.last_write_time.dwLowDateTime)
@@ -740,6 +740,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         loop_editing_render(&win32_state, &input);
 
         game_code.game_update(game_screen, win32_state.memory, input);
+
+        SetStretchBltMode(device_context, STRETCH_DELETESCANS);
 
         StretchDIBits(
             device_context,
