@@ -828,7 +828,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
 
 Collision check_expanded_collision(Game_memory *memory, Game_Object *game_object, V2 expansion)
 {
-    Collision expanded_collision;
+    Collision expanded_collision = {0};
 
     V2 total_speed = game_object->speed + expansion;
 
@@ -877,7 +877,7 @@ Collision check_expanded_collision(Game_memory *memory, Game_Object *game_object
 bool deal_damage(Game_memory *memory, Game_Object *dealing_object, Game_Object *taking_object, f32 damage)
 {
     bool result = false;
-    if (memory->timers[taking_object->invulnerable_timer] < 0)
+    if (memory->timers[taking_object->invulnerable_timer] <= 0 && memory->timers[dealing_object->cant_control_timer] <= 0)
     {
         taking_object->healthpoints -= damage;
         result = true;
@@ -886,103 +886,67 @@ bool deal_damage(Game_memory *memory, Game_Object *dealing_object, Game_Object *
 }
 
 #define JUMP_ON_ENEMY_BOOST 15
-#define KNOCKBACK \
-    V2 { 25, 10 }
+#define KNOCKBACK 20
 
-void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_objects_count)
+void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_object_count)
 {
+    V2 obj_pos = game_object->pos + game_object->hit_box_pos;
+
     for (i32 game_object_index = 0; game_object_index < memory->game_object_count; game_object_index++)
     {
-        for (i32 triggers_index = 0; triggers_index < triggering_objects_count; triggers_index++)
+        for (i32 trigger_index = 0; trigger_index < triggering_object_count; trigger_index++)
         {
-            Game_Object collided_object = game_object[game_object_index];
-            if (collided_object.type == triggering_objects[triggers_index] && collided_object.exists)
+            Game_Object *trigger_object = &memory->game_objects[game_object_index];
+            if (trigger_object->exists && trigger_object->type == triggering_objects[trigger_index])
             {
-                V2 obj_min = game_object->pos + game_object->hit_box_pos - game_object->hit_box * 0.5;
-                V2 obj_max = game_object->pos + game_object->hit_box_pos + game_object->hit_box * 0.5;
+                f32 min_time = 1.0f;
 
-                V2 collided_obj_min = collided_object.pos + game_object->hit_box_pos - collided_object.hit_box * 0.5;
-                V2 collided_obj_max = collided_object.pos + game_object->hit_box_pos + collided_object.hit_box * 0.5;
+                V2 trigger_min = (trigger_object->hit_box + game_object->hit_box) * (-0.5);
+                V2 trigger_max = (trigger_object->hit_box + game_object->hit_box) * 0.5;
 
-                V2 obj_side;
-                V2 collided_obj_side;
-                V2 speed = game_object->speed - collided_object.speed;
+                V2 obj_rel_pos = obj_pos - (trigger_object->pos + trigger_object->hit_box_pos);
 
-                //по у
-                if (speed.y > 0)
+                i8 trigger_side = -1;
+
+                if (test_wall(trigger_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
-                    obj_side.y = obj_max.y;
-                    collided_obj_side.y = collided_obj_min.y;
+                    trigger_side = Side_LEFT;
                 }
-                else
+                if (test_wall(trigger_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
-                    obj_side.y = obj_min.y;
-                    collided_obj_side.y = collided_obj_max.y;
+                    trigger_side = Side_RIGHT;
                 }
-
-                if (speed.x > 0)
+                if (test_wall(trigger_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
-                    obj_side.x = obj_max.x;
-                    collided_obj_side.x = collided_obj_min.x;
+                    trigger_side = Side_BOTTOM;
                 }
-                else
+                if (test_wall(trigger_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
-                    obj_side.x = obj_min.x;
-                    collided_obj_side.x = collided_obj_max.x;
+                    trigger_side = Side_TOP;
                 }
 
-                if (fabs(obj_side.y + speed.y - collided_obj_side.y) < fabs(obj_side.x + speed.x - collided_obj_side.x))
+                if (trigger_side != -1)
                 {
-                    if (!((obj_max.y + speed.y <= collided_obj_min.y) ||
-                          (obj_min.y + speed.y >= collided_obj_max.y) ||
-                          (obj_max.x <= collided_obj_min.x) ||
-                          (obj_min.x >= collided_obj_max.x)))
+                    if (trigger_object->type == Game_Object_ZOMBIE)
                     {
-                        if (obj_side.y == obj_min.y)
+                        if (trigger_side == Side_TOP)
                         {
-                            if (deal_damage(memory, game_object, &memory->game_objects[game_object_index], 1))
-                            {
-                                game_object->speed.y = JUMP_ON_ENEMY_BOOST;
-                            }
+                            deal_damage(memory, game_object, trigger_object, 1);
+                            game_object->speed.y = JUMP_ON_ENEMY_BOOST;
                         }
                         else
                         {
-                            if (deal_damage(memory, &memory->game_objects[game_object_index], game_object, 1))
+                            if (deal_damage(memory, trigger_object, game_object, 1))
                             {
-                                memory->timers[game_object->cant_control_timer] = 30;
+                                game_object->speed = unit(game_object->pos - trigger_object->pos) * KNOCKBACK;
                                 memory->timers[game_object->invulnerable_timer] = 60;
-                                game_object->speed = KNOCKBACK;
+                                memory->timers[game_object->cant_control_timer] = 30;
                             }
-                        }
-                    }
-                }
-                else
-                {
-
-                    if (!((obj_max.x + speed.y <= collided_obj_min.x) ||
-                          (obj_min.x + speed.y >= collided_obj_max.x) ||
-                          (obj_max.y <= collided_obj_min.y) ||
-                          (obj_min.y >= collided_obj_max.y)))
-                    {
-                        if (deal_damage(memory, &memory->game_objects[game_object_index], game_object, 1))
-                        {
-                            memory->timers[game_object->cant_control_timer] = 30;
-                            memory->timers[game_object->invulnerable_timer] = 60;
-                            if (game_object->pos.x > collided_object.pos.x)
-                            {
-                                game_object->speed.x = KNOCKBACK.x;
-                                memory->game_objects[game_object_index].looking_direction = Direction_RIGHT;
-                            }
-                            else
-                            {
-                                game_object->speed.x = -KNOCKBACK.x;
-                                memory->game_objects[game_object_index].looking_direction = Direction_LEFT;
-                            }
-                            game_object->speed.y = KNOCKBACK.y;
                         }
                     }
                 }
             }
+            break;
         }
     }
 }
@@ -1443,9 +1407,10 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
         }
 
         //столкновения и движение
-        Game_Object_Type triggers[1];
-        triggers[0] = Game_Object_ZOMBIE;
-        check_object_collision(memory, game_object, triggers, 1);
+        Game_Object_Type triggers[] = {
+            Game_Object_ZOMBIE,
+        };
+        check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
 
         //что делают состояния
         if (game_object->condition == Condition_IDLE || game_object->condition == Condition_MOOVING)
@@ -1620,7 +1585,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
         //прорисовка игрока
 
         //хитбокс
-        // draw_rect(memory, game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+        // draw_rect(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
 
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f},
                     V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction,
@@ -1679,7 +1644,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 
         //поведение, связанное с тайлами
         Collisions collisions = {};
-        check_collision(memory, game_object);
+        collisions = check_collision(memory, game_object);
 
         //если стоит
         if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
@@ -1790,8 +1755,6 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
             game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_IDLE];
         }
 
-        game_object->pos += game_object->speed;
-
         Game_Object_Type triggers[1];
         triggers[0] = Game_Object_PLAYER;
 
@@ -1832,7 +1795,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
             game_object->target_deflection = V2{0, 0};
         }
 
-        // draw_rect(game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
+        // draw_rect(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
         // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, game_object->layer);
     }
@@ -2246,7 +2209,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         sprite = memory->bitmaps[Bitmap_type_DOOR];
 
                         //addPlayer
-                        V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0, 100};
+                        V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0.0f, 0.001f};
                         add_game_object(memory, Game_Object_PLAYER, spawn_pos);
                         memory->camera.target = spawn_pos;
                         border_camera(memory, screen);
@@ -2416,7 +2379,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 
                     if (!(memory->tile_map[right_tile_index].solid && memory->tile_map[left_tile_index].solid))
                     {
-                        V2 spawn_pos = pixel_tile_pos;
+                        V2 spawn_pos = pixel_tile_pos + V2{0.0f, 0.001f};
                         add_game_object(memory, Game_Object_ZOMBIE, spawn_pos);
                     }
                 }
