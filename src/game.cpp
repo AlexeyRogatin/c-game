@@ -719,7 +719,7 @@ bool test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     {
         f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
         f32 y = obj_rel_pos_y + time * obj_speed_y;
-        if ((time >= 0.0f) && (time < *min_time))
+        if ((time >= 0.0f) && (time - time_epsilon < *min_time))
         {
             if (y >= min_y && y <= max_y)
             {
@@ -787,7 +787,8 @@ void check_collision(Game_memory *memory, Game_Object *game_object)
         game_object->pos += min_time * total_speed;
 
         //убираем часть скорости, которую мы уже прошли
-        total_speed *= (1.0f - min_time) * remaining_time;
+        //возможно не та формула
+        total_speed *= 1.0f - min_time * remaining_time;
 
         //удаляем скорость столкновения
         game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal;
