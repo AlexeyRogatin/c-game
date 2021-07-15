@@ -684,6 +684,8 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.go_left = random_int(&memory->__global_random_state, 0, 1);
         game_object.go_right = !game_object.go_left;
+
+        game_object.hit_box = V2{60, 70};
     }
 
     i32 slot_index = memory->game_object_count;
@@ -709,7 +711,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
 #define DISTANT_HANGING_VALUE 7
 
-bool test_wall(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
+bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
 {
     bool hit = false;
 
@@ -765,21 +767,21 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
 
                     V2 obj_rel_pos = game_object->pos + game_object->collision_box_pos - tile_pos;
 
-                    if (test_wall(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{-1, 0};
                         tile_collisions.x.happened = true;
                         tile_collisions.x.tile_index = index;
                         tile_collisions.x.tile_side = Side_LEFT;
                     }
-                    if (test_wall(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    if (test_side(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{1, 0};
                         tile_collisions.x.happened = true;
                         tile_collisions.x.tile_index = index;
                         tile_collisions.x.tile_side = Side_RIGHT;
                     }
-                    if (test_wall(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    if (test_side(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, -1};
                         tile_collisions.y.happened = true;
@@ -787,7 +789,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
                         tile_collisions.y.tile_index = index;
                         tile_collisions.y.tile_side = Side_BOTTOM;
                     }
-                    if (test_wall(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, 1};
                         tile_collisions.y.happened = true;
@@ -809,7 +811,10 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
         }
 
         f32 time_epsilon = 0.01f;
-        min_time = max(0.0f, min_time - time_epsilon);
+        if (min_time < 1.0f)
+        {
+            min_time = max(0.0f, min_time - time_epsilon);
+        }
 
         //передвигаем персонажа до точки столкновения
         game_object->pos += min_time * total_speed;
@@ -855,13 +860,13 @@ Collision check_expanded_collision(Game_memory *memory, Game_Object *game_object
 
                 V2 obj_rel_pos = game_object->pos + game_object->collision_box_pos - tile_pos;
 
-                if (test_wall(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                 {
                     expanded_collision.happened = true;
                     expanded_collision.tile_index = index;
                     expanded_collision.tile_side = Side_LEFT;
                 }
-                if (test_wall(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                if (test_side(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                 {
                     expanded_collision.happened = true;
                     expanded_collision.tile_index = index;
@@ -890,7 +895,7 @@ bool deal_damage(Game_memory *memory, Game_Object *dealing_object, Game_Object *
 
 void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_object_count)
 {
-    V2 obj_pos = game_object->pos + game_object->hit_box_pos;
+    V2 obj_pos = game_object->pos + game_object->hit_box_pos - game_object->speed;
 
     for (i32 game_object_index = 0; game_object_index < memory->game_object_count; game_object_index++)
     {
@@ -904,23 +909,23 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
                 V2 trigger_min = (trigger_object->hit_box + game_object->hit_box) * (-0.5);
                 V2 trigger_max = (trigger_object->hit_box + game_object->hit_box) * 0.5;
 
-                V2 obj_rel_pos = obj_pos - (trigger_object->pos + trigger_object->hit_box_pos);
+                V2 obj_rel_pos = obj_pos - (trigger_object->pos - trigger_object->speed + trigger_object->hit_box_pos);
 
                 i8 trigger_side = -1;
 
-                if (test_wall(trigger_min.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
+                if (test_side(trigger_min.x, game_object->speed.x - trigger_object->speed.x, game_object->speed.y - trigger_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
                     trigger_side = Side_LEFT;
                 }
-                if (test_wall(trigger_max.x, game_object->speed.x, game_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
+                if (test_side(trigger_max.x, game_object->speed.x - trigger_object->speed.x, game_object->speed.y - trigger_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
                     trigger_side = Side_RIGHT;
                 }
-                if (test_wall(trigger_min.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
+                if (test_side(trigger_min.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
                     trigger_side = Side_BOTTOM;
                 }
-                if (test_wall(trigger_max.y, game_object->speed.y, game_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
+                if (test_side(trigger_max.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
                     trigger_side = Side_TOP;
                 }
@@ -932,6 +937,7 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
                         if (trigger_side == Side_TOP)
                         {
                             deal_damage(memory, game_object, trigger_object, 1);
+                            trigger_object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
                             game_object->speed.y = JUMP_ON_ENEMY_BOOST;
                         }
                         else
@@ -941,6 +947,7 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
                                 game_object->speed = unit(game_object->pos - trigger_object->pos) * KNOCKBACK;
                                 memory->timers[game_object->invulnerable_timer] = 60;
                                 memory->timers[game_object->cant_control_timer] = 30;
+                                game_object->condition = Condition_FALLING;
                             }
                         }
                     }
@@ -1406,12 +1413,6 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
             game_object->condition = supposed_cond;
         }
 
-        //столкновения и движение
-        Game_Object_Type triggers[] = {
-            Game_Object_ZOMBIE,
-        };
-        check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
-
         //что делают состояния
         if (game_object->condition == Condition_IDLE || game_object->condition == Condition_MOOVING)
         {
@@ -1601,6 +1602,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 
     if (game_object->type == Game_Object_ZOMBIE)
     {
+
         V2 recent_speed = game_object->speed;
 
         //константы скорости
@@ -1795,14 +1797,26 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
             game_object->target_deflection = V2{0, 0};
         }
 
-        // draw_rect(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_GAME_OBJECT);
         // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
+        // draw_rect(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, game_object->layer);
     }
 
     if (game_object->healthpoints <= 0)
     {
         game_object->exists = false;
+    }
+}
+
+void check_hits(Game_memory *memory, Game_Object *game_object)
+{
+    if (game_object->type == Game_Object_PLAYER)
+    {
+        //столкновения и движение
+        Game_Object_Type triggers[] = {
+            Game_Object_ZOMBIE,
+        };
+        check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
     }
 }
 
@@ -2520,6 +2534,13 @@ extern "C" GAME_UPDATE(game_update)
         if (memory->game_objects[object_index].exists)
         {
             update_game_object(memory, &memory->game_objects[object_index], input, screen);
+        }
+    }
+    for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
+    {
+        if (memory->game_objects[object_index].exists)
+        {
+            check_hits(memory, &memory->game_objects[object_index]);
         }
     }
 

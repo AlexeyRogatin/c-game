@@ -576,29 +576,21 @@ void loop_editing_render(win32_State *win32_state, Input *input)
         else if (win32_state->input_recording_index)
         {
             end_record_input(win32_state);
-            begin_input_play_back(win32_state, 1);
         }
-
-        // //начать сначала
-        // if (win32_state->input_playing_index)
-        // {
-        //     end_record_input(win32_state);
-        //     begin_input_play_back(win32_state, 1);
-        // }
+        if (win32_state->input_playing_index)
+        {
+            end_input_play_back(win32_state);
+            *input = {0};
+        }
     }
 
-    // if (input->p.went_down)
-    // {
-    //     if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
-    //     {
-    //         begin_input_play_back(win32_state, 1);
-    //     }
-    //     else if (win32_state->input_playing_index)
-    //     {
-    //         end_input_play_back(win32_state);
-    //         input = {0};
-    //     }
-    // }
+    if (input->p.went_down)
+    {
+        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
+        {
+            begin_input_play_back(win32_state, 1);
+        }
+    }
 
     if (win32_state->input_recording_index)
     {
