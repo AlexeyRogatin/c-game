@@ -261,6 +261,12 @@ f32 max(f32 a, f32 b)
     return result;
 }
 
+f32 clamp(f32 num, f32 b1, f32 b2)
+{
+    f32 result = min(1.0f, max(0.0f, num));
+    return result;
+}
+
 V2 min(V2 a, V2 b)
 {
     V2 result;

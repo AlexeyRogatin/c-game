@@ -130,11 +130,19 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[67] = win32_read_bmp("../data/health_bar.bmp");
     memory->bitmaps[68] = win32_read_bmp("../data/health.bmp");
     memory->bitmaps[69] = win32_read_bmp("../data/spikes.bmp");
+    memory->bitmaps[70] = win32_read_bmp("../data/toy_gun.bmp");
+    memory->bitmaps[71] = win32_read_bmp("../data/toy_gun_bullet.bmp");
 }
 
 V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
 {
     V2 result = (p - camera.pos) * camera.scale + screen.size * 0.5f;
+    return result;
+}
+
+V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
+{
+    V2 result = (p - screen.size * 0.5) / camera.scale + camera.pos;
     return result;
 }
 
@@ -584,10 +592,9 @@ void draw_light(Game_memory *memory, Bitmap screen, Camera camera, V2 world_pos,
         for (f32 x = rect.min.x; x <= rect.max.x; x++)
         {
             V2 d = {x, y};
-            f32 dist_sqr = length_sqr(d - center);
 
             ARGB pixel = {memory->darkness.pixels[(i32)y * (i32)memory->darkness.pitch + (i32)x]};
-            f32 intensity = min(pixel.a / 255.0f, dist_sqr / radius_sqr);
+            f32 intensity = min(pixel.a / 255.0f, length(d - center) / radius);
             memory->darkness.pixels[(i32)y * (i32)memory->darkness.pitch + (i32)x] = v4_to_argb({0, 0, 0, intensity}).argb;
         }
     }
@@ -624,6 +631,8 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         3, //жизни
         3, //максимальные жизни
 
+        1.0f, //урон
+
         pos,      //позиция
         {0, -12}, //коробка столкновения
         {25, 56},
@@ -636,6 +645,8 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         false, //инпут
         false,
         NULL,
+
+        0,
 
         1,                    //ускорение
         0.75,                 //трение
@@ -685,7 +696,15 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         game_object.go_left = random_int(&memory->__global_random_state, 0, 1);
         game_object.go_right = !game_object.go_left;
 
-        game_object.hit_box = V2{60, 70};
+        game_object.hit_box = V2{25, 56};
+    }
+
+    if (type == Game_Object_TOY_GUN)
+    {
+        game_object.healthpoints = 10000000;
+
+        game_object.collision_box = V2{5, 7} / 16 * TILE_SIZE_PIXELS;
+        game_object.collision_box_pos = V2{0.5, 2.5};
     }
 
     i32 slot_index = memory->game_object_count;
@@ -732,7 +751,7 @@ bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     return hit;
 }
 
-Collisions check_collision(Game_memory *memory, Game_Object *game_object)
+Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bounce)
 {
     Collisions collisions = {0};
 
@@ -751,6 +770,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
         f32 min_time = 1.0f;
         V2 wall_normal = V2{};
 
+        Collisions collision_iteration = {0};
         for (i32 tile_y = (i32)start_tile.y; tile_y <= finish_tile.y; tile_y++)
         {
             for (i32 tile_x = (i32)start_tile.x; tile_x <= finish_tile.x; tile_x++)
@@ -759,7 +779,6 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
                 Tile tile = memory->tile_map[index];
                 if (tile.solid)
                 {
-                    Collisions tile_collisions = {0};
 
                     V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
@@ -770,44 +789,46 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
                     if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{-1, 0};
-                        tile_collisions.x.happened = true;
-                        tile_collisions.x.tile_index = index;
-                        tile_collisions.x.tile_side = Side_LEFT;
+                        collision_iteration.x.happened = true;
+                        collision_iteration.y.happened = false;
+                        collision_iteration.x.tile_index = index;
+                        collision_iteration.x.tile_side = Side_LEFT;
                     }
                     if (test_side(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                     {
                         wall_normal = V2{1, 0};
-                        tile_collisions.x.happened = true;
-                        tile_collisions.x.tile_index = index;
-                        tile_collisions.x.tile_side = Side_RIGHT;
+                        collision_iteration.x.happened = true;
+                        collision_iteration.y.happened = false;
+                        collision_iteration.x.tile_index = index;
+                        collision_iteration.x.tile_side = Side_RIGHT;
                     }
                     if (test_side(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, -1};
-                        tile_collisions.y.happened = true;
-                        tile_collisions.x.happened = false;
-                        tile_collisions.y.tile_index = index;
-                        tile_collisions.y.tile_side = Side_BOTTOM;
+                        collision_iteration.y.happened = true;
+                        collision_iteration.x.happened = false;
+                        collision_iteration.y.tile_index = index;
+                        collision_iteration.y.tile_side = Side_BOTTOM;
                     }
                     if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
                         wall_normal = V2{0, 1};
-                        tile_collisions.y.happened = true;
-                        tile_collisions.x.happened = false;
-                        tile_collisions.y.tile_index = index;
-                        tile_collisions.y.tile_side = Side_TOP;
-                    }
-
-                    if (tile_collisions.x.happened)
-                    {
-                        collisions.x = tile_collisions.x;
-                    }
-                    if (tile_collisions.y.happened)
-                    {
-                        collisions.y = tile_collisions.y;
+                        collision_iteration.y.happened = true;
+                        collision_iteration.x.happened = false;
+                        collision_iteration.y.tile_index = index;
+                        collision_iteration.y.tile_side = Side_TOP;
                     }
                 }
             }
+        }
+
+        if (collision_iteration.x.happened)
+        {
+            collisions.x = collision_iteration.x;
+        }
+        if (collision_iteration.y.happened)
+        {
+            collisions.y = collision_iteration.y;
         }
 
         f32 time_epsilon = 0.01f;
@@ -823,7 +844,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object)
         total_speed *= 1.0f - min_time;
 
         //удаляем скорость столкновения
-        game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal;
+        game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal * (bounce + 1.0f);
         total_speed -= dot(total_speed, wall_normal) * wall_normal;
 
         remaining_time -= min_time * remaining_time;
@@ -932,17 +953,19 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
 
                 if (trigger_side != -1)
                 {
-                    if (trigger_object->type == Game_Object_ZOMBIE)
+                    if (game_object->type == Game_Object_PLAYER)
                     {
                         if (trigger_side == Side_TOP)
                         {
-                            deal_damage(memory, game_object, trigger_object, 1);
-                            trigger_object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
-                            game_object->speed.y = JUMP_ON_ENEMY_BOOST;
+                            if (deal_damage(memory, game_object, trigger_object, game_object->damage))
+                            {
+                                trigger_object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
+                                game_object->speed.y = JUMP_ON_ENEMY_BOOST;
+                            }
                         }
                         else
                         {
-                            if (deal_damage(memory, trigger_object, game_object, 1))
+                            if (deal_damage(memory, trigger_object, game_object, trigger_object->damage))
                             {
                                 game_object->speed = unit(game_object->pos - trigger_object->pos) * KNOCKBACK;
                                 memory->timers[game_object->invulnerable_timer] = 60;
@@ -951,9 +974,15 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
                             }
                         }
                     }
+                    if (game_object->type == Game_Object_TOY_GUN_BULLET)
+                    {
+                        if (deal_damage(memory, game_object, trigger_object, game_object->damage))
+                        {
+                            game_object->exists = false;
+                        }
+                    }
                 }
             }
-            break;
         }
     }
 }
@@ -1022,76 +1051,76 @@ Result:
 // //-1 хитбокс перемещается к низу
 // //0 xитбокс не перемещается
 // //1 хитбокс перемещается к верху
-// void changeHitBox(Game_Object *gameObject, V2 hitBox, i8 changePos)
+// void change_hit_box(Game_memory *memory, Game_Object *game_object, V2 hit_box, i8 changePos)
 // {
-//     V2 objTilePos = {roundf(gameObject->pos.x / TILE_SIZE_PIXELS),
-//                      roundf(gameObject->pos.y / TILE_SIZE_PIXELS)};
+//     game_object->hit_box = hit_box;
 
-//     i32 tileCountX = ceilf((hitBox.x - gameObject->hit_box.x) / TILE_SIZE_PIXELS);
-//     i32 tileCountY = ceilf((hitBox.y - gameObject->hit_box.y) / TILE_SIZE_PIXELS);
+//     V2 obj_pos = game_object->pos + game_object->hit_box_pos;
+
+//     V2 start_tile = floor(obj_pos - hit_box);
+//     V2 finish_tile = ceil(obj_pos + hit_box);
 
 //     if (changePos)
 //     {
 //         if (changePos == -1)
 //         {
-//             gameObject->pos.y += -gameObject->hit_box.y *0.5 + hitBox.y *0.5;
+//             game_object->pos.y += -game_object->hit_box.y * 0.5f + hit_box.y * 0.5f;
 //         }
 //         if (changePos == 1)
 //         {
-//             gameObject->pos.y += gameObject->hit_box.y *0.5 - hitBox.y *0.5;
+//             game_object->pos.y += game_object->hit_box.y * 0.5f - hit_box.y * 0.5f;
 //         }
 //     }
 
-//     for (i32 y = objTilePos.y - tileCountY; y <= objTilePos.y + tileCountY; y++)
+//     for (i32 y = (i32)start_tile.y; y <= (i32)finish_tile.y; y++)
 //     {
-//         for (i32 x = objTilePos.x - tileCountX; x <= objTilePos.x + tileCountX; x++)
+//         for (i32 x = (i32)start_tile.x; x <= (i32)finish_tile.x; x++)
 //         {
-//             i32 tileIndex = get_index(x,y);
-//             Tile tile = tile_map[tileIndex];
+//             i32 tileIndex = get_index(V2{(f32)x, (f32)y});
+//             Tile tile = memory->tile_map[tileIndex];
 
 //             if (tile.solid)
 //             {
 
 //                 V2 tilePos = get_tile_pos(tileIndex);
 
-//                 f32 recentObjTop = gameObject->pos.y + gameObject->hit_box.y *0.5;
-//                 f32 recentObjBottom = gameObject->pos.y - gameObject->hit_box.y *0.5;
-//                 f32 recentObjRight = gameObject->pos.x + gameObject->hit_box.x *0.5;
-//                 f32 recentObjLeft = gameObject->pos.x - gameObject->hit_box.x *0.5;
+//                 f32 recentObjTop = game_object->pos.y + game_object->hit_box.y * 0.5f;
+//                 f32 recentObjBottom = game_object->pos.y - game_object->hit_box.y * 0.5f;
+//                 f32 recentObjRight = game_object->pos.x + game_object->hit_box.x * 0.5f;
+//                 f32 recentObjLeft = game_object->pos.x - game_object->hit_box.x * 0.5f;
 
-//                 f32 objTop = gameObject->pos.y + hitBox.y *0.5;
-//                 f32 objBottom = gameObject->pos.y - hitBox.y *0.5;
-//                 f32 objRight = gameObject->pos.x + hitBox.x *0.5;
-//                 f32 objLeft = gameObject->pos.x - hitBox.x *0.5;
+//                 f32 objTop = game_object->pos.y + hit_box.y * 0.5f;
+//                 f32 objBottom = game_object->pos.y - hit_box.y * 0.5f;
+//                 f32 objRight = game_object->pos.x + hit_box.x * 0.5f;
+//                 f32 objLeft = game_object->pos.x - hit_box.x * 0.5f;
 
-//                 f32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS *0.5;
-//                 f32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS *0.5;
-//                 f32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS *0.5;
-//                 f32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS *0.5;
+//                 f32 tileTop = tilePos.y * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f + 0.001f;
+//                 f32 tileBottom = tilePos.y * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f - 0.001f;
+//                 f32 tileRight = tilePos.x * TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f + 0.001f;
+//                 f32 tileLeft = tilePos.x * TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f - 0.001f;
 
 //                 if (recentObjLeft >= tileRight && objLeft <= tileRight)
 //                 {
-//                     gameObject->pos.x -= objLeft - tileRight;
+//                     game_object->pos.x -= objLeft - tileRight;
 //                 }
 
 //                 if (recentObjRight <= tileLeft && objRight >= tileLeft)
 //                 {
-//                     gameObject->pos.x -= objRight - tileLeft;
+//                     game_object->pos.x -= objRight - tileLeft;
 //                 }
 
 //                 if (recentObjBottom >= tileTop && objBottom <= tileTop)
 //                 {
-//                     gameObject->pos.y -= objBottom - tileTop;
+//                     game_object->pos.y -= objBottom - tileTop;
 //                 }
 
 //                 if (recentObjTop <= tileBottom && objTop >= tileBottom)
 //                 {
-//                     gameObject->pos.y -= objTop - tileBottom;
+//                     game_object->pos.y -= objTop - tileBottom;
 //                 }
 //             }
 //         }
 //     }
-//     gameObject->hit_box = hitBox;
 // }
 
 i32 check_for_interactive_tiles(Game_memory *memory, Game_Object *game_object)
@@ -1108,7 +1137,7 @@ i32 check_for_interactive_tiles(Game_memory *memory, Game_Object *game_object)
     return result;
 }
 
-void update_game_object(Game_memory *memory, Game_Object *game_object, Input input, Bitmap screen)
+void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap screen)
 {
 #define RUNNING_ACCEL 3.8
 #define NORMAL_ACCEL 1.9
@@ -1121,11 +1150,10 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 #define LOOKING_DISTANCE 80
 #define COLLISION_EXPANCION 8
 
+    Game_Object *game_object = &memory->game_objects[index];
+
     if (game_object->type == Game_Object_PLAYER)
     {
-        //предпологаемое состояние
-        Condition supposed_cond;
-
         V2 recent_speed = game_object->speed;
 
         //движение игрока
@@ -1255,11 +1283,11 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 
         //столкновения
         Game_Object old_object = *game_object;
-        Collisions collisions = check_collision(memory, game_object);
+        Collisions collisions = check_collision(memory, game_object, 0);
 
         //функции движения, связанные с коллизией
         //состояние падает
-        supposed_cond = Condition_FALLING;
+        Condition supposed_cond = Condition_FALLING;
 
         //состояние стоит
         if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
@@ -1568,7 +1596,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
                 V2 tile_pos = get_tile_pos(tile_index);
                 if (tile.type == Tile_Type_EXIT)
                 {
-                    if (game_object->condition != Condition_FALLING)
+                    if (game_object->condition != Condition_FALLING && memory->timers[tile.interactive] < 0)
                     {
                         game_object->pos.x = tile_pos.x * TILE_SIZE_PIXELS;
                         game_object->speed = V2{0, 0};
@@ -1581,6 +1609,19 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
                     }
                 }
             }
+        }
+
+        //оружие
+        if (game_object->weapon)
+        {
+            Game_Object *weapon = &memory->game_objects[game_object->weapon];
+            weapon->pos = game_object->pos + game_object->collision_box_pos - weapon->collision_box_pos;
+            weapon->speed = V2{40.0f * game_object->looking_direction, 0};
+            if (game_object->layer < LAYER_GAME_OBJECT)
+            {
+                weapon->speed = V2{(TILE_SIZE_PIXELS - weapon->collision_box.x) * 0.5f * game_object->looking_direction, 0};
+            }
+            weapon->looking_direction = game_object->looking_direction;
         }
 
         //прорисовка игрока
@@ -1646,7 +1687,7 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
 
         //поведение, связанное с тайлами
         Collisions collisions = {};
-        collisions = check_collision(memory, game_object);
+        collisions = check_collision(memory, game_object, 0);
 
         //если стоит
         if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
@@ -1802,9 +1843,115 @@ void update_game_object(Game_memory *memory, Game_Object *game_object, Input inp
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, game_object->layer);
     }
 
+    if (game_object->type >= Game_Object_TOY_GUN_BULLET && game_object->type <= Game_Object_TOY_GUN_BULLET)
+    {
+        f32 angle = 0.0f;
+        if (game_object->type == Game_Object_TOY_GUN_BULLET)
+        {
+            game_object->speed.y += -2.0f;
+            game_object->speed *= 0.9f;
+
+            if (memory->timers[game_object->cant_control_timer] <= 0)
+            {
+                f32 tan = game_object->speed.y / game_object->speed.x;
+
+                angle = (f32)atan(tan);
+            }
+            else
+            {
+                angle = game_object->speed.x * 0.5f;
+            }
+        }
+
+        Collisions collisions = check_collision(memory, game_object, 0.75f);
+        if ((collisions.x.happened || collisions.y.happened) && memory->timers[game_object->cant_control_timer] <= 0)
+        {
+            memory->timers[game_object->cant_control_timer] = 600;
+        }
+
+        f32 alpha = 1;
+        if (memory->timers[game_object->cant_control_timer] > 0)
+        {
+            alpha = memory->timers[game_object->cant_control_timer] / 600.0f;
+        }
+
+        if (memory->timers[game_object->cant_control_timer] == 1)
+        {
+            game_object->exists = false;
+        }
+
+        Game_Object_Type triggering_objects[] = {
+            Game_Object_ZOMBIE,
+        };
+        check_object_collision(memory, game_object, triggering_objects, sizeof(triggering_objects) / sizeof(Game_Object_Type));
+
+        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, angle, memory->bitmaps[Bitmap_type_TOY_GUN_BULLET], alpha, LAYER_GAME_OBJECT);
+    }
+
+    if (game_object->type >= Game_Object_TOY_GUN && game_object->type <= Game_Object_TOY_GUN)
+    {
+        Game_Object *player = &memory->game_objects[0];
+
+        f32 gravity = 0.0f;
+        f32 friction = 0.90f;
+        if (!player->weapon)
+        {
+            gravity = -0.5f;
+        }
+
+        game_object->speed.y += gravity;
+
+        game_object->speed.x *= friction;
+
+        check_collision(memory, game_object, 0);
+
+        if (input.x.went_down)
+        {
+            if ((player->condition == Condition_CROUCHING_IDLE || player->condition == Condition_CROUCHING_MOOVING))
+            {
+                if (!player->weapon)
+                {
+                    Rect object_rect = Rect{game_object->pos + game_object->collision_box_pos - game_object->collision_box * 0.5 - player->collision_box * 0.5, game_object->pos + game_object->collision_box_pos + game_object->collision_box * 0.5 + player->collision_box * 0.5};
+                    V2 collision_point = V2{player->pos.x, player->pos.y + player->collision_box_pos.y - player->collision_box.y * 0.75f};
+                    if (collision_point.x >= object_rect.min.x && collision_point.x <= object_rect.max.x &&
+                        collision_point.y >= object_rect.min.y && collision_point.y <= object_rect.max.y)
+                    {
+                        player->weapon = index;
+                    }
+                }
+                else
+                {
+                    player->weapon = 0;
+                    game_object->speed.x = (f32)game_object->looking_direction * 10;
+                }
+            }
+            else if (player->weapon == index)
+            {
+                Game_Object *bullet = add_game_object(memory, Game_Object_TOY_GUN_BULLET, game_object->pos + V2{game_object->collision_box.x * 0.5f - 2, 3});
+                bullet->speed = V2{40.0f * game_object->looking_direction, 0};
+                bullet->damage = 1;
+                bullet->collision_box = V2{1, 1} / 16 * TILE_SIZE_PIXELS;
+                bullet->collision_box_pos = V2{0, 0.5} / 16 * TILE_SIZE_PIXELS;
+                bullet->hit_box = V2{1, 1} / 16 * TILE_SIZE_PIXELS;
+                bullet->hit_box_pos = V2{0, 0.5} / 16 * TILE_SIZE_PIXELS;
+                bullet->cant_control_timer = add_timer(memory, -1);
+                bullet->looking_direction = game_object->looking_direction;
+            }
+        }
+
+        game_object->layer = player->layer;
+
+        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_TOY_GUN], 1, game_object->layer);
+    }
+
     if (game_object->healthpoints <= 0)
     {
         game_object->exists = false;
+        if (game_object->weapon)
+        {
+            memory->game_objects[game_object->weapon].speed = game_object->speed;
+            game_object->weapon = 0;
+        }
     }
 }
 
@@ -1926,7 +2073,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         "       #  "
         "TT      ##"
         "          "
-        "    N     "
+        "    NX    "
         "    ##    "
         "#TT=#  ###"
         "###=    ##"
@@ -1934,14 +2081,6 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     };
 
     char *enter_chunks[] = {
-        // "          "
-        // "          "
-        // "       # N"
-        // "        # "
-        // "          "
-        // "          "
-        // "          "
-        // "          ",
         // "          "
         // "          "
         // "     N    "
@@ -2225,6 +2364,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         //addPlayer
                         V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0.0f, 0.001f};
                         add_game_object(memory, Game_Object_PLAYER, spawn_pos);
+                        add_game_object(memory, Game_Object_TOY_GUN, spawn_pos);
                         memory->camera.target = spawn_pos;
                         border_camera(memory, screen);
                         memory->camera.pos = memory->camera.target;
@@ -2461,7 +2601,7 @@ void update_tile(Game_memory *memory, i32 tile_index)
         }
         else if (memory->timers[tile->interactive] == 0)
         {
-            memory->transition_is_on = true;
+            memory->transition_is_on = -1;
         }
     }
     break;
@@ -2480,11 +2620,6 @@ void update_tile(Game_memory *memory, i32 tile_index)
 
 extern "C" GAME_UPDATE(game_update)
 {
-    V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
-    i32 tile_count = i32(map_size.x * map_size.y);
-
-    i32 interval = SPRITE_SCALE;
-
     //выполняется один раз
     if (!memory->initialized)
     {
@@ -2496,7 +2631,7 @@ extern "C" GAME_UPDATE(game_update)
         memory->camera.target = V2{0, 0};
         memory->camera.scale = V2{1, 1} * 0.4f;
 
-        memory->darkness = create_empty_bitmap(screen.size / memory->camera.scale);
+        memory->darkness = create_empty_bitmap(ceil(screen.size / memory->camera.scale * memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS));
 
         memory->light_lvl = 1;
         memory->darkness_lvl = (f32)DARKNESS_USUAL_LVL;
@@ -2507,102 +2642,119 @@ extern "C" GAME_UPDATE(game_update)
         memory->game_object_count = 0;
         memory->timers_count = 0;
 
-        memory->transition_is_on = false;
+        memory->transition_is_on = 0;
+        memory->pause = false;
 
         generate_new_map(memory, screen);
-    }
-
-    if (input.r.went_down)
-    {
-        // if (game_objects[0].exists == true)
-        // {
-
-        //     draw_darkness = !draw_darkness;
-        // }
-        // else
-        {
-            generate_new_map(memory, screen);
-        }
     }
 
     //очистка экрана
     clear_screen(memory, screen, memory->darkness);
 
-    //обновление сущностей
-    for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
+    if (input.space.went_down)
     {
-        if (memory->game_objects[object_index].exists)
+        if (memory->pause)
         {
-            update_game_object(memory, &memory->game_objects[object_index], input, screen);
+            memory->pause = false;
         }
-    }
-    for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
-    {
-        if (memory->game_objects[object_index].exists)
+        else
         {
-            check_hits(memory, &memory->game_objects[object_index]);
+            memory->pause = true;
         }
     }
 
-    //плавный переход
-    if (memory->transition_is_on)
+    if (!memory->pause)
     {
-        memory->darkness_lvl += (1 - memory->darkness_lvl) * 0.1f;
-        memory->light_lvl += (0 - memory->light_lvl) * 0.1f;
-        memory->UI_alpha += (0 - memory->UI_alpha) * 0.1f;
-        if (memory->light_lvl < 0.001f)
+        memory->draw_queue_size = 0;
+
+        V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
+        i32 tile_count = i32(map_size.x * map_size.y);
+        i32 interval = SPRITE_SCALE;
+        if (input.r.went_down)
         {
-            memory->transition_is_on = false;
             generate_new_map(memory, screen);
         }
-    }
-    else
-    {
-        memory->darkness_lvl += (f32)(DARKNESS_USUAL_LVL - memory->darkness_lvl) * 0.1f;
-        memory->light_lvl += (1 - memory->light_lvl) * 0.1f;
-        memory->UI_alpha += (1 - memory->UI_alpha) * 0.1f;
-    }
 
-    //прорисовка темноты
-    if (memory->draw_darkness)
-    {
-        draw_bitmap(memory, memory->camera.pos, memory->darkness.size, 0, memory->darkness, 1, LAYER_DARKNESS);
-    }
+        //обновление сущностей
+        for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
+        {
+            if (memory->game_objects[object_index].exists)
+            {
+                update_game_object(memory, object_index, input, screen);
+            }
+        }
+        for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
+        {
+            if (memory->game_objects[object_index].exists)
+            {
+                check_hits(memory, &memory->game_objects[object_index]);
+            }
+        }
 
-    //обновление тайлов
-    for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
-    {
-        update_tile(memory, tile_index);
+        //плавный переход
+        if (memory->transition_is_on == -1)
+        {
+            memory->darkness_lvl += (1 - memory->darkness_lvl) * 0.1f;
+            memory->light_lvl += (0 - memory->light_lvl) * 0.1f;
+            memory->UI_alpha += (0 - memory->UI_alpha) * 0.1f;
+            if (memory->light_lvl < 0.001f)
+            {
+                memory->transition_is_on = 1;
+                generate_new_map(memory, screen);
+            }
+        }
+        else if (memory->transition_is_on == 1)
+        {
+            memory->darkness_lvl += (f32)(DARKNESS_USUAL_LVL - memory->darkness_lvl) * 0.1f;
+            memory->light_lvl += (1 - memory->light_lvl) * 0.1f;
+            memory->UI_alpha += (1 - memory->UI_alpha) * 0.1f;
+            if (memory->light_lvl > 9.999f)
+            {
+                memory->transition_is_on = 0;
+                generate_new_map(memory, screen);
+            }
+        }
+
+        //прорисовка темноты
+        if (!memory->draw_darkness)
+        {
+            draw_bitmap(memory, memory->camera.pos + memory->darkness.size / (screen.size / memory->camera.scale) * 0.5, memory->darkness.size * TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x, 0, memory->darkness, 1, LAYER_DARKNESS);
+        }
+
+        //обновление тайлов
+        for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
+        {
+            update_tile(memory, tile_index);
+        }
+
+        update_timers(memory);
     }
 
     //сортируем qrawQueue
-    Drawing new_draw_queue[1024 * 8];
-    i32 new_draw_queue_size = 0;
-    Layer layer = (Layer)0;
 
     //to do переделать под insertion sort
-    while (new_draw_queue_size != memory->draw_queue_size)
+    i32 mistakes;
+    do
     {
-        for (i32 drawing_index = 0; drawing_index < memory->draw_queue_size; drawing_index++)
+        mistakes = 0;
+        for (i32 drawing_index = 1; drawing_index < memory->draw_queue_size; drawing_index++)
         {
-            if (memory->draw_queue[drawing_index].layer == layer)
+            if (memory->draw_queue[drawing_index].layer < memory->draw_queue[drawing_index - 1].layer)
             {
-                memory->draw_queue[drawing_index].pos = world_to_screen(screen, memory->camera, memory->draw_queue[drawing_index].pos);
-                memory->draw_queue[drawing_index].size *= memory->camera.scale;
-
-                new_draw_queue[new_draw_queue_size] = memory->draw_queue[drawing_index];
-                new_draw_queue_size++;
+                Drawing drawing = memory->draw_queue[drawing_index];
+                memory->draw_queue[drawing_index] = memory->draw_queue[drawing_index - 1];
+                memory->draw_queue[drawing_index - 1] = drawing;
+                mistakes++;
             }
         }
-        layer = (Layer)((i32)layer + 1);
-    }
+    } while (mistakes != 0);
 
-    memory->draw_queue_size = 0;
-
-    for (i32 i = 0; i < new_draw_queue_size; i++)
+    for (i32 i = 0; i < memory->draw_queue_size; i++)
     {
-        draw_item(screen, new_draw_queue[i]);
+        memory->draw_queue[i].pos = world_to_screen(screen, memory->camera, memory->draw_queue[i].pos);
+        memory->draw_queue[i].size *= memory->camera.scale;
+        draw_item(screen, memory->draw_queue[i]);
+        memory->draw_queue[i].pos = screen_to_world(screen, memory->camera, memory->draw_queue[i].pos);
+        memory->draw_queue[i].size /= memory->camera.scale;
     }
-
-    update_timers(memory);
 }

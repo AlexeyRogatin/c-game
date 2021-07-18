@@ -119,6 +119,8 @@ typedef enum
 {
     Game_Object_PLAYER,
     Game_Object_ZOMBIE,
+    Game_Object_TOY_GUN,
+    Game_Object_TOY_GUN_BULLET,
 } Game_Object_Type;
 
 typedef enum
@@ -159,6 +161,8 @@ typedef struct
     f32 healthpoints;
     f32 max_healthpoints;
 
+    f32 damage;
+
     V2 pos;
     V2 collision_box_pos;
     V2 collision_box;
@@ -167,6 +171,8 @@ typedef struct
     V2 speed;
     V2 deflection;
     V2 target_deflection;
+
+    i32 weapon;
 
     bool go_left;
     bool go_right;
@@ -238,6 +244,8 @@ typedef enum
     Bitmap_type_HEALTH_BAR,
     Bitmap_type_HEALTH,
     Bitmap_type_SPIKES,
+    Bitmap_type_TOY_GUN,
+    Bitmap_type_TOY_GUN_BULLET,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -275,7 +283,7 @@ typedef struct
     Drawing draw_queue[1024 * 8];
     i32 draw_queue_size;
 
-    bool transition_is_on;
+    i32 transition_is_on;
     f32 darkness_lvl;
 
     Tile tile_map[(CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2) * (CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2)];
@@ -297,6 +305,8 @@ typedef struct
 
     Read_BMP *win32_read_bmp;
     xoshiro256ss_state __global_random_state;
+
+    bool pause;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)
