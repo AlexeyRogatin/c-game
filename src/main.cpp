@@ -310,6 +310,11 @@ void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
                 }
             }
             break;
+            case 'T':
+            {
+                handle_button(&input->t, key_went_up);
+            }
+            break;
             case VK_SHIFT:
             {
                 handle_button(&input->shift, key_went_up);
@@ -765,6 +770,6 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         char buffer[256];
         sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        // OutputDebugStringA(buffer);
+        OutputDebugStringA(buffer);
     }
 }

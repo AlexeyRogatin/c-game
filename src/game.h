@@ -59,7 +59,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 11
+#define BUTTON_COUNT 12
 
 typedef union
 {
@@ -74,6 +74,7 @@ typedef union
         Button r;
         Button l;
         Button p;
+        Button t;
         Button shift;
         Button space;
     };
@@ -86,6 +87,8 @@ typedef enum
     DRAWING_TYPE_RECT,
     DRAWING_TYPE_BITMAP,
     DRAWING_TYPE_OLD_BITMAP,
+    DRAWING_TYPE_LIGHT,
+    DRAWING_TYPE_OLD_LIGHT,
 } Drawing_Type;
 
 typedef enum
@@ -107,6 +110,7 @@ typedef struct
     Drawing_Type type;
     V2 pos;
     V2 size;
+    V2 inner_size;
     f32 angle;
     f32 alpha;
     u32 color;
@@ -154,6 +158,14 @@ typedef struct
 
 typedef struct
 {
+    i32 id;
+    i32 index;
+} Game_Object_Handle;
+
+typedef struct
+{
+    i32 id;
+
     Game_Object_Type type;
 
     bool exists;
@@ -172,7 +184,7 @@ typedef struct
     V2 deflection;
     V2 target_deflection;
 
-    i32 weapon;
+    Game_Object_Handle weapon;
 
     bool go_left;
     bool go_right;
@@ -283,17 +295,13 @@ typedef struct
     Drawing draw_queue[1024 * 8];
     i32 draw_queue_size;
 
-    i32 transition_is_on;
-    f32 darkness_lvl;
-
     Tile tile_map[(CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2) * (CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2)];
 
+    f32 transition;
     Bitmap darkness;
-    f32 light_lvl;
 
     i32 game_object_count;
     Game_Object game_objects[512];
-    f32 UI_alpha;
 
     bool draw_darkness;
 
@@ -307,6 +315,8 @@ typedef struct
     xoshiro256ss_state __global_random_state;
 
     bool pause;
+
+    i32 id_count;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)

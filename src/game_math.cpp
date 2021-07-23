@@ -528,9 +528,14 @@ i32_8x operator<(f32_8x a, f32_8x b)
     return result;
 }
 
-void store(void *address, i32_8x data, i32_8x mask)
+void mask_store(void *address, i32_8x data, i32_8x mask)
 {
     _mm256_maskstore_epi32((int *)address, mask.v, data.v);
+}
+
+void store(void *address, i32_8x data)
+{
+    _mm256_store_si256((__m256i *)address, data.v);
 }
 
 struct V2_8x
@@ -633,6 +638,19 @@ V2_8x clamp(V2_8x v, V2_8x bord1, V2_8x bord2)
         min(bord2.x, max(v.x, bord1.x)),
         min(bord2.y, max(v.y, bord1.y)),
     };
+    return result;
+}
+
+f32_8x sqrt_8x(f32_8x a)
+{
+    f32_8x result = {_mm256_sqrt_ps(*(__m256 *)&a)};
+    return result;
+}
+
+f32_8x length_8x(V2_8x a)
+{
+    f32_8x length_sqr = a.x * a.x + a.y * a.y;
+    f32_8x result = sqrt_8x(length_sqr);
     return result;
 }
 
