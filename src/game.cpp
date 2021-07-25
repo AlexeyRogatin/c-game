@@ -147,6 +147,14 @@ V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
     return result;
 }
 
+V2 screen_to_darkness(Bitmap screen, Game_memory memory, V2 p)
+{
+    f32 scale = TILE_SIZE_PIXELS / memory.bitmaps[Bitmap_type_BRICKS].size.x;
+    V2 offset = memory.camera.pos - (screen.size / memory.camera.scale - memory.darkness.size * scale) * 0.5f - floor((memory.camera.pos - (screen.size / memory.camera.scale - memory.darkness.size * scale) * 0.5f) / scale) * scale;
+    V2 result = (p / memory.camera.scale + offset) / scale;
+    return result;
+}
+
 //drawing
 void draw_rect(Game_memory *memory, V2 pos, V2 size, f32 angle, u32 color, Layer layer)
 {
@@ -585,15 +593,14 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_OLD_LIGHT)
+    if (drawing.type == DRAWING_TYPE_LIGHT)
     {
-        f32 inner_radius = drawing.inner_size.x;
-        f32 radius = drawing.size.x;
+        drawing.pos = screen_to_darkness(screen, *memory, drawing.pos);
+        f32 scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale.x;
+        f32 inner_radius = drawing.inner_size.x * scale;
+        f32 radius = drawing.size.x * scale;
         inner_radius *= 1.0f - fabsf(memory->transition);
         radius *= 1.0f - fabsf(memory->transition);
-        f32 darkness_scale = memory->darkness.size.x / screen.size.x;
-        radius *= darkness_scale;
-        drawing.pos *= darkness_scale;
 
         Rect rect = {
             drawing.pos - V2{radius, radius},
@@ -620,15 +627,14 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_LIGHT)
+    if (drawing.type == DRAWING_TYPE_OLD_LIGHT)
     {
-        f32 inner_radius = drawing.inner_size.x;
-        f32 radius = drawing.size.x;
+        drawing.pos = screen_to_darkness(screen, *memory, drawing.pos);
+        f32 scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale.x;
+        f32 inner_radius = drawing.inner_size.x * scale;
+        f32 radius = drawing.size.x * scale;
         inner_radius *= 1.0f - fabsf(memory->transition);
         radius *= 1.0f - fabsf(memory->transition);
-        f32 darkness_scale = memory->darkness.size.x / screen.size.x;
-        radius *= darkness_scale;
-        drawing.pos *= darkness_scale;
 
         Rect rect = {
             drawing.pos - V2{radius, radius},
@@ -2008,7 +2014,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             else if (player->weapon.index == index && memory->timers[player->cant_control_timer] < 0 && memory->timers[game_object->cant_control_timer] < 0)
             {
                 Game_Object *bullet = add_game_object(memory, Game_Object_TOY_GUN_BULLET, game_object->pos + V2{game_object->collision_box.x * 0.5f - 2, 3});
-                bullet->speed = V2{40.0f * game_object->looking_direction, 0};
+                bullet->speed = V2{45.0f * game_object->looking_direction * random_float(&memory->__global_random_state, 0.75f, 1.0f), random_float(&memory->__global_random_state, -1, 5)};
                 bullet->damage = 1;
                 bullet->collision_box = V2{1, 1} / 16 * TILE_SIZE_PIXELS;
                 bullet->collision_box_pos = V2{0, 0.5} / 16 * TILE_SIZE_PIXELS;
@@ -2838,7 +2844,7 @@ extern "C" GAME_UPDATE(game_update)
         if (!memory->draw_darkness)
         {
             f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
-            draw_bitmap(memory, round((memory->camera.pos + memory->darkness.size / (screen.size / memory->camera.scale) * 0.5) / scale) * scale, memory->darkness.size * scale, 0, memory->darkness, 1, LAYER_DARKNESS);
+            draw_bitmap(memory, floor((memory->camera.pos - (screen.size / memory->camera.scale - memory->darkness.size * scale) * 0.5f) / scale) * scale, memory->darkness.size * scale, 0, memory->darkness, 1, LAYER_DARKNESS);
         }
 
         //обновление тайлов
