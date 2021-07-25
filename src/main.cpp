@@ -206,139 +206,6 @@ f64 win32_get_time()
     return result;
 }
 
-void process_messages(HWND window, Input *input, WINDOWPLACEMENT *g_wpPrev)
-{
-    for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
-    {
-        Button *button = &input->buttons[button_index];
-        button->went_up = false;
-        button->went_down = false;
-    }
-
-    MSG message;
-    while (PeekMessageA(&message, window, 0, 0, PM_REMOVE))
-    {
-        switch (message.message)
-        {
-        case WM_KEYUP:
-        case WM_KEYDOWN:
-        {
-            DWORD key_code = (DWORD)message.wParam;
-            bool key_went_up = (message.lParam & (1 << 31)) != 0;
-            switch (key_code)
-            {
-            case VK_LEFT:
-            {
-                handle_button(&input->left, key_went_up);
-            }
-            break;
-            case VK_RIGHT:
-            {
-                handle_button(&input->right, key_went_up);
-            }
-            break;
-            case VK_DOWN:
-            {
-                handle_button(&input->down, key_went_up);
-            }
-            break;
-            case VK_UP:
-            {
-                handle_button(&input->up, key_went_up);
-            }
-            break;
-            case 'Z':
-            {
-                handle_button(&input->z, key_went_up);
-            }
-            break;
-            case 'X':
-            {
-                handle_button(&input->x, key_went_up);
-            }
-            break;
-            case 'R':
-            {
-                handle_button(&input->r, key_went_up);
-            }
-            break;
-            case 'L':
-            {
-                handle_button(&input->l, key_went_up);
-            }
-            break;
-            case 'P':
-            {
-                handle_button(&input->p, key_went_up);
-            }
-            break;
-            case 'F':
-            {
-                if (key_went_up)
-                {
-                    //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
-                    DWORD window_style = GetWindowLong(window, GWL_STYLE);
-                    DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
-                    if (window_style & WS_OVERLAPPEDWINDOW)
-                    {
-                        MONITORINFO monitor_info = {sizeof(monitor_info)};
-                        if (GetWindowPlacement(window, g_wpPrev) &&
-                            GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
-                        {
-                            SetWindowLong(window, GWL_STYLE,
-                                          window_style & ~WS_OVERLAPPEDWINDOW);
-                            SetWindowLong(window, GWL_EXSTYLE,
-                                          window_ex_style & ~WS_EX_LAYERED);
-
-                            SetWindowPos(window, HWND_NOTOPMOST,
-                                         monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
-                                         monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
-                                         monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                                         SWP_FRAMECHANGED);
-                        }
-                    }
-                    else
-                    {
-                        SetWindowLong(window, GWL_STYLE,
-                                      window_style | WS_OVERLAPPEDWINDOW);
-                        SetWindowLong(window, GWL_EXSTYLE,
-                                      window_ex_style | WS_EX_LAYERED);
-                        SetWindowPlacement(window, g_wpPrev);
-                        SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0,
-                                     SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
-                    }
-                }
-            }
-            break;
-            case 'T':
-            {
-                handle_button(&input->t, key_went_up);
-            }
-            break;
-            case VK_SHIFT:
-            {
-                handle_button(&input->shift, key_went_up);
-            }
-            break;
-            case VK_SPACE:
-            {
-                handle_button(&input->space, key_went_up);
-            }
-            break;
-            case VK_ESCAPE:
-            {
-                running = false;
-            }
-            break;
-            }
-        }
-        break;
-        default:
-            DefWindowProc(window, message.message, message.wParam, message.lParam);
-        }
-    }
-}
-
 #define TASK_QUEUE_SIZE 1024
 
 typedef struct
@@ -468,12 +335,17 @@ void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *s
     *dest++ = 0;
 }
 
+typedef enum
+{
+    Replay_State_NONE,
+    Replay_State_RECORDING,
+    Replay_State_REPLAYING,
+} Replay_State;
+
 typedef struct
 {
-    HANDLE recording_handle;
-    HANDLE play_back_handle;
-    i32 input_recording_index;
-    i32 input_playing_index;
+    HANDLE handle;
+    Replay_State replay_state;
     Game_memory *memory;
     char exe_file_name[MAX_PATH];
     char *exe_file_one_past_last_slash;
@@ -484,18 +356,18 @@ void get_file_path(win32_State *win32_state, char *file_name, i32 dest_count, ch
     cat_strings(win32_state->exe_file_one_past_last_slash - win32_state->exe_file_name, win32_state->exe_file_name, string_length(file_name), file_name, dest_count, dest);
 }
 
-void begin_record_input(win32_State *win32_state, i32 input_recording_index)
+void begin_record_input(win32_State *win32_state)
 {
     //открываем файл для записи движений
-    win32_state->input_recording_index = input_recording_index;
+    win32_state->replay_state = Replay_State_RECORDING;
 
     char file_name[256];
-    sprintf_s(file_name, 256, "loop_edit%i.gmi", input_recording_index);
+    sprintf_s(file_name, 256, "loop_edit.gmi");
 
     char file_path[MAX_PATH];
     get_file_path(win32_state, file_name, sizeof(file_path), file_path);
 
-    win32_state->recording_handle = CreateFileA(
+    win32_state->handle = CreateFileA(
         file_path,
         GENERIC_WRITE,
         NULL,
@@ -505,28 +377,28 @@ void begin_record_input(win32_State *win32_state, i32 input_recording_index)
         NULL);
 
     DWORD bytes_written;
-    WriteFile(win32_state->recording_handle, win32_state->memory, sizeof(Game_memory), &bytes_written, 0);
+    WriteFile(win32_state->handle, win32_state->memory, sizeof(Game_memory), &bytes_written, 0);
 }
 
 void end_record_input(win32_State *win32_state)
 {
     //закрываем файл для записи движений
-    CloseHandle(win32_state->recording_handle);
-    win32_state->input_recording_index = 0;
+    CloseHandle(win32_state->handle);
+    win32_state->replay_state = Replay_State_NONE;
 }
 
-void begin_input_play_back(win32_State *win32_state, i32 input_playing_index)
+void begin_input_play_back(win32_State *win32_state)
 {
     //открываем файл для чтения движений
-    win32_state->input_playing_index = input_playing_index;
+    win32_state->replay_state = Replay_State_REPLAYING;
 
     char file_name[256];
-    sprintf_s(file_name, 256, "loop_edit%i.gmi", input_playing_index);
+    sprintf_s(file_name, 256, "loop_edit.gmi");
 
     char file_path[MAX_PATH];
     get_file_path(win32_state, file_name, sizeof(file_path), file_path);
 
-    win32_state->play_back_handle = CreateFileA(
+    win32_state->handle = CreateFileA(
         file_path,
         GENERIC_READ,
         FILE_SHARE_READ,
@@ -536,72 +408,46 @@ void begin_input_play_back(win32_State *win32_state, i32 input_playing_index)
         NULL);
 
     DWORD bytes_read;
-    assert(ReadFile(win32_state->play_back_handle, win32_state->memory, sizeof(Game_memory), &bytes_read, 0));
+    assert(ReadFile(win32_state->handle, win32_state->memory, sizeof(Game_memory), &bytes_read, 0));
     assert(bytes_read == sizeof(Game_memory));
 }
 
 void end_input_play_back(win32_State *win32_state)
 {
     //закрываем файл для чтения движений
-    CloseHandle(win32_state->play_back_handle);
-    win32_state->input_playing_index = 0;
+    CloseHandle(win32_state->handle);
+    win32_state->replay_state = Replay_State_NONE;
 }
 
 void win32_record_input(win32_State *win32_state, Input *input)
 {
     //продолжаем записывать движения
     DWORD bytes_written;
-    WriteFile(win32_state->recording_handle, input, sizeof(Input), &bytes_written, 0);
+    WriteFile(win32_state->handle, input, sizeof(Input), &bytes_written, 0);
 }
 
 void win32_play_back_input(win32_State *win32_state, Input *input)
 {
     DWORD bytes_read;
-    if (ReadFile(win32_state->play_back_handle, input, sizeof(Input), &bytes_read, 0))
+    if (ReadFile(win32_state->handle, input, sizeof(Input), &bytes_read, 0))
     {
         if (bytes_read == 0)
         {
             //повторяем проход
-            i32 playing_index = win32_state->input_playing_index;
             end_input_play_back(win32_state);
-            begin_input_play_back(win32_state, playing_index);
-            ReadFile(win32_state->play_back_handle, input, sizeof(Input), &bytes_read, 0);
+            begin_input_play_back(win32_state);
+            ReadFile(win32_state->handle, input, sizeof(Input), &bytes_read, 0);
         }
     }
 }
 
 void loop_editing_render(win32_State *win32_state, Input *input)
 {
-    if (input->l.went_down)
-    {
-        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
-        {
-            begin_record_input(win32_state, 1);
-        }
-        else if (win32_state->input_recording_index)
-        {
-            end_record_input(win32_state);
-        }
-        if (win32_state->input_playing_index)
-        {
-            end_input_play_back(win32_state);
-            *input = {0};
-        }
-    }
-
-    if (input->p.went_down)
-    {
-        if (win32_state->input_recording_index == 0 && win32_state->input_playing_index == 0)
-        {
-            begin_input_play_back(win32_state, 1);
-        }
-    }
-
-    if (win32_state->input_recording_index)
+    if (win32_state->replay_state == Replay_State_RECORDING)
     {
         win32_record_input(win32_state, input);
     }
-    if (win32_state->input_playing_index)
+    if (win32_state->replay_state == Replay_State_REPLAYING)
     {
         win32_play_back_input(win32_state, input);
     }
@@ -616,6 +462,166 @@ void win32_get_exe_file_name(win32_State *win32_state)
         if (*scan == '\\')
         {
             win32_state->exe_file_one_past_last_slash = scan + 1;
+        }
+    }
+}
+
+void process_messages(HWND window, win32_State *win32_state, Input *input, WINDOWPLACEMENT *g_wpPrev)
+{
+    for (i32 button_index = 0; button_index < BUTTON_COUNT; button_index++)
+    {
+        Button *button = &input->buttons[button_index];
+        button->went_up = false;
+        button->went_down = false;
+    }
+
+    MSG message;
+    while (PeekMessageA(&message, window, 0, 0, PM_REMOVE))
+    {
+        switch (message.message)
+        {
+        case WM_KEYUP:
+        case WM_KEYDOWN:
+        {
+            DWORD key_code = (DWORD)message.wParam;
+            bool key_went_up = (message.lParam & (1 << 31)) != 0;
+            switch (key_code)
+            {
+            case VK_LEFT:
+            {
+                handle_button(&input->left, key_went_up);
+            }
+            break;
+            case VK_RIGHT:
+            {
+                handle_button(&input->right, key_went_up);
+            }
+            break;
+            case VK_DOWN:
+            {
+                handle_button(&input->down, key_went_up);
+            }
+            break;
+            case VK_UP:
+            {
+                handle_button(&input->up, key_went_up);
+            }
+            break;
+            case 'Z':
+            {
+                handle_button(&input->z, key_went_up);
+            }
+            break;
+            case 'X':
+            {
+                handle_button(&input->x, key_went_up);
+            }
+            break;
+            case 'R':
+            {
+                handle_button(&input->r, key_went_up);
+            }
+            break;
+            case 'L':
+            {
+                handle_button(&input->l, key_went_up);
+
+                if (key_went_up)
+                {
+
+                    if (win32_state->replay_state == Replay_State_NONE)
+                    {
+                        begin_record_input(win32_state);
+                    }
+                    else if (win32_state->replay_state == Replay_State_RECORDING)
+                    {
+                        end_record_input(win32_state);
+                    }
+                }
+            }
+            break;
+            case 'P':
+            {
+                handle_button(&input->p, key_went_up);
+
+                if (key_went_up)
+                {
+
+                    if (win32_state->replay_state == Replay_State_NONE)
+                    {
+                        begin_input_play_back(win32_state);
+                    }
+                    else if (win32_state->replay_state == Replay_State_REPLAYING)
+                    {
+                        end_input_play_back(win32_state);
+                        *input = {0};
+                    }
+                }
+            }
+            break;
+            case 'F':
+            {
+                if (key_went_up)
+                {
+                    //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
+                    DWORD window_style = GetWindowLong(window, GWL_STYLE);
+                    DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
+                    if (window_style & WS_OVERLAPPEDWINDOW)
+                    {
+                        MONITORINFO monitor_info = {sizeof(monitor_info)};
+                        if (GetWindowPlacement(window, g_wpPrev) &&
+                            GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
+                        {
+                            SetWindowLong(window, GWL_STYLE,
+                                          window_style & ~WS_OVERLAPPEDWINDOW);
+                            SetWindowLong(window, GWL_EXSTYLE,
+                                          window_ex_style & ~WS_EX_LAYERED);
+
+                            SetWindowPos(window, HWND_NOTOPMOST,
+                                         monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                                         monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                                         monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                                         SWP_FRAMECHANGED);
+                        }
+                    }
+                    else
+                    {
+                        SetWindowLong(window, GWL_STYLE,
+                                      window_style | WS_OVERLAPPEDWINDOW);
+                        SetWindowLong(window, GWL_EXSTYLE,
+                                      window_ex_style | WS_EX_LAYERED);
+                        SetWindowPlacement(window, g_wpPrev);
+                        SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0,
+                                     SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+                    }
+                }
+            }
+            break;
+            case 'T':
+            {
+                handle_button(&input->t, key_went_up);
+            }
+            break;
+            case VK_SHIFT:
+            {
+                handle_button(&input->shift, key_went_up);
+            }
+            break;
+            case VK_SPACE:
+            {
+                handle_button(&input->space, key_went_up);
+            }
+            break;
+            case VK_ESCAPE:
+            {
+                running = false;
+            }
+            break;
+            }
+        }
+        break;
+        default:
+            DefWindowProc(window, message.message, message.wParam, message.lParam);
         }
     }
 }
@@ -732,7 +738,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             game_code = win32_load_game_code(source_dll_full_path, temp_dll_full_path);
         }
 
-        process_messages(window, &input, &g_wpPrev);
+        process_messages(window, &win32_state, &input, &g_wpPrev);
 
         loop_editing_render(&win32_state, &input);
 
@@ -767,9 +773,9 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         prev_time = win32_get_time();
 
-        char buffer[256];
-        sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
+        // char buffer[256];
+        // sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        OutputDebugStringA(buffer);
+        // OutputDebugStringA(buffer);
     }
 }

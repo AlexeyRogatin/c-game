@@ -132,6 +132,7 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[69] = win32_read_bmp("../data/spikes.bmp");
     memory->bitmaps[70] = win32_read_bmp("../data/toy_gun.bmp");
     memory->bitmaps[71] = win32_read_bmp("../data/toy_gun_bullet.bmp");
+    memory->bitmaps[72] = win32_read_bmp("../data/excalator.bmp");
 }
 
 V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
@@ -214,7 +215,7 @@ void clear_screen(Game_memory *memory, Bitmap screen, Bitmap darkness)
         for (i32 x = 0; x <= darkness.size.x; x++)
         {
             ARGB dark_pixel = {0xFF000000};
-            dark_pixel.a = (u8)(dark_pixel.a * (0.9f + (1.0f - 0.9f) * fabsf(memory->transition)));
+            dark_pixel.a = (u8)min((dark_pixel.a * ((f32)DARKNESS_USUAL_LVL + (1.01f - (f32)DARKNESS_USUAL_LVL) * fabsf(memory->transition))), dark_pixel.a);
             darkness.pixels[y * darkness.pitch + x] = dark_pixel.argb;
         }
     }
@@ -655,7 +656,7 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
         V2_8x drawing_pos_8x = V2_8x{set1_f32(drawing.pos.x), set1_f32(drawing.pos.y)};
         f32_8x radius_8x = set1_f32(radius);
         f32_8x zero_8x = set1_f32(0.0f);
-        i32_8x one_8x = set1_i32(1);
+        f32_8x one_8x = set1_f32(1.0f);
 
         for (i32 y = (i32)rect.min.y; y <= (i32)rect.max.y; y++)
         {
@@ -666,7 +667,7 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
                 V2_8x d = V2_8x{set1_f32((f32)x) + zero_to_seven, y_8x};
 
                 V4_8x pixel = argb_to_v4_8x(load(pixel_ptr));
-                f32_8x intensity = min(pixel.a, length_8x(d - drawing_pos_8x) / radius_8x);
+                f32_8x intensity = min(pixel.a, (length_8x(d - drawing_pos_8x) + one_8x) / radius_8x);
                 store(pixel_ptr, v4_to_argb_8x({zero_8x, zero_8x, zero_8x, intensity}));
 
                 pixel_ptr += 8;
@@ -1004,10 +1005,19 @@ bool deal_damage(Game_memory *memory, Game_Object *dealing_object, Game_Object *
 #define JUMP_ON_ENEMY_BOOST 15
 #define KNOCKBACK 20
 
-void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_object_count)
+typedef struct
+{
+    Side side;
+    Game_Object *object;
+} Object_Collision;
+
+Object_Collision check_object_collision(Game_memory *memory, Game_Object *game_object, Game_Object_Type *triggering_objects, i32 triggering_object_count)
 {
     V2 obj_pos = game_object->pos + game_object->hit_box_pos - game_object->speed;
+    Object_Collision collision = {};
+    collision.side = (Side)-1;
 
+    f32 min_time = 1.0f;
     for (i32 game_object_index = 0; game_object_index < memory->game_object_count; game_object_index++)
     {
         for (i32 trigger_index = 0; trigger_index < triggering_object_count; trigger_index++)
@@ -1015,67 +1025,36 @@ void check_object_collision(Game_memory *memory, Game_Object *game_object, Game_
             Game_Object *trigger_object = &memory->game_objects[game_object_index];
             if (trigger_object->exists && trigger_object->type == triggering_objects[trigger_index])
             {
-                f32 min_time = 1.0f;
 
                 V2 trigger_min = (trigger_object->hit_box + game_object->hit_box) * (-0.5);
                 V2 trigger_max = (trigger_object->hit_box + game_object->hit_box) * 0.5;
 
                 V2 obj_rel_pos = obj_pos - (trigger_object->pos - trigger_object->speed + trigger_object->hit_box_pos);
 
-                i8 trigger_side = -1;
-
                 if (test_side(trigger_min.x, game_object->speed.x - trigger_object->speed.x, game_object->speed.y - trigger_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
-                    trigger_side = Side_LEFT;
+                    collision.side = Side_LEFT;
+                    collision.object = trigger_object;
                 }
                 if (test_side(trigger_max.x, game_object->speed.x - trigger_object->speed.x, game_object->speed.y - trigger_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                 {
-                    trigger_side = Side_RIGHT;
+                    collision.side = Side_RIGHT;
+                    collision.object = trigger_object;
                 }
                 if (test_side(trigger_min.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
-                    trigger_side = Side_BOTTOM;
+                    collision.side = Side_BOTTOM;
+                    collision.object = trigger_object;
                 }
                 if (test_side(trigger_max.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                 {
-                    trigger_side = Side_TOP;
-                }
-
-                if (trigger_side != -1)
-                {
-                    if (game_object->type == Game_Object_PLAYER)
-                    {
-                        if (trigger_side == Side_TOP)
-                        {
-                            if (deal_damage(memory, game_object, trigger_object, game_object->damage))
-                            {
-                                trigger_object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
-                                game_object->speed.y = JUMP_ON_ENEMY_BOOST;
-                                game_object->condition = Condition_FALLING;
-                            }
-                        }
-                        else
-                        {
-                            if (deal_damage(memory, trigger_object, game_object, trigger_object->damage))
-                            {
-                                game_object->speed = unit(game_object->pos - trigger_object->pos) * KNOCKBACK;
-                                memory->timers[game_object->invulnerable_timer] = 60;
-                                memory->timers[game_object->cant_control_timer] = 30;
-                                game_object->condition = Condition_FALLING;
-                            }
-                        }
-                    }
-                    if (game_object->type == Game_Object_TOY_GUN_BULLET)
-                    {
-                        if (deal_damage(memory, game_object, trigger_object, game_object->damage))
-                        {
-                            game_object->exists = false;
-                        }
-                    }
+                    collision.side = Side_TOP;
+                    collision.object = trigger_object;
                 }
             }
         }
     }
+    return collision;
 }
 
 bool check_vision_box(Game_memory *memory, i32 *trigger_index, V2 vision_point, V2 vision_pos, V2 vision_size, Game_Object_Type *triggering_objects, i32 triggering_objects_count, bool goes_through_walls, bool draw)
@@ -1439,10 +1418,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         if (expanded_collision.happened)
         {
             V2 collided_x_tile_pos = get_tile_pos(expanded_collision.tile_index);
+            i8 tile_direction = (i8)unit(V2{(collided_x_tile_pos.x * TILE_SIZE_PIXELS - game_object->pos.x), 0}).x;
             i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
             i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
 
-            if (!memory->tile_map[collision_up_tile_index].solid && !memory->tile_map[collision_frontup_tile_index].solid)
+            if (!memory->tile_map[collision_up_tile_index].solid && !memory->tile_map[collision_frontup_tile_index].solid && tile_direction == game_object->looking_direction)
             {
                 if (player_delta.y < 0 &&
                     old_object.pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 3 &&
@@ -2007,9 +1987,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (input.x.went_down && player)
         {
-            if ((player->condition == Condition_CROUCHING_IDLE || player->condition == Condition_CROUCHING_MOOVING))
+            if ((player->condition == Condition_CROUCHING_IDLE || player->condition == Condition_CROUCHING_MOOVING || player->condition == Condition_HANGING_LOOKING_DOWN))
             {
-                if (!player->weapon.index)
+                if (!player->weapon.index && player->condition != Condition_HANGING_LOOKING_DOWN)
                 {
                     Rect object_rect = Rect{game_object->pos + game_object->collision_box_pos - game_object->collision_box * 0.5 - player->collision_box * 0.5, game_object->pos + game_object->collision_box_pos + game_object->collision_box * 0.5 + player->collision_box * 0.5};
                     V2 collision_point = V2{player->pos.x, player->pos.y + player->collision_box_pos.y - player->collision_box.y * 0.75f};
@@ -2053,7 +2033,51 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
         Game_Object_Type triggers[] = {
             Game_Object_ZOMBIE,
         };
-        check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
+        Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
+
+        if (obj_collision.side != -1)
+        {
+            if (obj_collision.side == Side_TOP)
+            {
+                if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
+                {
+                    obj_collision.object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
+                    game_object->speed.y = JUMP_ON_ENEMY_BOOST;
+                    game_object->condition = Condition_FALLING;
+                }
+            }
+            else
+            {
+                if (deal_damage(memory, obj_collision.object, game_object, obj_collision.object->damage))
+                {
+                    game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
+                    game_object->speed.y *= 0.5;
+                    memory->timers[game_object->invulnerable_timer] = 60;
+                    memory->timers[game_object->cant_control_timer] = 30;
+                    game_object->condition = Condition_FALLING;
+                }
+            }
+        }
+    }
+    if (game_object->type == Game_Object_TOY_GUN_BULLET)
+    {
+        //столкновения и движение
+        Game_Object_Type triggers[] = {
+            Game_Object_ZOMBIE,
+        };
+        Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
+
+        if (obj_collision.side != -1)
+        {
+
+            if (game_object->type == Game_Object_TOY_GUN_BULLET)
+            {
+                if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
+                {
+                    game_object->exists = false;
+                }
+            }
+        }
     }
 }
 
@@ -2148,7 +2172,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 
         "          "
         "  N       "
-        "TTTT      "
+        "TTTTC     "
         "       ## "
         "    =     "
         "####=  TT#"
@@ -2728,7 +2752,7 @@ extern "C" GAME_UPDATE(game_update)
         memory->camera.target = V2{0, 0};
         memory->camera.scale = V2{1, 1} * 0.4f;
 
-        memory->darkness = create_empty_bitmap(ceil(screen.size / memory->camera.scale * memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS));
+        memory->darkness = create_empty_bitmap(ceil(screen.size / memory->camera.scale * memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS) + V2{1, 1});
 
         memory->draw_darkness = false;
         memory->transition = 0;
@@ -2756,6 +2780,29 @@ extern "C" GAME_UPDATE(game_update)
         else
         {
             memory->pause = true;
+        }
+    }
+
+    //плавный переход
+    if (memory->transition < 0)
+    {
+        memory->pause = true;
+        memory->transition += (-1.0f - memory->transition) * 0.08f;
+        if (memory->transition < -0.999f)
+        {
+            memory->transition = 0.999f;
+            generate_new_map(memory, screen);
+            memory->pause = false;
+        }
+    }
+    else if (memory->transition > 0)
+    {
+        memory->pause = true;
+        memory->transition += (0.0f - memory->transition) * 0.08f;
+        if (memory->transition < 0.001f)
+        {
+            memory->transition = 0.0f;
+            memory->pause = false;
         }
     }
 
@@ -2790,7 +2837,8 @@ extern "C" GAME_UPDATE(game_update)
         //прорисовка темноты
         if (!memory->draw_darkness)
         {
-            draw_bitmap(memory, memory->camera.pos + memory->darkness.size / (screen.size / memory->camera.scale) * 0.5, memory->darkness.size * TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x, 0, memory->darkness, 1, LAYER_DARKNESS);
+            f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
+            draw_bitmap(memory, round((memory->camera.pos + memory->darkness.size / (screen.size / memory->camera.scale) * 0.5) / scale) * scale, memory->darkness.size * scale, 0, memory->darkness, 1, LAYER_DARKNESS);
         }
 
         //обновление тайлов
@@ -2828,28 +2876,5 @@ extern "C" GAME_UPDATE(game_update)
         draw_item(memory, screen, memory->draw_queue[i]);
         memory->draw_queue[i].pos = screen_to_world(screen, memory->camera, memory->draw_queue[i].pos);
         memory->draw_queue[i].size /= memory->camera.scale;
-    }
-
-    //плавный переход
-    if (memory->transition < 0)
-    {
-        memory->pause = true;
-        memory->transition += (-1.0f - memory->transition) * 0.1f;
-        if (memory->transition < -0.999f)
-        {
-            memory->transition = 0.999f;
-            generate_new_map(memory, screen);
-            memory->pause = false;
-        }
-    }
-    else if (memory->transition > 0)
-    {
-        memory->pause = true;
-        memory->transition += (0.0f - memory->transition) * 0.1f;
-        if (memory->transition < 0.001f)
-        {
-            memory->transition = 0.0f;
-            memory->pause = false;
-        }
     }
 }

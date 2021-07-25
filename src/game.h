@@ -258,6 +258,7 @@ typedef enum
     Bitmap_type_SPIKES,
     Bitmap_type_TOY_GUN,
     Bitmap_type_TOY_GUN_BULLET,
+    Bitmap_type_EXCALATOR,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -272,6 +273,7 @@ typedef enum
     Tile_Type_EXIT,
     Tile_Type_PARAPET,
     Tile_Type_SPIKES,
+    Tile_Type_EXCALATOR,
 } Tile_type;
 
 typedef struct
