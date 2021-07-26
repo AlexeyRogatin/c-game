@@ -147,11 +147,19 @@ V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
     return result;
 }
 
-V2 screen_to_darkness(Bitmap screen, Game_memory memory, V2 p)
+V2 screen_to_darkness(Bitmap screen, Game_memory *memory, V2 p)
 {
-    f32 scale = TILE_SIZE_PIXELS / memory.bitmaps[Bitmap_type_BRICKS].size.x;
-    V2 offset = memory.camera.pos - (screen.size / memory.camera.scale - memory.darkness.size * scale) * 0.5f - floor((memory.camera.pos - (screen.size / memory.camera.scale - memory.darkness.size * scale) * 0.5f) / scale) * scale;
-    V2 result = (p / memory.camera.scale + offset) / scale;
+    f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
+    V2 offset = memory->camera.pos - screen.size / memory->camera.scale * 0.5f - floor((memory->camera.pos - screen.size / memory->camera.scale * 0.5f) / scale) * scale;
+    V2 result = (p / memory->camera.scale + offset) / scale;
+    return result;
+}
+
+V2 darkness_to_screen(Bitmap screen, Game_memory *memory, V2 p)
+{
+    f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
+    V2 offset = memory->camera.pos - screen.size / memory->camera.scale * 0.5f - floor((memory->camera.pos - screen.size / memory->camera.scale * 0.5f) / scale) * scale;
+    V2 result = (p * scale - offset) * memory->camera.scale;
     return result;
 }
 
@@ -352,6 +360,27 @@ V4_8x bilinear_blend(Bilinear_Sample_8x sample, V2_8x f)
 // };
 
 // #define TIMED_BLOCK(name, times) Timed_Scope __scope_##name = {__rdtsc(), #name, times};
+
+bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
+{
+    bool hit = false;
+
+    if (obj_speed_x != 0.0f)
+    {
+        f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
+        f32 y = obj_rel_pos_y + time * obj_speed_y;
+        if ((time >= 0.0f) && (time < *min_time))
+        {
+            if (y >= min_y && y <= max_y)
+            {
+                *min_time = time;
+                hit = true;
+            }
+        }
+    }
+
+    return hit;
+}
 
 void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
 {
@@ -593,9 +622,11 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_LIGHT)
+    if (drawing.type == DRAWING_TYPE_OLD_LIGHT)
     {
-        drawing.pos = screen_to_darkness(screen, *memory, drawing.pos);
+        V2 start_tile = floor(screen_to_world(screen, memory->camera, drawing.pos - drawing.size) / TILE_SIZE_PIXELS);
+        V2 finish_tile = ceil(screen_to_world(screen, memory->camera, drawing.pos + drawing.size) / TILE_SIZE_PIXELS);
+        drawing.pos = screen_to_darkness(screen, memory, drawing.pos);
         f32 scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale.x;
         f32 inner_radius = drawing.inner_size.x * scale;
         f32 radius = drawing.size.x * scale;
@@ -614,22 +645,50 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
 
         f32 radius_sqr = radius * radius;
 
+        V2 tile_min = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * (-0.5) * memory->camera.scale;
+        V2 tile_max = V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5 * memory->camera.scale;
+
         for (f32 y = rect.min.y; y <= rect.max.y; y++)
         {
             for (f32 x = rect.min.x; x <= rect.max.x; x++)
             {
                 V2 d = {x, y};
+                V2 light_ray = darkness_to_screen(screen, memory, d - drawing.pos);
 
                 ARGB pixel = {memory->darkness.pixels[(i32)y * (i32)memory->darkness.pitch + (i32)x]};
                 f32 intensity = min(pixel.a / 255.0f, length(d - drawing.pos) / radius);
+
+                for (f32 tile_y = start_tile.y; tile_y <= finish_tile.y; tile_y++)
+                {
+                    for (f32 tile_x = start_tile.x; tile_x <= finish_tile.x; tile_x++)
+                    {
+                        V2 tile_pos = V2{tile_x, tile_y};
+                        if (memory->tile_map[get_index(tile_pos)].solid)
+                        {
+                            V2 rel_pos = darkness_to_screen(screen, memory, drawing.pos) - world_to_screen(screen, memory->camera, tile_pos * TILE_SIZE_PIXELS);
+                            f32 min_time = 1.0f;
+                            test_side(tile_min.x, light_ray.x, light_ray.y, rel_pos.x, rel_pos.y, &min_time, tile_min.y, tile_max.y);
+                            test_side(tile_max.x, light_ray.x, light_ray.y, rel_pos.x, rel_pos.y, &min_time, tile_min.y, tile_max.y);
+                            test_side(tile_min.y, light_ray.y, light_ray.x, rel_pos.y, rel_pos.x, &min_time, tile_min.x, tile_max.x);
+                            test_side(tile_max.y, light_ray.y, light_ray.x, rel_pos.y, rel_pos.x, &min_time, tile_min.x, tile_max.x);
+                            if (min_time < 1.0f)
+                            {
+                                intensity = pixel.a / 255.0f;
+                                tile_y = finish_tile.y + 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 memory->darkness.pixels[(i32)y * (i32)memory->darkness.pitch + (i32)x] = v4_to_argb({0, 0, 0, intensity}).argb;
             }
         }
     }
 
-    if (drawing.type == DRAWING_TYPE_OLD_LIGHT)
+    if (drawing.type == DRAWING_TYPE_LIGHT)
     {
-        drawing.pos = screen_to_darkness(screen, *memory, drawing.pos);
+        drawing.pos = screen_to_darkness(screen, memory, drawing.pos);
         f32 scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale.x;
         f32 inner_radius = drawing.inner_size.x * scale;
         f32 radius = drawing.size.x * scale;
@@ -826,27 +885,6 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 }
 
 #define DISTANT_HANGING_VALUE 7
-
-bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, f32 obj_rel_pos_y, f32 *min_time, f32 min_y, f32 max_y)
-{
-    bool hit = false;
-
-    if (obj_speed_x != 0.0f)
-    {
-        f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
-        f32 y = obj_rel_pos_y + time * obj_speed_y;
-        if ((time >= 0.0f) && (time < *min_time))
-        {
-            if (y >= min_y && y <= max_y)
-            {
-                *min_time = time;
-                hit = true;
-            }
-        }
-    }
-
-    return hit;
-}
 
 Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bounce)
 {
@@ -1719,7 +1757,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                        game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y},
                     0, game_object->sprite, 1, game_object->layer);
 
-        draw_light(memory, game_object->pos, 200, 300);
+        draw_light(memory, game_object->pos, 0, 100);
     }
 
 #define ZOMBIE_ACCEL 6
@@ -2756,7 +2794,7 @@ extern "C" GAME_UPDATE(game_update)
 
         memory->camera.pos = V2{0, 0};
         memory->camera.target = V2{0, 0};
-        memory->camera.scale = V2{1, 1} * 0.4f;
+        memory->camera.scale = V2{1, 1} * 2.4f;
 
         memory->darkness = create_empty_bitmap(ceil(screen.size / memory->camera.scale * memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS) + V2{1, 1});
 
@@ -2844,7 +2882,7 @@ extern "C" GAME_UPDATE(game_update)
         if (!memory->draw_darkness)
         {
             f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
-            draw_bitmap(memory, floor((memory->camera.pos - (screen.size / memory->camera.scale - memory->darkness.size * scale) * 0.5f) / scale) * scale, memory->darkness.size * scale, 0, memory->darkness, 1, LAYER_DARKNESS);
+            draw_bitmap(memory, floor((memory->camera.pos - screen.size / memory->camera.scale * 0.5f) / scale) * scale + screen.size / memory->camera.scale * 0.5f - V2{2, 2}, memory->darkness.size * scale, 0, memory->darkness, 1, LAYER_DARKNESS);
         }
 
         //обновление тайлов
