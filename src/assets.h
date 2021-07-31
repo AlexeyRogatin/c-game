@@ -158,7 +158,7 @@ Letter stbtt_read_font(char *font_name, i32 letter_code, f32 letter_height)
             stbtt_kerningentry entry = table[index];
             if (entry.glyph1 == stbtt_FindGlyphIndex(&font, letter_code) && entry.glyph2 == stbtt_FindGlyphIndex(&font, code))
             {
-                kernings[code] = (i32)(entry.advance * scale;
+                kernings[code] = (i32)(entry.advance * scale);
                 break;
             }
         }
