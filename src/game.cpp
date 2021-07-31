@@ -61,29 +61,29 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
 {
     memory->bitmaps[0] = win32_read_bmp("./bitmaps/none.bmp");
     memory->bitmaps[1] = win32_read_bmp("./bitmaps/test.bmp");
-    memory->bitmaps[2] = win32_read_bmp("./bitmaps/dashaIdle.bmp");
-    memory->bitmaps[3] = win32_read_bmp("./bitmaps/dashaJump.bmp");
-    memory->bitmaps[4] = win32_read_bmp("./bitmaps/dashaCrouchIdle.bmp");
-    memory->bitmaps[5] = win32_read_bmp("./bitmaps/dashaWall.bmp");
-    memory->bitmaps[6] = win32_read_bmp("./bitmaps/dashaWall.bmp");
-    memory->bitmaps[7] = win32_read_bmp("./bitmaps/dashaWall.bmp");
-    memory->bitmaps[8] = win32_read_bmp("./bitmaps/dashaLookingUp.bmp");
-    memory->bitmaps[9] = win32_read_bmp("./bitmaps/dashaStep1.bmp");
-    memory->bitmaps[10] = win32_read_bmp("./bitmaps/dashaStep2.bmp");
-    memory->bitmaps[11] = win32_read_bmp("./bitmaps/dashaStep3.bmp");
-    memory->bitmaps[12] = win32_read_bmp("./bitmaps/dashaStep4.bmp");
-    memory->bitmaps[13] = win32_read_bmp("./bitmaps/dashaStep5.bmp");
-    memory->bitmaps[14] = win32_read_bmp("./bitmaps/dashaStep6.bmp");
-    memory->bitmaps[15] = win32_read_bmp("./bitmaps/dashaCrouchIdle1.bmp");
-    memory->bitmaps[16] = win32_read_bmp("./bitmaps/dashaCrouchIdle2.bmp");
-    memory->bitmaps[17] = win32_read_bmp("./bitmaps/dashaCrouchIdle3.bmp");
-    memory->bitmaps[18] = win32_read_bmp("./bitmaps/dashaCrouchIdle4.bmp");
-    memory->bitmaps[19] = win32_read_bmp("./bitmaps/dashaCrouchStep1.bmp");
-    memory->bitmaps[20] = win32_read_bmp("./bitmaps/dashaCrouchStep2.bmp");
-    memory->bitmaps[21] = win32_read_bmp("./bitmaps/dashaCrouchStep3.bmp");
-    memory->bitmaps[22] = win32_read_bmp("./bitmaps/dashaCrouchStep4.bmp");
-    memory->bitmaps[23] = win32_read_bmp("./bitmaps/dashaCrouchStep5.bmp");
-    memory->bitmaps[24] = win32_read_bmp("./bitmaps/dashaCrouchStep6.bmp");
+    memory->bitmaps[2] = win32_read_bmp("./bitmaps/jermaIdle.bmp");
+    memory->bitmaps[3] = win32_read_bmp("./bitmaps/jermaJump.bmp");
+    memory->bitmaps[4] = win32_read_bmp("./bitmaps/jermaCrouchIdle.bmp");
+    memory->bitmaps[5] = win32_read_bmp("./bitmaps/jermaWall.bmp");
+    memory->bitmaps[6] = win32_read_bmp("./bitmaps/jermaWall.bmp");
+    memory->bitmaps[7] = win32_read_bmp("./bitmaps/jermaWall.bmp");
+    memory->bitmaps[8] = win32_read_bmp("./bitmaps/jermaLookingUp.bmp");
+    memory->bitmaps[9] = win32_read_bmp("./bitmaps/jermaStep1.bmp");
+    memory->bitmaps[10] = win32_read_bmp("./bitmaps/jermaStep2.bmp");
+    memory->bitmaps[11] = win32_read_bmp("./bitmaps/jermaStep3.bmp");
+    memory->bitmaps[12] = win32_read_bmp("./bitmaps/jermaStep4.bmp");
+    memory->bitmaps[13] = win32_read_bmp("./bitmaps/jermaStep5.bmp");
+    memory->bitmaps[14] = win32_read_bmp("./bitmaps/jermaStep6.bmp");
+    memory->bitmaps[15] = win32_read_bmp("./bitmaps/jermaCrouchIdle1.bmp");
+    memory->bitmaps[16] = win32_read_bmp("./bitmaps/jermaCrouchIdle2.bmp");
+    memory->bitmaps[17] = win32_read_bmp("./bitmaps/jermaCrouchIdle3.bmp");
+    memory->bitmaps[18] = win32_read_bmp("./bitmaps/jermaCrouchIdle4.bmp");
+    memory->bitmaps[19] = win32_read_bmp("./bitmaps/jermaCrouchStep1.bmp");
+    memory->bitmaps[20] = win32_read_bmp("./bitmaps/jermaCrouchStep2.bmp");
+    memory->bitmaps[21] = win32_read_bmp("./bitmaps/jermaCrouchStep3.bmp");
+    memory->bitmaps[22] = win32_read_bmp("./bitmaps/jermaCrouchStep4.bmp");
+    memory->bitmaps[23] = win32_read_bmp("./bitmaps/jermaCrouchStep5.bmp");
+    memory->bitmaps[24] = win32_read_bmp("./bitmaps/jermaCrouchStep6.bmp");
     memory->bitmaps[25] = win32_read_bmp("./bitmaps/zombieIdle.bmp");
     memory->bitmaps[26] = win32_read_bmp("./bitmaps/zombieStep1.bmp");
     memory->bitmaps[27] = win32_read_bmp("./bitmaps/zombieStep2.bmp");
@@ -129,12 +129,12 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[67] = win32_read_bmp("./bitmaps/health_bar.bmp");
     memory->bitmaps[68] = win32_read_bmp("./bitmaps/health.bmp");
     memory->bitmaps[69] = win32_read_bmp("./bitmaps/spikes.bmp");
-    memory->bitmaps[70] = win32_read_bmp("./bitmaps/toy_gun.bmp");
-    memory->bitmaps[71] = win32_read_bmp("./bitmaps/toy_gun_bullet.bmp");
-    memory->bitmaps[72] = win32_read_bmp("./bitmaps/none.bmp");
-    memory->bitmaps[73] = win32_read_bmp("./bitmaps/none.bmp");
-    memory->bitmaps[74] = win32_read_bmp("./bitmaps/none.bmp");
-    memory->bitmaps[75] = win32_read_bmp("./bitmaps/none.bmp");
+    memory->bitmaps[70] = win32_read_bmp("./bitmaps/toyGun.bmp");
+    memory->bitmaps[71] = win32_read_bmp("./bitmaps/toyGunBullet.bmp");
+    memory->bitmaps[72] = win32_read_bmp("./bitmaps/exitSign.bmp");
+    memory->bitmaps[73] = win32_read_bmp("./bitmaps/exitSignOff.bmp");
+    memory->bitmaps[74] = win32_read_bmp("./bitmaps/lamp.bmp");
+    memory->bitmaps[75] = win32_read_bmp("./bitmaps/lampOff.bmp");
 }
 
 void load_letters(Game_memory *memory, READ_FONT(stbtt_read_font), char *file_name, f32 letter_height)
@@ -194,8 +194,7 @@ void draw_light(Game_memory *memory, V2 pos, f32 world_radius, u32 color)
     drawing.pos = pos;
     drawing.size = V2{world_radius, world_radius};
     drawing.color = color;
-    drawing.bitmap = memory->bitmaps[Bitmap_type_NONE];
-    drawing.layer = LAYER_DARKNESS;
+    drawing.layer = LAYER_BACKGROUND_MAIN;
     assert(memory->draw_queue_size < 1024 * 8);
     memory->draw_queue[memory->draw_queue_size] = drawing;
     memory->draw_queue_size++;
@@ -1576,7 +1575,12 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 }
                 else if (game_object->condition == Condition_MOOVING)
                 {
-                    i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) / 35);
+                    f32 step_length = 35;
+                    if (length(game_object->sprite.size) > 600)
+                    {
+                        step_length = 50;
+                    }
+                    i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) / step_length);
                     while (step > 5)
                     {
                         step -= 6;
@@ -1696,14 +1700,14 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 UI_shake = {random_float(&memory->__global_random_state, -10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 10 * (0.5f - game_object->healthpoints / game_object->max_healthpoints)), random_float(&memory->__global_random_state, -5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints), 5 * (0.5f - game_object->healthpoints / game_object->max_healthpoints))};
             }
 
-            draw_bitmap(memory,
-                        memory->camera.pos + UI_shake + V2{-screen.size.x, screen.size.y} / memory->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
-                        V2{game_object->healthpoints / game_object->max_healthpoints * BAR_WIDTH, BAR_HEIGHT},
-                        0, memory->bitmaps[Bitmap_type_HEALTH], 1, LAYER_UI);
+            // draw_bitmap(memory,
+            //             memory->camera.pos + UI_shake + V2{-screen.size.x, screen.size.y} / memory->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)} - V2{(1 - game_object->healthpoints / game_object->max_healthpoints) * BAR_WIDTH, 0} / 2,
+            //             V2{game_object->healthpoints / game_object->max_healthpoints * BAR_WIDTH, BAR_HEIGHT},
+            //             0, memory->bitmaps[Bitmap_type_HEALTH], 1, LAYER_UI);
 
-            draw_bitmap(memory,
-                        memory->camera.pos + UI_shake + V2{-screen.size.x, screen.size.y} / memory->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
-                        V2{BAR_WIDTH, BAR_HEIGHT}, 0, memory->bitmaps[Bitmap_type_HEALTH_BAR], 1, LAYER_UI);
+            // draw_bitmap(memory,
+            //             memory->camera.pos + UI_shake + V2{-screen.size.x, screen.size.y} / memory->camera.scale * 0.5f + V2{BAR_WIDTH / 2 + INTERVAL, -(BAR_HEIGHT / 2 + INTERVAL)},
+            //             V2{BAR_WIDTH, BAR_HEIGHT}, 0, memory->bitmaps[Bitmap_type_HEALTH_BAR], 1, LAYER_UI);
 
             //взаимодействие с тайлами
 
@@ -3051,7 +3055,7 @@ extern "C" GAME_UPDATE(game_update)
             update_tile(memory, tile_index);
         }
 
-        draw_text(memory, "aiAWAWAWAWVA", memory->camera.pos - V2{screen.size.x / memory->camera.scale.x * 0.45f, 0.0f}, V2{0, 0}, 0, 0.0f, 0, 0.0f, LAYER_UI);
+        // draw_text(memory, "aiAWAWAWAWVA", memory->camera.pos - V2{screen.size.x / memory->camera.scale.x * 0.45f, 0.0f}, V2{0, 0}, 0, 0.0f, 0, 0.0f, LAYER_UI);
 
         update_timers(memory);
     }
