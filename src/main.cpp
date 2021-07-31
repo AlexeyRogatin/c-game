@@ -1,141 +1,11 @@
 #include "stdio.h"
 #include "game.h"
 #include "Windows.h"
+#include "assets.h"
 
 void foo(const char *str)
 {
     OutputDebugStringA(str);
-}
-
-typedef struct
-{
-    byte *data;
-    u32 size;
-} File_Buffer;
-
-bool win32_write_entire_file(char *file_name)
-{
-    bool result = false;
-
-    HANDLE file = CreateFileA(
-        file_name,
-        GENERIC_WRITE,
-        NULL,
-        NULL,
-        CREATE_ALWAYS,
-        NULL,
-        NULL);
-
-    assert(file != INVALID_HANDLE_VALUE);
-
-    DWORD file_size_high;
-    DWORD file_size = GetFileSize(file, &file_size_high);
-
-    byte *file_memory = (byte *)malloc(file_size);
-    DWORD bytes_written;
-
-    if (WriteFile(file, file_memory, file_size, &bytes_written, NULL))
-    {
-        result = true;
-    }
-
-    return result;
-}
-
-File_Buffer win32_read_entire_file(char *file_name)
-{
-    HANDLE file = CreateFileA(
-        file_name,
-        GENERIC_READ,
-        FILE_SHARE_READ,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL);
-
-    assert(file != INVALID_HANDLE_VALUE);
-
-    DWORD file_size_high;
-    DWORD file_size = GetFileSize(file, &file_size_high);
-
-    byte *file_memory = (byte *)malloc(file_size);
-    DWORD bytes_read = 0;
-
-    ReadFile(file, file_memory, file_size, &bytes_read, NULL);
-
-    File_Buffer result;
-    result.data = file_memory;
-    result.size = file_size;
-    return result;
-}
-
-//pack убирает промежутки между данными в struct
-#pragma pack(push, 1)
-
-typedef struct
-{
-    u16 signature;
-    u32 file_size;
-    u32 unused;
-    u32 data_offset;
-} Bmp_Header;
-
-typedef struct
-{
-    u32 header_size;
-    u32 width;
-    u32 height;
-    u16 planes;
-    u16 bits_per_pixel;
-    u32 compression;
-    u32 image_size;
-    u32 x_pixels_per_meter;
-    u32 y_pixels_per_meter;
-    u32 colors_used;
-    u32 important_colors;
-} Bmp_Info;
-#pragma pack(pop)
-
-READ_BMP(win32_read_bmp)
-{
-    File_Buffer file = win32_read_entire_file(file_name);
-    Bmp_Header *header = (Bmp_Header *)file.data;
-    Bmp_Info *info = (Bmp_Info *)(file.data + sizeof(Bmp_Header));
-    u32 *pixels = (u32 *)(file.data + header->data_offset);
-
-    u64 alignment = 8 * sizeof(u32);
-    u64 screen_buffer_size = 4 * (info->width + 2) * (info->height + 2);
-    screen_buffer_size += alignment - (screen_buffer_size % alignment);
-
-    u32 *new_pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
-    memset(new_pixels, 0, screen_buffer_size);
-    Bitmap result;
-    result.pitch = info->width + 2;
-    result.size = {(f32)info->width, (f32)info->height};
-
-    u32 bitmap_start_offset = result.pitch + 1;
-
-    for (u32 y = 0; y < info->height; y++)
-    {
-        for (u32 x = 0; x < info->width; x++)
-        {
-            ARGB pixel;
-            pixel.argb = pixels[y * info->width + x];
-            f32 alpha = (f32)(pixel.a / 0xFF);
-            pixel.r = (u8)roundf(pixel.r * alpha);
-            pixel.g = (u8)roundf(pixel.g * alpha);
-            pixel.b = (u8)roundf(pixel.b * alpha);
-
-            new_pixels[y * result.pitch + x + bitmap_start_offset] = pixel.argb;
-        }
-    }
-
-    // AA RR GG BB
-    result.pixels = new_pixels;
-
-    free(file.data);
-
-    return result;
 }
 
 bool running = true;
@@ -198,7 +68,7 @@ void handle_button(Button *button, bool key_went_up)
 
 u64 performance_frequency = 1;
 
-f64 win32_get_time()
+f64 win32_get_time(void)
 {
     LARGE_INTEGER ticks;
     QueryPerformanceCounter(&ticks);
@@ -633,6 +503,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     win32_state.memory = (Game_memory *)malloc(sizeof(Game_memory));
     memset(win32_state.memory, 0, sizeof(Game_memory));
     win32_state.memory->win32_read_bmp = &win32_read_bmp;
+    win32_state.memory->stbtt_read_font = &stbtt_read_font;
     win32_state.memory->__global_random_state = xorshift256_init(time(NULL));
 
     //файлы для динамичной перезагрузки
@@ -675,7 +546,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ATOM registeredClass = RegisterClassA(&wndClass);
 
     HWND window = CreateWindowExA(
-        WS_EX_LAYERED | WS_EX_TOPMOST,
+        0,
         wndClass.lpszClassName,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,

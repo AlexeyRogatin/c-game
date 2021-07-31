@@ -25,12 +25,14 @@ typedef u8 byte;
 
 #include "math.h"
 #include "game_math.cpp"
+#include <string.h>
 
 //fps
 #define TARGET_TIME_PER_FRAME (1.0f / 60.0f)
 #define DT ((f32)TARGET_TIME_PER_FRAME)
 
 #define PI 3.14159265359
+#define INT_INFINITY 2147483647
 
 #define TILE_SIZE_PIXELS 80
 #define CHUNK_SIZE_X 10
@@ -43,6 +45,12 @@ typedef u8 byte;
 
 #define ARRAY_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
+typedef struct
+{
+    byte *data;
+    u32 size;
+} File_Buffer;
+
 //битмап
 typedef struct
 {
@@ -50,6 +58,20 @@ typedef struct
     V2 size;
     i32 pitch;
 } Bitmap;
+
+Bitmap create_empty_bitmap(V2 size)
+{
+    u64 alignment = 8 * sizeof(u32);
+    u64 screen_buffer_size = 4 * ((i32)size.x + 2) * ((i32)size.y + 2);
+    screen_buffer_size += alignment - (screen_buffer_size % alignment);
+
+    Bitmap result;
+    result.pitch = (i32)size.x + 2;
+    result.size = size;
+    result.pixels = (u32 *)_aligned_malloc(screen_buffer_size, alignment);
+    memset(result.pixels, 0, screen_buffer_size);
+    return result;
+}
 
 //ввод
 typedef struct
@@ -89,6 +111,7 @@ typedef enum
     DRAWING_TYPE_OLD_BITMAP,
     DRAWING_TYPE_LIGHT,
     DRAWING_TYPE_OLD_LIGHT,
+    DRAWING_TYPE_TEXT,
 } Drawing_Type;
 
 typedef enum
@@ -110,11 +133,11 @@ typedef struct
     Drawing_Type type;
     V2 pos;
     V2 size;
-    V2 inner_size;
     f32 angle;
     f32 alpha;
     u32 color;
     Bitmap bitmap;
+    char *string;
     Layer layer;
 } Drawing;
 
@@ -125,6 +148,7 @@ typedef enum
     Game_Object_ZOMBIE,
     Game_Object_TOY_GUN,
     Game_Object_TOY_GUN_BULLET,
+    Game_Object_BOMB,
 } Game_Object_Type;
 
 typedef enum
@@ -181,6 +205,7 @@ typedef struct
     V2 hit_box_pos;
     V2 hit_box;
     V2 speed;
+    V2 delta;
     V2 deflection;
     V2 target_deflection;
 
@@ -258,14 +283,27 @@ typedef enum
     Bitmap_type_SPIKES,
     Bitmap_type_TOY_GUN,
     Bitmap_type_TOY_GUN_BULLET,
-    Bitmap_type_EXCALATOR,
+    Bitmap_type_EXIT_SIGN,
+    Bitmap_type_EXIT_SIGN_OFF,
+    Bitmap_type_LAMP,
+    Bitmap_type_LAMP_OFF,
     Bitmap_type_COUNT,
 } Bitmap_type;
+
+//буква
+typedef struct
+{
+    Bitmap bitmap;
+    V2 offset;
+    i32 *kernings;
+    i32 advance;
+} Letter;
 
 //тайлы
 typedef enum
 {
     Tile_Type_NONE,
+    Tile_Type_OCCUPIED,
     Tile_Type_NORMAL,
     Tile_Type_FLOOR,
     Tile_Type_BORDER,
@@ -273,7 +311,7 @@ typedef enum
     Tile_Type_EXIT,
     Tile_Type_PARAPET,
     Tile_Type_SPIKES,
-    Tile_Type_EXCALATOR,
+    Tile_Type_LAMP,
 } Tile_type;
 
 typedef struct
@@ -281,17 +319,20 @@ typedef struct
     Tile_type type;
     Bitmap sprite;
     bool solid;
-    i32 interactive;
+    i32 timer;
 } Tile;
 
 #define READ_BMP(name) Bitmap name(char *file_name)
 typedef READ_BMP(Read_BMP);
 
+#define READ_FONT(name) Letter name(char *file_name, i32 letter_code, f32 letter_height)
+typedef READ_FONT(Read_Font);
+
 //состояние игры
 typedef struct
 {
     //таймеры
-    i32 timers[512];
+    i32 timers[1024];
     i32 timers_count;
 
     Drawing draw_queue[1024 * 8];
@@ -305,20 +346,23 @@ typedef struct
     i32 game_object_count;
     Game_Object game_objects[512];
 
-    bool draw_darkness;
-
     bool initialized;
 
     Camera camera;
 
     Bitmap bitmaps[Bitmap_type_COUNT];
+    Letter letters[256];
 
     Read_BMP *win32_read_bmp;
+    Read_Font *stbtt_read_font;
+
     xoshiro256ss_state __global_random_state;
 
-    bool pause;
+    i32 pause;
 
     i32 id_count;
+
+    i32 lamp_count;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)
