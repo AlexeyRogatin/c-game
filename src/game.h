@@ -209,6 +209,7 @@ typedef struct
     V2 delta;
     V2 deflection;
     V2 target_deflection;
+    f32 angle;
 
     Game_Object_Handle weapon;
 

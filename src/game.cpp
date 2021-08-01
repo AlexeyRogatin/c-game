@@ -760,11 +760,12 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     game_object.collision_box_pos = V2{0, -12};
     game_object.collision_box = V2{25, 56};
     game_object.hit_box_pos = V2{0, -12};
-    game_object.hit_box = V2{46, 65};
+    game_object.hit_box = V2{52, 66};
     game_object.speed = V2{0, 0};
     game_object.delta = V2{0, 0};
     game_object.deflection = V2{0, 0};
     game_object.target_deflection = V2{0, 0};
+    game_object.angle = 0.0f;
 
     game_object.weapon = Game_Object_Handle{0, 0};
 
@@ -822,8 +823,6 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.go_left = random_int(&memory->__global_random_state, 0, 1);
         game_object.go_right = !game_object.go_left;
-
-        game_object.hit_box = V2{30, 65};
     }
 
     if (type == Game_Object_TOY_GUN)
@@ -855,12 +854,14 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     {
         game_object.collision_box = V2{6, 6} * SPRITE_SCALE;
         game_object.collision_box_pos = V2{0, 0.25f} * SPRITE_SCALE;
+        game_object.hit_box = V2{6, 6} * SPRITE_SCALE;
+        game_object.hit_box_pos = V2{0, 0.25f} * SPRITE_SCALE;
 
         game_object.gravity = -0.66f;
         game_object.friction = 0.97f;
 
         game_object.sprite = memory->bitmaps[Bitmap_type_BOMB];
-        game_object.bounce = 0.25f;
+        game_object.bounce = 0.4f;
         game_object.mass = 0.66f;
     }
 
@@ -1203,6 +1204,39 @@ Result:
     return vision_triggered;
 }
 
+#define ADDITIONAL_THROWING_SPEED V2{0, 15.0f};
+#define THROWING_SPEED(mass, speed) ((V2{25.0f * game_object->looking_direction, 10.0f} + speed) * mass)
+#define TOSSING_SPEED(mass, speed) ((V2{6.0f * game_object->looking_direction, 0.0f} + speed) * mass)
+
+//функция заставляет персонажа поднимать/бросать предметы
+bool pick_item_check(Game_Object *player, Game_Object *game_object, i32 index)
+{
+    bool result = false;
+    if ((player->condition == Condition_CROUCHING_IDLE || player->condition == Condition_CROUCHING_MOOVING || player->condition == Condition_HANGING_LOOKING_DOWN))
+    {
+        if (!player->weapon.index)
+        {
+            if (player->condition != Condition_HANGING_LOOKING_DOWN)
+            {
+                Rect object_rect = Rect{game_object->pos + game_object->collision_box_pos - game_object->collision_box * 0.5 - player->collision_box * 0.5, game_object->pos + game_object->collision_box_pos + game_object->collision_box * 0.5 + player->collision_box * 0.5};
+                V2 collision_point = V2{player->pos.x, player->pos.y + player->collision_box_pos.y - player->collision_box.y * 0.75f};
+                if (collision_point.x >= object_rect.min.x && collision_point.x <= object_rect.max.x &&
+                    collision_point.y >= object_rect.min.y && collision_point.y <= object_rect.max.y)
+                {
+                    player->weapon = {game_object->id, index};
+                }
+            }
+        }
+        else if (player->weapon.index == index)
+        {
+            player->weapon = {0, 0};
+            game_object->speed = TOSSING_SPEED(game_object->mass, player->speed);
+        }
+        result = true;
+    }
+    return result;
+}
+
 // //changePos принимает три значения: -1, 0, 1.
 // //-1 хитбокс перемещается к низу
 // //0 xитбокс не перемещается
@@ -1307,9 +1341,6 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 #define CROUCHING_ANIMATION_TIME 8
 #define LOOKING_DISTANCE 80
 #define COLLISION_EXPANCION 8
-
-#define THROWING_SPEED(mass, speed) ((V2{25.0f * game_object->looking_direction, 10.0f} + speed) * mass)
-#define TOSSING_SPEED(mass, speed) ((V2{6.0f * game_object->looking_direction, 0.0f} + speed) * mass)
 
     if (game_object->type == Game_Object_PLAYER)
     {
@@ -1773,10 +1804,24 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (input.s.went_down)
         {
-            Game_Object *bomb = add_game_object(memory, Game_Object_BOMB, game_object->pos);
+            V2 bomb_pos = game_object->pos + game_object->collision_box_pos - V2{0, 0.25f} * SPRITE_SCALE + V2{game_object->collision_box.x * 0.5f - 6.0f * SPRITE_SCALE * 0.5f, 0.0f} * (f32)game_object->looking_direction;
+            Game_Object *bomb = add_game_object(memory, Game_Object_BOMB, bomb_pos);
             if (game_object->condition != Condition_CROUCHING_IDLE && game_object->condition != Condition_CROUCHING_MOOVING)
             {
-                bomb->speed = THROWING_SPEED(bomb->mass, game_object->speed);
+                if (input.up.is_down)
+                {
+                    V2 player_momentum = game_object->speed + ADDITIONAL_THROWING_SPEED;
+                    bomb->speed = THROWING_SPEED(bomb->mass, player_momentum);
+                }
+                else if (game_object->condition == Condition_FALLING && input.down.is_down)
+                {
+                    V2 player_momentum = game_object->speed - ADDITIONAL_THROWING_SPEED;
+                    bomb->speed = THROWING_SPEED(bomb->mass, player_momentum);
+                }
+                else
+                {
+                    bomb->speed = THROWING_SPEED(bomb->mass, game_object->speed);
+                }
             }
             else
             {
@@ -1790,7 +1835,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             Game_Object *weapon = get_game_object(memory, game_object->weapon);
             if (weapon)
             {
-                weapon->pos = game_object->pos + game_object->collision_box_pos - weapon->collision_box_pos;
+                weapon->pos = game_object->pos + game_object->collision_box_pos - weapon->collision_box_pos + V2{game_object->collision_box.x * 0.5f - weapon->collision_box.x * 0.5f, 0} * (f32)game_object->looking_direction;
                 weapon->speed = V2{40.0f * game_object->looking_direction, 0};
                 if (game_object->layer < LAYER_GAME_OBJECT)
                 {
@@ -2043,110 +2088,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         draw_bitmap(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, game_object->layer);
     }
 
-    //предметы, которые можно поднять
-    if (game_object->type >= Game_Object_TOY_GUN && game_object->type <= Game_Object_BOMB)
-    {
-        Game_Object *player = get_game_object(memory, memory->player);
-
-        f32 gravity = game_object->gravity;
-
-        if (player && player->weapon.index == index)
-        {
-            gravity = 0.0f;
-            game_object->layer = player->layer;
-        }
-
-        game_object->speed.y += gravity;
-
-        game_object->speed.x *= game_object->friction;
-
-        check_collision(memory, game_object, game_object->bounce);
-
-        if (input.x.went_down && player)
-        {
-            if ((player->condition == Condition_CROUCHING_IDLE || player->condition == Condition_CROUCHING_MOOVING || player->condition == Condition_HANGING_LOOKING_DOWN))
-            {
-                if (!player->weapon.index)
-                {
-                    if (player->condition != Condition_HANGING_LOOKING_DOWN)
-                    {
-                        Rect object_rect = Rect{game_object->pos + game_object->collision_box_pos - game_object->collision_box * 0.5 - player->collision_box * 0.5, game_object->pos + game_object->collision_box_pos + game_object->collision_box * 0.5 + player->collision_box * 0.5};
-                        V2 collision_point = V2{player->pos.x, player->pos.y + player->collision_box_pos.y - player->collision_box.y * 0.75f};
-                        if (collision_point.x >= object_rect.min.x && collision_point.x <= object_rect.max.x &&
-                            collision_point.y >= object_rect.min.y && collision_point.y <= object_rect.max.y)
-                        {
-                            player->weapon = {game_object->id, index};
-                        }
-                    }
-                }
-                else if (player->weapon.index == index)
-                {
-                    player->weapon = {0, 0};
-                    game_object->speed = TOSSING_SPEED(game_object->mass, player->speed);
-                }
-            }
-        }
-        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, 0, game_object->sprite, 1, game_object->layer);
-    }
-
-    //стреляющее оружие
-    if (game_object->type >= Game_Object_TOY_GUN && game_object->type <= Game_Object_TOY_GUN)
-    {
-        Game_Object *player = get_game_object(memory, memory->player);
-        if (input.x.went_down && player && game_object->condition != Condition_CROUCHING_IDLE && game_object->condition != Condition_CROUCHING_MOOVING && game_object->condition != Condition_HANGING_LOOKING_DOWN)
-        {
-            if (player->weapon.index == index)
-            {
-                if (memory->timers[player->cant_control_timer] < 0 && memory->timers[game_object->cant_control_timer] < 0)
-                {
-                    Game_Object *bullet = add_game_object(memory, Game_Object_TOY_GUN_BULLET, game_object->pos + V2{game_object->collision_box.x * 0.5f - 2, 3});
-                    bullet->speed = V2{45.0f * game_object->looking_direction * random_float(&memory->__global_random_state, 0.75f, 1.0f), random_float(&memory->__global_random_state, -1, 5)};
-                    bullet->looking_direction = game_object->looking_direction;
-
-                    memory->timers[game_object->cant_control_timer] = 10;
-                }
-            }
-        }
-    }
-
-    //метательное оружие
-    if (game_object->type >= Game_Object_BOMB && game_object->type <= Game_Object_BOMB)
-    {
-        if (game_object->type >= Game_Object_TOY_GUN && game_object->type <= Game_Object_TOY_GUN)
-        {
-            Game_Object *player = get_game_object(memory, memory->player);
-            if (input.x.went_down && player && game_object->condition != Condition_CROUCHING_IDLE && game_object->condition != Condition_CROUCHING_MOOVING && game_object->condition != Condition_HANGING_LOOKING_DOWN)
-            {
-                if (player->weapon.index == index)
-                {
-                    player->weapon = {0, 0};
-                    game_object->speed = THROWING_SPEED(game_object->mass, player->speed);
-                }
-            }
-        }
-
-        f32 angle = 0.0f;
-        game_object->speed.y += game_object->gravity;
-        game_object->speed *= game_object->friction;
-
-        if (memory->timers[game_object->cant_control_timer] <= 0)
-        {
-            f32 tan = game_object->speed.y / game_object->speed.x;
-
-            angle = (f32)atan(tan);
-        }
-        else
-        {
-            angle = game_object->speed.x * 0.5f;
-        }
-
-        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, angle, memory->bitmaps[Bitmap_type_TOY_GUN_BULLET], alpha, LAYER_GAME_OBJECT);
-    }
-
-    //пули
     if (game_object->type >= Game_Object_TOY_GUN_BULLET && game_object->type <= Game_Object_TOY_GUN_BULLET)
     {
-        f32 angle = 0.0f;
         switch (game_object->type)
         {
         case Game_Object_TOY_GUN_BULLET:
@@ -2158,11 +2101,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             {
                 f32 tan = game_object->speed.y / game_object->speed.x;
 
-                angle = (f32)atan(tan);
+                game_object->angle = (f32)atan(tan);
             }
             else
             {
-                angle = game_object->speed.x * 0.5f;
+                game_object->angle = game_object->speed.x * 0.5f;
             }
         }
         break;
@@ -2189,7 +2132,97 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             game_object->exists = false;
         }
 
-        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, angle, memory->bitmaps[Bitmap_type_TOY_GUN_BULLET], alpha, LAYER_GAME_OBJECT);
+        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, game_object->angle, memory->bitmaps[Bitmap_type_TOY_GUN_BULLET], alpha, LAYER_GAME_OBJECT);
+    }
+
+    if (game_object->type >= Game_Object_TOY_GUN && game_object->type <= Game_Object_TOY_GUN)
+    {
+        Game_Object *player = get_game_object(memory, memory->player);
+
+        f32 gravity = game_object->gravity;
+
+        if (player && player->weapon.index == index)
+        {
+            gravity = 0.0f;
+            game_object->layer = player->layer;
+        }
+
+        game_object->speed.y += gravity;
+
+        game_object->speed.x *= game_object->friction;
+
+        check_collision(memory, game_object, game_object->bounce);
+
+        if (input.x.went_down && player)
+        {
+            if (!pick_item_check(player, game_object, index))
+            {
+                if (player->weapon.index == index)
+                {
+                    if (memory->timers[player->cant_control_timer] < 0 && memory->timers[game_object->cant_control_timer] < 0)
+                    {
+                        Game_Object *bullet = add_game_object(memory, Game_Object_TOY_GUN_BULLET, game_object->pos + V2{game_object->collision_box.x * 0.5f - 2, 3});
+                        bullet->speed = V2{45.0f * game_object->looking_direction * random_float(&memory->__global_random_state, 0.75f, 1.0f), random_float(&memory->__global_random_state, -1, 5)};
+                        bullet->looking_direction = game_object->looking_direction;
+
+                        memory->timers[game_object->cant_control_timer] = 10;
+                    }
+                }
+            }
+        }
+
+        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, 0, game_object->sprite, 1, game_object->layer);
+    }
+
+    if (game_object->type == Game_Object_BOMB)
+    {
+        Game_Object *player = get_game_object(memory, memory->player);
+
+        f32 gravity = game_object->gravity;
+
+        game_object->speed.y += gravity;
+
+        game_object->speed.x *= game_object->friction;
+
+        check_collision(memory, game_object, game_object->bounce);
+
+        game_object->angle -= game_object->speed.x * 0.05f;
+
+        if (player && player->weapon.index == index)
+        {
+            gravity = 0.0f;
+            game_object->speed = V2{0, 0};
+            game_object->angle = 0.0f;
+            game_object->layer = player->layer;
+        }
+
+        if (input.x.went_down && player)
+        {
+            if (!pick_item_check(player, game_object, index))
+            {
+                if (player->weapon.index == index)
+                {
+
+                    player->weapon = {0, 0};
+                    if (input.up.is_down)
+                    {
+                        V2 player_momentum = player->speed + ADDITIONAL_THROWING_SPEED;
+                        game_object->speed = THROWING_SPEED(game_object->mass, player_momentum);
+                    }
+                    else if (player->condition == Condition_FALLING && input.down.is_down)
+                    {
+                        V2 player_momentum = player->speed - ADDITIONAL_THROWING_SPEED;
+                        game_object->speed = THROWING_SPEED(game_object->mass, player_momentum);
+                    }
+                    else
+                    {
+                        game_object->speed = THROWING_SPEED(game_object->mass, player->speed);
+                    }
+                }
+            }
+        }
+
+        draw_bitmap(memory, game_object->pos, V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS}, game_object->angle, game_object->sprite, 1, game_object->layer);
     }
 }
 
@@ -2250,13 +2283,24 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
 
         if (obj_collision.side != -1)
         {
-
-            if (game_object->type == Game_Object_TOY_GUN_BULLET)
+            if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
             {
-                if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
-                {
-                    game_object->exists = false;
-                }
+                game_object->exists = false;
+            }
+        }
+    }
+    if (game_object->type == Game_Object_BOMB)
+    {
+        Game_Object_Type triggers[] = {
+            Game_Object_ZOMBIE,
+        };
+
+        Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
+        if (obj_collision.side != -1)
+        {
+            if (length(game_object->speed) > 10.0f)
+            {
+                deal_damage(memory, game_object, obj_collision.object, game_object->damage);
             }
         }
     }
