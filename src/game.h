@@ -81,7 +81,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 12
+#define BUTTON_COUNT 13
 
 typedef union
 {
@@ -97,6 +97,7 @@ typedef union
         Button l;
         Button p;
         Button t;
+        Button s;
         Button shift;
         Button space;
     };
@@ -147,8 +148,8 @@ typedef enum
     Game_Object_PLAYER,
     Game_Object_ZOMBIE,
     Game_Object_TOY_GUN,
-    Game_Object_TOY_GUN_BULLET,
     Game_Object_BOMB,
+    Game_Object_TOY_GUN_BULLET,
 } Game_Object_Type;
 
 typedef enum
@@ -217,8 +218,11 @@ typedef struct
 
     f32 accel;
     f32 friction;
+    f32 gravity;
     f32 jump_height;
     f32 jump_duration;
+    f32 bounce;
+    f32 mass;
 
     i32 moved_through_pixels;
     Direction looking_direction;
@@ -287,6 +291,7 @@ typedef enum
     Bitmap_type_EXIT_SIGN_OFF,
     Bitmap_type_LAMP,
     Bitmap_type_LAMP_OFF,
+    Bitmap_type_BOMB,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -363,6 +368,8 @@ typedef struct
     i32 id_count;
 
     i32 lamp_count;
+
+    Game_Object_Handle player;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)

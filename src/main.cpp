@@ -472,6 +472,11 @@ void process_messages(HWND window, win32_State *win32_state, Input *input, WINDO
                 handle_button(&input->t, key_went_up);
             }
             break;
+            case 'S':
+            {
+                handle_button(&input->s, key_went_up);
+            }
+            break;
             case VK_SHIFT:
             {
                 handle_button(&input->shift, key_went_up);
@@ -546,7 +551,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ATOM registeredClass = RegisterClassA(&wndClass);
 
     HWND window = CreateWindowExA(
-        0,
+        WS_EX_LAYERED | WS_EX_TOPMOST,
         wndClass.lpszClassName,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
