@@ -237,6 +237,7 @@ typedef struct
     i32 looking_key_held_timer;
     i32 crouching_animation_timer;
     i32 hanging_animation_timer;
+    i32 hanging_index;
     i32 cant_control_timer;
     i32 invulnerable_timer;
 
@@ -371,6 +372,9 @@ typedef struct
     i32 lamp_count;
 
     Game_Object_Handle player;
+
+    i32 screen_shake_timer;
+    f32 screen_shake_power;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)
