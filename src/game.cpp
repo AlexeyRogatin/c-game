@@ -136,6 +136,7 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[74] = win32_read_bmp("./bitmaps/lamp.bmp");
     memory->bitmaps[75] = win32_read_bmp("./bitmaps/lampOff.bmp");
     memory->bitmaps[76] = win32_read_bmp("./bitmaps/bomb.bmp");
+    memory->bitmaps[77] = win32_read_bmp("./bitmaps/plank.bmp");
 }
 
 void load_letters(Game_memory *memory, READ_FONT(stbtt_read_font), char *file_name, f32 letter_height)
@@ -244,24 +245,24 @@ void clear_screen(Game_memory *memory, Bitmap screen, Bitmap darkness)
 //границы камеры
 void border_camera(Game_memory *memory, Bitmap screen)
 {
-    if (!(memory->camera.target.x - screen.size.x / memory->camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5))
+    if (!(memory->camera.pos.x - screen.size.x / memory->camera.scale.x * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        memory->camera.target.x = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.x / memory->camera.scale.x * 0.5);
+        memory->camera.pos.x = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.x / memory->camera.scale.x * 0.5);
     }
 
-    if (!(memory->camera.target.x + screen.size.x / memory->camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
+    if (!(memory->camera.pos.x + screen.size.x / memory->camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        memory->camera.target.x = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / memory->camera.scale.x * 0.5);
+        memory->camera.pos.x = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / memory->camera.scale.x * 0.5);
     }
 
-    if (!(memory->camera.target.y - screen.size.y / memory->camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5))
+    if (!(memory->camera.pos.y - screen.size.y / memory->camera.scale.y * 0.5 > -TILE_SIZE_PIXELS * 0.5))
     {
-        memory->camera.target.y = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.y / memory->camera.scale.y * 0.5);
+        memory->camera.pos.y = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.y / memory->camera.scale.y * 0.5);
     }
 
-    if (!(memory->camera.target.y + screen.size.y / memory->camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
+    if (!(memory->camera.pos.y + screen.size.y / memory->camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        memory->camera.target.y = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / memory->camera.scale.y * 0.5);
+        memory->camera.pos.y = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / memory->camera.scale.y * 0.5);
     }
 }
 
@@ -765,7 +766,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     game_object.collision_box_pos = V2{0, -12};
     game_object.collision_box = V2{35, 56};
     game_object.hit_box_pos = V2{0, -12};
-    game_object.hit_box = V2{48, 66};
+    game_object.hit_box = V2{40, 75};
     game_object.speed = V2{0, 0};
     game_object.delta = V2{0, 0};
     game_object.deflection = V2{0, 0};
@@ -868,11 +869,11 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         game_object.hit_box_pos = V2{0, 0.0f} * SPRITE_SCALE;
 
         game_object.gravity = -0.66f;
-        game_object.friction = 0.97f;
+        game_object.friction = 0.96f;
 
         game_object.sprite = memory->bitmaps[Bitmap_type_BOMB];
         game_object.bounce = 0.3f;
-        game_object.mass = 0.66f;
+        game_object.mass = 0.75f;
 
         game_object.invulnerable_timer = add_timer(memory, 240);
     }
@@ -909,7 +910,7 @@ bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     {
         f32 time = (wall_x - obj_rel_pos_x) / obj_speed_x;
         f32 y = obj_rel_pos_y + time * obj_speed_y;
-        if ((time >= 0.0f) && (time < *min_time))
+        if ((time >= 0.0f) && (time < *min_time) && unit(V2{obj_speed_x, 0}).x != unit(V2{wall_x, 0}).x)
         {
             if (y >= min_y && y <= max_y)
             {
@@ -958,29 +959,32 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bo
 
                     V2 obj_rel_pos = game_object->pos + real_collision_box_pos - tile_pos;
 
-                    if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                    if (tile.solid != Solidness_Type_UP)
                     {
-                        wall_normal = V2{-1, 0};
-                        collision_iteration.x.happened = true;
-                        collision_iteration.y.happened = false;
-                        collision_iteration.x.tile_index = index;
-                        collision_iteration.x.tile_side = Side_LEFT;
-                    }
-                    if (test_side(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
-                    {
-                        wall_normal = V2{1, 0};
-                        collision_iteration.x.happened = true;
-                        collision_iteration.y.happened = false;
-                        collision_iteration.x.tile_index = index;
-                        collision_iteration.x.tile_side = Side_RIGHT;
-                    }
-                    if (test_side(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
-                    {
-                        wall_normal = V2{0, -1};
-                        collision_iteration.y.happened = true;
-                        collision_iteration.x.happened = false;
-                        collision_iteration.y.tile_index = index;
-                        collision_iteration.y.tile_side = Side_BOTTOM;
+                        if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                        {
+                            wall_normal = V2{-1, 0};
+                            collision_iteration.x.happened = true;
+                            collision_iteration.y.happened = false;
+                            collision_iteration.x.tile_index = index;
+                            collision_iteration.x.tile_side = Side_LEFT;
+                        }
+                        if (test_side(tile_max.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
+                        {
+                            wall_normal = V2{1, 0};
+                            collision_iteration.x.happened = true;
+                            collision_iteration.y.happened = false;
+                            collision_iteration.x.tile_index = index;
+                            collision_iteration.x.tile_side = Side_RIGHT;
+                        }
+                        if (test_side(tile_min.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                        {
+                            wall_normal = V2{0, -1};
+                            collision_iteration.y.happened = true;
+                            collision_iteration.x.happened = false;
+                            collision_iteration.y.tile_index = index;
+                            collision_iteration.y.tile_side = Side_BOTTOM;
+                        }
                     }
                     if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                     {
@@ -1411,47 +1415,6 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
 
-        //прыжок
-        if (memory->timers[game_object->jump] > 0 && memory->timers[game_object->can_jump] > 0)
-        {
-            memory->timers[game_object->jump] = 0;
-            memory->timers[game_object->can_jump] = 0;
-            if (game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN)
-            {
-                if (memory->timers[game_object->hanging_animation_timer] > 0)
-                {
-                    memory->timers[game_object->jump] = memory->timers[game_object->hanging_animation_timer] + 1;
-                }
-                else
-                {
-                    if (!input.down.is_down)
-                    {
-                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                        memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
-                    }
-                    game_object->condition = Condition_FALLING;
-                }
-            }
-            else
-            {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
-            }
-        }
-
-        if (memory->timers[game_object->jump_timer] > 0)
-        {
-            if (!input.z.is_down)
-            {
-                memory->timers[game_object->jump_timer] = 0;
-            }
-        }
-
-        if (game_object->speed.y > 0 && memory->timers[game_object->jump_timer] <= 0)
-        {
-            gravity *= 2;
-        }
-
         //гравитация
         game_object->speed.y += gravity;
 
@@ -1460,7 +1423,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             game_object->speed.y = TILE_SIZE_PIXELS * 0.5;
         }
 
-        f32 sliding_speed = -((game_object->hit_box.y + TILE_SIZE_PIXELS) * 0.5f + 4) / (f32)(HANGING_ANIMATION_TIME);
+        f32 sliding_speed = -((game_object->hit_box.y + TILE_SIZE_PIXELS) * 0.5f) / (f32)(HANGING_ANIMATION_TIME);
 
         if (game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN)
         {
@@ -1560,7 +1523,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             i32 collision_up_tile_index = get_index(V2{collided_x_tile_pos.x, collided_x_tile_pos.y + 1});
             i32 collision_frontup_tile_index = get_index(V2{collided_x_tile_pos.x - game_object->looking_direction, collided_x_tile_pos.y + 1});
 
-            if (!memory->tile_map[collision_up_tile_index].solid && !memory->tile_map[collision_frontup_tile_index].solid && tile_direction == game_object->looking_direction)
+            if (memory->tile_map[collision_up_tile_index].solid != Solidness_Type_NORMAL && memory->tile_map[collision_frontup_tile_index].solid != Solidness_Type_NORMAL && tile_direction == game_object->looking_direction)
             {
                 if (game_object->delta.y < 0 &&
                     old_object.pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2 &&
@@ -1580,7 +1543,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //переход на стенку из состояния ползком
-        if (collisions.y.happened)
+        if (collisions.y.happened && memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_NORMAL)
         {
             if (supposed_cond == Condition_CROUCHING_IDLE || supposed_cond == Condition_CROUCHING_MOOVING)
             {
@@ -1588,7 +1551,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
                 i32 collisionY_front_tile_pos_index = get_index(collisionY_front_tile_pos);
 
-                if (!memory->tile_map[collisionY_front_tile_pos_index].solid &&
+                if (memory->tile_map[collisionY_front_tile_pos_index].solid != Solidness_Type_NORMAL &&
                     ((old_object.pos.x + game_object->delta.x + game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) && (ceilf(old_object.pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5f) >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) ||
                      (old_object.pos.x + game_object->delta.x - game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f) && (floorf(old_object.pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5f) <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f)))
                 {
@@ -1623,6 +1586,22 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             else
             {
                 supposed_cond = Condition_HANGING;
+            }
+        }
+
+        //спрыгиваем с планок
+        if (collisions.y.happened)
+        {
+            if (memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_UP)
+            {
+                if (input.z.went_down)
+                {
+                    if (input.down.is_down)
+                    {
+                        game_object->pos.y -= 1.0f;
+                        memory->timers[game_object->can_jump] = 0;
+                    }
+                }
             }
         }
 
@@ -1793,11 +1772,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             game_object->target_deflection = V2{0, 0};
         }
 
-        //границы для камеры
-        border_camera(memory, screen);
-
         //камера
         memory->camera.pos += (memory->camera.target - memory->camera.pos) * 0.25f;
+
+        //границы для камеры
+        border_camera(memory, screen);
 
         //интерфейс
 
@@ -1845,6 +1824,47 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                     }
                 }
             }
+        }
+
+        //прыжок
+        if (memory->timers[game_object->jump] > 0 && memory->timers[game_object->can_jump] > 0)
+        {
+            memory->timers[game_object->jump] = 0;
+            memory->timers[game_object->can_jump] = 0;
+            if (game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN)
+            {
+                if (memory->timers[game_object->hanging_animation_timer] > 0)
+                {
+                    memory->timers[game_object->jump] = memory->timers[game_object->hanging_animation_timer] + 1;
+                }
+                else
+                {
+                    if (!input.down.is_down)
+                    {
+                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                        memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
+                    }
+                    game_object->condition = Condition_FALLING;
+                }
+            }
+            else
+            {
+                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
+            }
+        }
+
+        if (memory->timers[game_object->jump_timer] > 0)
+        {
+            if (!input.z.is_down)
+            {
+                memory->timers[game_object->jump_timer] = 0;
+            }
+        }
+
+        if (game_object->speed.y > 0 && memory->timers[game_object->jump_timer] <= 0)
+        {
+            gravity *= 2;
         }
 
         if (input.s.went_down)
@@ -2327,7 +2347,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                             tile->type = Tile_Type_NONE;
                             tile->sprite = memory->bitmaps[Bitmap_type_NONE];
                             tile->timer = -1;
-                            tile->solid = false;
+                            tile->solid = (Solidness_Type)0;
                         }
                     }
                 }
@@ -2409,8 +2429,11 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
             {
                 if (deal_damage(memory, obj_collision.object, game_object, obj_collision.object->damage))
                 {
-                    obj_collision.object->go_right = clamp(unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x, 0, 1);
-                    obj_collision.object->go_left = !obj_collision.object->go_right;
+                    if (obj_collision.object->condition != Condition_FALLING)
+                    {
+                        obj_collision.object->go_right = clamp(unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x, 0, 1);
+                        obj_collision.object->go_left = !obj_collision.object->go_right;
+                    }
                     game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
                     game_object->speed.y *= 0.5;
                     game_object->speed.y += 7;
@@ -2671,7 +2694,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         "       #  "
         " ##     # "
         "          "
-        "    N     "
+        "   _N     "
         "    ##    "
         "#TT##  ## "
         "####   ###"
@@ -2763,7 +2786,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     for (i32 index = 0; index < tile_count; index++)
     {
         memory->tile_map[index].type = Tile_Type_BORDER;
-        memory->tile_map[index].solid = true;
+        memory->tile_map[index].solid = (Solidness_Type)Solidness_Type_NORMAL;
         memory->tile_map[index].timer = -1;
         memory->tile_map[index].sprite = memory->bitmaps[Bitmap_type_NONE];
     }
@@ -2857,7 +2880,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     i32 index = get_index(tile_pos);
 
                     Tile_type type = Tile_Type_NONE;
-                    bool solid = false;
+                    Solidness_Type solid = Solidness_Type_NONE;
                     i32 timer = -1;
                     Bitmap sprite = memory->bitmaps[Bitmap_type_NONE];
 
@@ -2870,7 +2893,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case '#':
                     {
                         type = Tile_Type_NORMAL;
-                        solid = true;
+                        solid = Solidness_Type_NORMAL;
 
                         f32 chance = random_float(&memory->__global_random_state, 0, 1);
                         if (chance < 0.95)
@@ -2893,14 +2916,14 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case '=':
                     {
                         type = Tile_Type_NORMAL;
-                        solid = true;
+                        solid = Solidness_Type_NORMAL;
                         sprite = memory->bitmaps[Bitmap_type_ELEGANT_BRICK];
                     }
                     break;
                     case '-':
                     {
                         type = Tile_Type_BORDER;
-                        solid = true;
+                        solid = Solidness_Type_NORMAL;
 
                         sprite = memory->bitmaps[Bitmap_type_BORDER];
                     }
@@ -2934,7 +2957,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case 'T':
                     {
                         type = Tile_Type_FLOOR;
-                        solid = true;
+                        solid = Solidness_Type_NORMAL;
                     }
                     break;
                     case 'P':
@@ -2949,16 +2972,11 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         sprite = memory->bitmaps[Bitmap_type_SPIKES];
                     }
                     break;
-                    case 'L':
+                    case '_':
                     {
-                        if (random_float(&memory->__global_random_state, 0, 1) < 0.5)
-                        {
-                            type = Tile_Type_LAMP;
-                        }
-                        else
-                        {
-                            type = Tile_Type_NONE;
-                        }
+                        type = Tile_Type_PLANK;
+                        sprite = memory->bitmaps[Bitmap_type_PLANK];
+                        solid = Solidness_Type_UP;
                     }
                     break;
                     }
@@ -3083,9 +3101,12 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         {
             Tile *up_tile = &memory->tile_map[get_index(tile_pos + V2{0, 1})];
             up_tile->type = Tile_Type_NONE;
-            up_tile->solid = false;
+            up_tile->solid = (Solidness_Type)Solidness_Type_NONE;
             up_tile->sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN_OFF];
             up_tile->timer = add_timer(memory, -(i32)INFINITY);
+
+            Tile *down_tile = &memory->tile_map[get_index(tile_pos - V2{0, 1})];
+            down_tile->solid = Solidness_Type_UP;
         }
 
         memory->tile_map[index].sprite = sprite;
@@ -3236,9 +3257,14 @@ void update_tile(Game_memory *memory, i32 tile_index)
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
+    case Tile_Type_PLANK:
+    {
+        draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+    }
+    break;
     }
 
-    if (!tile->solid)
+    if (tile->solid != Solidness_Type_NORMAL)
     {
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_BACKGROUND], 1, 0x00000000, LAYER_BACKGROUND_MAIN);
     }
@@ -3357,6 +3383,8 @@ extern "C" GAME_UPDATE(game_update)
         {
             memory->camera.pos += V2{random_float(&memory->__global_random_state, -memory->screen_shake_power, memory->screen_shake_power),
                                      random_float(&memory->__global_random_state, -memory->screen_shake_power, memory->screen_shake_power)};
+
+            border_camera(memory, screen);
         }
         else
         {

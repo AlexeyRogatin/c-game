@@ -294,6 +294,7 @@ typedef enum
     Bitmap_type_LAMP,
     Bitmap_type_LAMP_OFF,
     Bitmap_type_BOMB,
+    Bitmap_type_PLANK,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -319,13 +320,21 @@ typedef enum
     Tile_Type_PARAPET,
     Tile_Type_SPIKES,
     Tile_Type_LAMP,
+    Tile_Type_PLANK,
 } Tile_type;
+
+typedef enum
+{
+    Solidness_Type_NONE = 0,
+    Solidness_Type_NORMAL = 1,
+    Solidness_Type_UP = 2,
+} Solidness_Type;
 
 typedef struct
 {
     Tile_type type;
     Bitmap sprite;
-    bool solid;
+    Solidness_Type solid;
     i32 timer;
 } Tile;
 
