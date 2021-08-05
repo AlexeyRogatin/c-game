@@ -799,6 +799,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     game_object.hanging_index = 0;
     game_object.crouching_animation_timer = NULL;
     game_object.cant_control_timer = NULL;
+    game_object.walks_throught_planks_timer = NULL;
 
     game_object.layer = LAYER_GAME_OBJECT;
 
@@ -815,6 +816,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         game_object.hanging_animation_timer = add_timer(memory, 0);
         game_object.cant_control_timer = add_timer(memory, 0);
         game_object.invulnerable_timer = add_timer(memory, 0);
+        game_object.walks_throught_planks_timer = add_timer(memory, 0);
 
         game_object.jump_height = (f32)(TILE_SIZE_PIXELS * 2.2) - game_object.collision_box.y;
     }
@@ -923,7 +925,7 @@ bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     return hit;
 }
 
-Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bounce)
+Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bounce, bool ignores_up_collision)
 {
     Collisions collisions = {0};
 
@@ -986,13 +988,16 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bo
                             collision_iteration.y.tile_side = Side_BOTTOM;
                         }
                     }
-                    if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                    if (!(ignores_up_collision && tile.solid == Solidness_Type_UP))
                     {
-                        wall_normal = V2{0, 1};
-                        collision_iteration.y.happened = true;
-                        collision_iteration.x.happened = false;
-                        collision_iteration.y.tile_index = index;
-                        collision_iteration.y.tile_side = Side_TOP;
+                        if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
+                        {
+                            wall_normal = V2{0, 1};
+                            collision_iteration.y.happened = true;
+                            collision_iteration.x.happened = false;
+                            collision_iteration.y.tile_index = index;
+                            collision_iteration.y.tile_side = Side_TOP;
+                        }
                     }
                 }
             }
@@ -1415,6 +1420,20 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         //скорость по x
         game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
 
+        //во время прыжка
+        if (memory->timers[game_object->jump_timer] > 0)
+        {
+            if (!input.z.is_down)
+            {
+                memory->timers[game_object->jump_timer] = 0;
+            }
+        }
+
+        if (game_object->speed.y > 0 && memory->timers[game_object->jump_timer] <= 0)
+        {
+            gravity *= 2;
+        }
+
         //гравитация
         game_object->speed.y += gravity;
 
@@ -1458,7 +1477,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //столкновения
-        Collisions collisions = check_collision(memory, game_object, 0);
+        Collisions collisions = check_collision(memory, game_object, 0, memory->timers[game_object->walks_throught_planks_timer] > 0);
 
         Game_Object old_object = *game_object;
         old_object.pos -= game_object->delta;
@@ -1551,7 +1570,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 V2 collisionY_front_tile_pos = collided_y_tile_pos + V2{(f32)game_object->looking_direction, 0};
                 i32 collisionY_front_tile_pos_index = get_index(collisionY_front_tile_pos);
 
-                if (memory->tile_map[collisionY_front_tile_pos_index].solid != Solidness_Type_NORMAL &&
+                if (!memory->tile_map[collisionY_front_tile_pos_index].solid &&
                     ((old_object.pos.x + game_object->delta.x + game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) && (ceilf(old_object.pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5f) >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) ||
                      (old_object.pos.x + game_object->delta.x - game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f) && (floorf(old_object.pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5f) <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f)))
                 {
@@ -1598,7 +1617,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 {
                     if (input.down.is_down)
                     {
-                        game_object->pos.y -= 1.0f;
+                        memory->timers[game_object->walks_throught_planks_timer] = 2;
                         memory->timers[game_object->can_jump] = 0;
                     }
                 }
@@ -1850,21 +1869,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             else
             {
                 game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration);
+                memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
             }
-        }
-
-        if (memory->timers[game_object->jump_timer] > 0)
-        {
-            if (!input.z.is_down)
-            {
-                memory->timers[game_object->jump_timer] = 0;
-            }
-        }
-
-        if (game_object->speed.y > 0 && memory->timers[game_object->jump_timer] <= 0)
-        {
-            gravity *= 2;
         }
 
         if (input.s.went_down)
@@ -2037,7 +2043,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         //поведение, связанное с тайлами
         Collisions collisions = {};
-        collisions = check_collision(memory, game_object, 0);
+        collisions = check_collision(memory, game_object, 0, false);
 
         //если стоит
         if (collisions.y.happened && collisions.y.tile_side == Side_TOP)
@@ -2216,7 +2222,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         break;
         }
 
-        Collisions collisions = check_collision(memory, game_object, game_object->bounce);
+        Collisions collisions = check_collision(memory, game_object, game_object->bounce, false);
         if (memory->timers[game_object->cant_control_timer] == -1)
         {
             memory->timers[game_object->cant_control_timer] = 600;
@@ -2256,7 +2262,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         game_object->speed.x *= game_object->friction;
 
-        check_collision(memory, game_object, game_object->bounce);
+        check_collision(memory, game_object, game_object->bounce, false);
 
         if (input.x.went_down && player)
         {
@@ -2289,7 +2295,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         game_object->speed.x *= game_object->friction;
 
-        check_collision(memory, game_object, game_object->bounce);
+        check_collision(memory, game_object, game_object->bounce, false);
 
         game_object->angle -= game_object->speed.x * 0.05f;
 
@@ -2339,10 +2345,10 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 for (i32 x = (i32)tile_min.x; x <= (i32)tile_max.x; x++)
                 {
                     V2 tile_pos = V2{(f32)x, (f32)y};
-                    if (distance_between_points(game_object->pos, tile_pos * TILE_SIZE_PIXELS) < explosion_radius)
+                    Tile *tile = &memory->tile_map[get_index(tile_pos)];
+                    if (tile->solid == Solidness_Type_NORMAL && tile->type != Tile_Type_BORDER)
                     {
-                        Tile *tile = &memory->tile_map[get_index(tile_pos)];
-                        if (tile->solid && tile->type != Tile_Type_BORDER)
+                        if (distance_between_points(game_object->pos, tile_pos * TILE_SIZE_PIXELS) < explosion_radius)
                         {
                             tile->type = Tile_Type_NONE;
                             tile->sprite = memory->bitmaps[Bitmap_type_NONE];
@@ -2416,7 +2422,7 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                 if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
                 {
                     game_object->speed.y = obj_collision.object->pos.y + obj_collision.object->hit_box_pos.y + obj_collision.object->hit_box.y * 0.5f + 0.001f - game_object->hit_box_pos.y + game_object->hit_box.y * 0.5f - game_object->pos.y;
-                    check_collision(memory, game_object, 0);
+                    check_collision(memory, game_object, 0, false);
 
                     game_object->speed.y = JUMP_ON_ENEMY_BOOST;
                     obj_collision.object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
@@ -2596,9 +2602,9 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 
         "          "
         "          "
-        "          "
+        "  P       "
         " TT TTTT  "
-        "          "
+        "    PPP P "
         "TT  TTTTT "
         "#==       "
         "###======#",
@@ -2630,10 +2636,10 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         " =        "
         "          "
         "          "
-        "   =   =  "
+        "   =_  =  "
         "# #=   =# "
-        "###=   =# "
-        "###=   =##",
+        "###=  _=# "
+        "###=_  =##",
         invert_chunk(down_passage_chunks[0]),
         invert_chunk(down_passage_chunks[1]),
         invert_chunk(down_passage_chunks[2]),
@@ -2647,7 +2653,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         "     T    "
         " ^     TTT"
         "T#TT   ==="
-        "####   ###",
+        "####  _  #",
 
         "          "
         "  N       "
@@ -2656,7 +2662,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         "    =     "
         "TTTT=  TT#"
         "=====  ==="
-        "####=  =##",
+        "####=_ =##",
 
         "       #  "
         "TT      ##"
@@ -2694,7 +2700,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         "       #  "
         " ##     # "
         "          "
-        "   _N     "
+        "    N     "
         "    ##    "
         "#TT##  ## "
         "####   ###"
@@ -2709,7 +2715,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
         " PPPPPPP  "
         " TTTTTTT  "
         "          "
-        "         ="
+        "         _"
         "          "
         "   ## #   "
         "TTTTTTTTTT"
@@ -3104,9 +3110,6 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
             up_tile->solid = (Solidness_Type)Solidness_Type_NONE;
             up_tile->sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN_OFF];
             up_tile->timer = add_timer(memory, -(i32)INFINITY);
-
-            Tile *down_tile = &memory->tile_map[get_index(tile_pos - V2{0, 1})];
-            down_tile->solid = Solidness_Type_UP;
         }
 
         memory->tile_map[index].sprite = sprite;
@@ -3168,6 +3171,16 @@ void update_tile(Game_memory *memory, i32 tile_index)
     break;
     case Tile_Type_ENTER:
     {
+        V2 down_tile_pos = tile_pos - V2{0, 1};
+        i32 down_tile_index = get_index(down_tile_pos);
+        Tile *down_tile = &memory->tile_map[down_tile_index];
+        if (!down_tile->solid)
+        {
+            down_tile->type = Tile_Type_PLANK;
+            down_tile->solid = Solidness_Type_UP;
+            down_tile->sprite = memory->bitmaps[Bitmap_type_PLANK];
+        }
+
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->tile_map[tile_index].sprite.size * SPRITE_SCALE, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
     }
     break;
@@ -3175,6 +3188,16 @@ void update_tile(Game_memory *memory, i32 tile_index)
     {
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->bitmaps[Bitmap_type_DOOR_BACK].size * SPRITE_SCALE, 0, memory->bitmaps[Bitmap_type_DOOR_BACK], 1, 0x00000000, LAYER_ON_BACKGROUND);
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->tile_map[tile_index].sprite.size * SPRITE_SCALE, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
+
+        V2 down_tile_pos = tile_pos - V2{0, 1};
+        i32 down_tile_index = get_index(down_tile_pos);
+        Tile *down_tile = &memory->tile_map[down_tile_index];
+        if (!down_tile->solid)
+        {
+            down_tile->type = Tile_Type_PLANK;
+            down_tile->solid = Solidness_Type_UP;
+            down_tile->sprite = memory->bitmaps[Bitmap_type_PLANK];
+        }
 
         if (memory->timers[tile->timer] > 0)
         {

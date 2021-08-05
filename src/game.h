@@ -240,6 +240,7 @@ typedef struct
     i32 hanging_index;
     i32 cant_control_timer;
     i32 invulnerable_timer;
+    i32 walks_throught_planks_timer;
 
     Layer layer;
 } Game_Object;
