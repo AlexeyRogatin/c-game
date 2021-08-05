@@ -1057,7 +1057,7 @@ Collision check_expanded_collision(Game_memory *memory, Game_Object *game_object
             f32 min_time = 1.0f;
             i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
             Tile tile = memory->tile_map[index];
-            if (tile.solid)
+            if (tile.solid == Solidness_Type_NORMAL)
             {
                 V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
                 V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
@@ -1608,22 +1608,6 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
         }
 
-        //спрыгиваем с планок
-        if (collisions.y.happened)
-        {
-            if (memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_UP)
-            {
-                if (input.z.went_down)
-                {
-                    if (input.down.is_down)
-                    {
-                        memory->timers[game_object->walks_throught_planks_timer] = 2;
-                        memory->timers[game_object->can_jump] = 0;
-                    }
-                }
-            }
-        }
-
         //работа с предполагаемым состоянием (возможно нужно убрать)
         if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
             (supposed_cond == Condition_HANGING || supposed_cond == Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_HANGING_LOOKING_UP))
@@ -1868,8 +1852,21 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
             else
             {
-                game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                //спрыгиваем с планок
+                if (collisions.y.happened)
+                {
+                    if (memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_UP && input.down.is_down)
+                    {
+
+                        memory->timers[game_object->walks_throught_planks_timer] = 2;
+                        memory->timers[game_object->can_jump] = 0;
+                    }
+                    else
+                    {
+                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                        memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                    }
+                }
             }
         }
 
@@ -2377,7 +2374,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                     }
                     if (other_object->type == Game_Object_BOMB)
                     {
-                        memory->timers[other_object->invulnerable_timer] = 1;
+                        memory->timers[other_object->invulnerable_timer] = random_int(&memory->__global_random_state, 1, 15);
                     }
                 }
             }
