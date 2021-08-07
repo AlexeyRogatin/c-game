@@ -296,6 +296,7 @@ typedef enum
     Bitmap_type_LAMP_OFF,
     Bitmap_type_BOMB,
     Bitmap_type_PLANK,
+    Bitmap_type_UNBREAKABLE_PLANK,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -322,6 +323,7 @@ typedef enum
     Tile_Type_SPIKES,
     Tile_Type_LAMP,
     Tile_Type_PLANK,
+    Tile_Type_UNBREAKABLE_PLANK,
 } Tile_type;
 
 typedef enum

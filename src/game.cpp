@@ -137,6 +137,7 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[75] = win32_read_bmp("./bitmaps/lampOff.bmp");
     memory->bitmaps[76] = win32_read_bmp("./bitmaps/bomb.bmp");
     memory->bitmaps[77] = win32_read_bmp("./bitmaps/plank.bmp");
+    memory->bitmaps[78] = win32_read_bmp("./bitmaps/unbreakablePlank.bmp");
 }
 
 void load_letters(Game_memory *memory, READ_FONT(stbtt_read_font), char *file_name, f32 letter_height)
@@ -155,7 +156,7 @@ V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
 
 V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
 {
-    V2 result = (p - screen.size * 0.5) / camera.scale + camera.pos;
+    V2 result = (p - screen.size * 0.5f) / camera.scale + camera.pos;
     return result;
 }
 
@@ -224,11 +225,8 @@ void draw_text(Game_memory *memory, char *string, V2 pos, V2 size, f32 height, f
 
 void clear_screen(Game_memory *memory, Bitmap screen, Bitmap darkness)
 {
-    i32 pixelCount = (i32)(screen.size.x * screen.size.y);
-    for (i32 i = 0; i < pixelCount; i++)
-    {
-        screen.pixels[i] = 0;
-    }
+    i32 pixel_count = (i32)(screen.size.x * screen.size.y);
+    memset(screen.pixels, 0, sizeof(u32) * pixel_count);
 
     //обновление темноты
     for (i32 y = 0; y <= darkness.size.y; y++)
@@ -236,7 +234,7 @@ void clear_screen(Game_memory *memory, Bitmap screen, Bitmap darkness)
         for (i32 x = 0; x <= darkness.size.x; x++)
         {
             ARGB dark_pixel = {0xFF000000};
-            dark_pixel.a = (u8)(min((dark_pixel.a * (DARKNESS_USUAL_LVL + (1.02f - DARKNESS_USUAL_LVL) * fabsf(memory->transition))), dark_pixel.a) * random_float(&memory->__global_random_state, 0.996f + (1.0f - 0.996f) * fabsf(memory->transition), 1.0f));
+            dark_pixel.a = (u8)((dark_pixel.a * (DARKNESS_USUAL_LVL + (1.00f - DARKNESS_USUAL_LVL) * fabsf(memory->transition))) * random_float(&memory->__global_random_state, 0.996f + 0.004f * fabsf(memory->transition), 1.0f));
             darkness.pixels[y * darkness.pitch + x] = dark_pixel.argb;
         }
     }
@@ -339,7 +337,7 @@ V4_8x bilinear_blend(Bilinear_Sample_8x sample, V2_8x f)
     return abcd;
 }
 
-//отключил пока Серёга не поможет разобраться с кодом
+//(to do) отключил пока Серёга не поможет разобраться с кодом
 // struct Timed_Scope
 // {
 //     u64 stamp;
@@ -591,8 +589,6 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
                     f32_8x inverted_alpha = one_8x - texel.a * is_tile_multiplier;
                     V4_8x result = inverted_alpha * pixel + texel;
 
-                    mask = uv01.x >= zero_8x & uv01.x < one_8x & uv01.y >= zero_8x & uv01.y < one_8x;
-
                     mask_store(pixel_ptr, v4_to_argb_8x(result), mask);
 
                     pixel_ptr += 8;
@@ -672,7 +668,7 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
 
         for (i32 y = (i32)rect.min.y; y <= (i32)rect.max.y; y++)
         {
-            u32 *pixel_ptr = memory->darkness.pixels + y * (i32)(memory->darkness.size.x + 2) + (i32)rect.min.x;
+            u32 *pixel_ptr = memory->darkness.pixels + y * memory->darkness.pitch + (i32)rect.min.x;
             f32_8x y_8x = set1_f32((f32)y);
             for (i32 x = (i32)rect.min.x; x <= (i32)rect.max.x; x += 8)
             {
@@ -954,7 +950,6 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bo
                 Tile tile = memory->tile_map[index];
                 if (tile.solid)
                 {
-
                     V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
                     V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
@@ -2343,7 +2338,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 {
                     V2 tile_pos = V2{(f32)x, (f32)y};
                     Tile *tile = &memory->tile_map[get_index(tile_pos)];
-                    if (tile->solid == Solidness_Type_NORMAL && tile->type != Tile_Type_BORDER)
+                    if (tile->solid && tile->type != Tile_Type_BORDER && tile->type != Tile_Type_UNBREAKABLE_PLANK)
                     {
                         if (distance_between_points(game_object->pos, tile_pos * TILE_SIZE_PIXELS) < explosion_radius)
                         {
@@ -3173,9 +3168,9 @@ void update_tile(Game_memory *memory, i32 tile_index)
         Tile *down_tile = &memory->tile_map[down_tile_index];
         if (!down_tile->solid)
         {
-            down_tile->type = Tile_Type_PLANK;
+            down_tile->type = Tile_Type_UNBREAKABLE_PLANK;
             down_tile->solid = Solidness_Type_UP;
-            down_tile->sprite = memory->bitmaps[Bitmap_type_PLANK];
+            down_tile->sprite = memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK];
         }
 
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->tile_map[tile_index].sprite.size * SPRITE_SCALE, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
@@ -3191,9 +3186,9 @@ void update_tile(Game_memory *memory, i32 tile_index)
         Tile *down_tile = &memory->tile_map[down_tile_index];
         if (!down_tile->solid)
         {
-            down_tile->type = Tile_Type_PLANK;
+            down_tile->type = Tile_Type_UNBREAKABLE_PLANK;
             down_tile->solid = Solidness_Type_UP;
-            down_tile->sprite = memory->bitmaps[Bitmap_type_PLANK];
+            down_tile->sprite = memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK];
         }
 
         if (memory->timers[tile->timer] > 0)
@@ -3278,6 +3273,11 @@ void update_tile(Game_memory *memory, i32 tile_index)
     }
     break;
     case Tile_Type_PLANK:
+    {
+        draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+    }
+    break;
+    case Tile_Type_UNBREAKABLE_PLANK:
     {
         draw_bitmap(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
