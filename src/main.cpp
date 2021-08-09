@@ -443,62 +443,109 @@ void process_messages(HWND window, win32_State *win32_state, Input *input, WINDO
     }
 }
 
-#define TASK_QUEUE_SIZE 1024
+typedef struct
+{
+    void *user_pointer;
+} Work_queue_entry_storage;
 
 typedef struct
 {
-    void (*fn)(void *);
+    HANDLE semaphore_handle;
+    i32 volatile entry_completion_count;
+    i32 volatile next_entry_to_do;
+    i32 volatile entry_count;
+
+    Work_queue_entry_storage entries[256];
+} Work_queue;
+
+typedef struct
+{
     void *data;
-} Task;
+    bool is_valid;
+} Work_queue_entry;
 
-typedef struct
+Work_queue_entry complete_and_get_next_queue_entry(Work_queue *queue, Work_queue_entry сompleted)
 {
-    Task tasks[TASK_QUEUE_SIZE];
-    u32 start_cursor;
-    u32 end_cursor;
-} Queue;
-
-void add_task(Queue *queue, Task task)
-{
-    queue->tasks[queue->end_cursor] = task;
-    queue->end_cursor = (queue->end_cursor + 1) % TASK_QUEUE_SIZE;
-    assert(queue->end_cursor != queue->start_cursor);
-}
-
-Task *take_task(Queue *queue)
-{
-    Task *result = NULL;
-    if (queue->end_cursor != queue->start_cursor)
+    Work_queue_entry result = {};
+    if (сompleted.is_valid)
     {
-        result = &queue->tasks[queue->start_cursor];
-        queue->start_cursor = (queue->start_cursor + 1) % TASK_QUEUE_SIZE;
+        InterlockedIncrement((u64 volatile *)&queue->entry_completion_count);
+    }
+
+    if (queue->next_entry_to_do < queue->entry_count)
+    {
+        u32 index = (i32)InterlockedIncrement((u64 volatile *)&queue->next_entry_to_do) - 1;
+        result.data = queue->entries[index].user_pointer;
+        result.is_valid = true;
+        _ReadBarrier();
     }
     return result;
 }
 
-Queue queue = {0};
+void add_queue_entry(Work_queue *queue, void *pointer)
+{
+    assert(queue->entry_count < ARRAY_COUNT(queue->entries));
+    queue->entries[queue->entry_count].user_pointer = pointer;
+    _WriteBarrier();
+    _mm_sfence();
+    queue->entry_count++;
+    ReleaseSemaphore(queue->semaphore_handle, 1, 0);
+}
+
+bool queue_work_still_in_progress(Work_queue *queue)
+{
+    bool result = queue->entry_count == queue->entry_completion_count;
+    return result;
+}
+
+void mark_queue_entry_compleated(Work_queue *queue, Work_queue_entry entry)
+{
+    InterlockedIncrement((u64 volatile *)&queue->entry_completion_count);
+}
+
+void do_work(Work_queue_entry entry, i32 logical_thread_index)
+{
+    char buffer[256];
+    sprintf_s(buffer, "Thread %u: %s\n", logical_thread_index, (char *)entry.data);
+    OutputDebugStringA(buffer);
+}
+
+typedef struct
+{
+    i32 logical_thread_index;
+    Work_queue *queue;
+} win32_thread_info;
 
 DWORD WINAPI ThreadProc(LPVOID lpParameter)
 {
-    Queue *queue_pointer = (Queue *)lpParameter;
+    win32_thread_info *thread_info = (win32_thread_info *)lpParameter;
+
+    Work_queue_entry entry = {};
     while (running)
     {
-        Task *task = take_task(queue_pointer);
-        if (task)
+        entry = complete_and_get_next_queue_entry(thread_info->queue, entry);
+        if (entry.is_valid)
         {
-            task->fn(task->data);
+            do_work(entry, thread_info->logical_thread_index);
+        }
+        else
+        {
+            WaitForSingleObjectEx(thread_info->queue->semaphore_handle, INFINITE, FALSE);
         }
     }
 
     return 0;
 };
 
-void print_smth(void *data)
+i32 get_next_available_work_queue_index(Work_queue *queue)
 {
-    char buffer[256];
-    sprintf_s(buffer, 256, "%d\n", data);
+    i32 result = queue->entry_count;
+    return result;
+}
 
-    OutputDebugStringA(buffer);
+void push_string(Work_queue *queue, char *string)
+{
+    add_queue_entry(queue, string);
 }
 
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
@@ -522,23 +569,47 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     QueryPerformanceFrequency(&perf_frequency_li);
     performance_frequency = perf_frequency_li.QuadPart;
 
-    //multythreading
-    for (i32 num = 0; num <= 100; num++)
+    //multithreading
+    Work_queue queue = {};
+
+    win32_thread_info info[7] = {};
+    i32 thread_count = ARRAY_COUNT(info);
+    i32 initial_count = 0;
+
+    queue.semaphore_handle = CreateSemaphoreExA(
+        0,
+        initial_count,
+        thread_count,
+        0,
+        0,
+        SEMAPHORE_ALL_ACCESS);
+
+    for (i32 thread_index = 0; thread_index < thread_count; thread_index++)
     {
-        Task task;
-        task.fn = print_smth;
-        task.data = (void *)num;
-        add_task(&queue, task);
+        info[thread_index].logical_thread_index = thread_index;
+        info[thread_index].queue = &queue;
+
+        CreateThread(0, 0, ThreadProc, &info[thread_index], 0, 0);
     }
 
-    //поток
-    for (i32 i = 0; i < 32; i++)
-    {
-        CreateThread(0, 0, ThreadProc, &queue, 0, 0);
-    }
+    push_string(&queue, "String 0\n");
+    push_string(&queue, "String 1\n");
+    push_string(&queue, "String 2\n");
+    push_string(&queue, "String 3\n");
+    push_string(&queue, "String 4\n");
+    push_string(&queue, "String 5\n");
+    push_string(&queue, "String 6\n");
+    push_string(&queue, "String 7\n");
 
-    // DWORD thread_id;
-    // HANDLE thread_hande = CreateThread(0, 0, ThreadProc, &queue, 0, &thread_id);
+    Work_queue_entry entry = {0};
+    while (queue_work_still_in_progress(&queue))
+    {
+        entry = complete_and_get_next_queue_entry(&queue, entry);
+        if (entry.is_valid)
+        {
+            do_work(entry, 7);
+        }
+    }
 
     WNDCLASSA wndClass = {0};
     wndClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;

@@ -128,7 +128,6 @@ typedef enum
 } Layer;
 
 //получение картинки
-
 typedef struct
 {
     Drawing_Type type;
