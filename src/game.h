@@ -109,9 +109,7 @@ typedef enum
 {
     DRAWING_TYPE_RECT,
     DRAWING_TYPE_BITMAP,
-    DRAWING_TYPE_OLD_BITMAP,
     DRAWING_TYPE_LIGHT,
-    DRAWING_TYPE_OLD_LIGHT,
     DRAWING_TYPE_TEXT,
 } Drawing_Type;
 
@@ -356,6 +354,8 @@ typedef struct
 
     Drawing draw_queue[1024 * 8];
     i32 draw_queue_size;
+    Drawing light_queue[1024 * 8];
+    i32 light_queue_size;
 
     Tile tile_map[(CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2) * (CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2)];
 

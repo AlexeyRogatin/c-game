@@ -58,8 +58,8 @@ void add_light_to_queue(Game_memory *memory, V2 pos, f32 world_radius, u32 color
     drawing.color = color;
     drawing.layer = LAYER_BACKGROUND_MAIN;
     assert(memory->draw_queue_size < 1024 * 8);
-    memory->draw_queue[memory->draw_queue_size] = drawing;
-    memory->draw_queue_size++;
+    memory->light_queue[memory->light_queue_size] = drawing;
+    memory->light_queue_size++;
 }
 
 void add_text_to_queue(Game_memory *memory, char *string, V2 pos, V2 size, f32 height, f32 angle, u32 color, f32 alpha, Layer layer)
@@ -189,8 +189,7 @@ void render_rect(Bitmap screen, Drawing drawing)
         drawn_rect.max.y = max(drawn_rect.max.y, vertex.y);
     }
 
-    Rect paint_rect = intersect(screen_rect, drawn_rect);
-    paint_rect = intersect(paint_rect, drawing.clip_rect);
+    Rect paint_rect = intersect(drawn_rect, drawing.clip_rect);
 
     V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
@@ -247,8 +246,7 @@ void render_bitmap(Bitmap screen, Drawing drawing)
         drawn_rect.max.y = ceilf(max(drawn_rect.max.y, vertex.y));
     }
 
-    Rect paint_rect = intersect(screen_rect, drawn_rect);
-    paint_rect = intersect(paint_rect, drawing.clip_rect);
+    Rect paint_rect = intersect(drawn_rect, drawing.clip_rect);
 #if 0
 
     V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
@@ -358,26 +356,17 @@ void render_bitmap(Bitmap screen, Drawing drawing)
 
 void render_light(Game_memory *memory, Drawing drawing)
 {
-    f32 radius = drawing.size.x * (1.0f - fabsf(memory->transition));
+    V2 darkness_scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale;
+    f32 radius = drawing.size.x * darkness_scale.x;
+    drawing.pos *= darkness_scale;
+    radius *= 1.0f - fabsf(memory->transition);
+
     Rect rect = {
         drawing.pos - V2{radius, radius},
         drawing.pos + V2{radius, radius},
     };
-    rect = intersect(rect, drawing.clip_rect);
 
-    V2 darkness_scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale;
-    radius = drawing.size.x * darkness_scale.x;
-    drawing.pos *= darkness_scale;
-
-    rect.min = floor(rect.min * darkness_scale);
-    rect.max = floor(rect.max * darkness_scale);
-
-    Rect screen_rect = {
-        V2{0, 0},
-        memory->darkness.size,
-    };
-
-    Rect paint_rect = intersect(rect, screen_rect);
+    Rect paint_rect = intersect(rect, drawing.clip_rect);
 #if 0
 
     for (f32 y = rect.min.y; y <= rect.max.y; y++)
@@ -413,11 +402,11 @@ void render_light(Game_memory *memory, Drawing drawing)
     color = color * color.a;
     V4_8x color_8x = V4_8x{set1_f32(color.r), set1_f32(color.g), set1_f32(color.b), set1_f32(0x00)};
 
-    for (i32 y = (i32)paint_rect.min.y; y <= (i32)paint_rect.max.y; y++)
+    for (i32 y = (i32)paint_rect.min.y; y < (i32)paint_rect.max.y; y++)
     {
         u32 *pixel_ptr = memory->darkness.pixels + y * memory->darkness.pitch + (i32)paint_rect.min.x;
         f32_8x y_8x = set1_f32((f32)y);
-        for (i32 x = (i32)paint_rect.min.x; x <= (i32)paint_rect.max.x; x += 8)
+        for (i32 x = (i32)paint_rect.min.x; x < (i32)paint_rect.max.x; x += 8)
         {
             V2_8x d = V2_8x{set1_f32((f32)x) + zero_to_seven, y_8x};
 
@@ -486,13 +475,15 @@ typedef struct
     Game_memory *memory;
     Bitmap screen;
     Rect clip_rect;
+    Drawing *queue;
+    i32 queue_size;
 } Drawing_work;
 
 void draw_items_in_rect(Drawing_work *work)
 {
-    for (i32 i = 0; i < work->memory->draw_queue_size; i++)
+    for (i32 i = 0; i < work->queue_size; i++)
     {
-        Drawing item = work->memory->draw_queue[i];
+        Drawing item = work->queue[i];
 
         item.pos = world_to_screen(work->screen, work->memory->camera, item.pos);
         item.size *= work->memory->camera.scale;
@@ -502,5 +493,27 @@ void draw_items_in_rect(Drawing_work *work)
 
         item.pos = screen_to_world(work->screen, work->memory->camera, item.pos);
         item.size /= work->memory->camera.scale;
+    }
+}
+
+void render_queue(Game_memory *memory, Bitmap screen, Bitmap bitmap, u32 threads_count, Drawing *queue, i32 queue_size)
+{
+    f32 TILE_HEIGHT = ceilf(bitmap.size.y / threads_count);
+    f32 rect_min_y = 0;
+    f32 rect_max_y = TILE_HEIGHT;
+
+    for (u32 drawing_tile_index = 0; drawing_tile_index < threads_count; drawing_tile_index++)
+    {
+        Drawing_work work = {};
+        work.memory = memory;
+        work.screen = screen;
+        work.queue = queue;
+        work.queue_size = queue_size;
+        work.clip_rect = Rect{V2{0, rect_min_y}, V2{bitmap.size.x, rect_max_y}};
+
+        draw_items_in_rect(&work);
+
+        rect_min_y = rect_max_y;
+        rect_max_y += TILE_HEIGHT;
     }
 }

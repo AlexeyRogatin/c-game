@@ -200,6 +200,7 @@ extern "C" GAME_UPDATE(game_update)
     if (memory->pause <= 0)
     {
         memory->draw_queue_size = 0;
+        memory->light_queue_size = 0;
 
         V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
         i32 tile_count = i32(map_size.x * map_size.y);
@@ -274,16 +275,8 @@ extern "C" GAME_UPDATE(game_update)
         }
     } while (mistakes != 0);
 
-#define THREADS_COUNT 4
-    f32 TILE_HEIGHT = ceilf(screen.size.y / THREADS_COUNT);
+#define THREADS_COUNT 8
 
-    for (u32 drawing_tile_index = 0; drawing_tile_index < THREADS_COUNT; drawing_tile_index++)
-    {
-        Drawing_work work = {};
-        work.memory = memory;
-        work.screen = screen;
-        work.clip_rect = Rect{V2{0, TILE_HEIGHT * drawing_tile_index}, V2{screen.size.x, TILE_HEIGHT * (drawing_tile_index + 1)}};
-
-        draw_items_in_rect(&work);
-    }
+    render_queue(memory, screen, memory->darkness, THREADS_COUNT, memory->light_queue, memory->light_queue_size);
+    render_queue(memory, screen, screen, THREADS_COUNT, memory->draw_queue, memory->draw_queue_size);
 }
