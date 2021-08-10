@@ -139,6 +139,7 @@ typedef struct
     Bitmap bitmap;
     char *string;
     Layer layer;
+    Rect clip_rect;
 } Drawing;
 
 //сущности

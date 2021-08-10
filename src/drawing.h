@@ -190,6 +190,7 @@ void render_rect(Bitmap screen, Drawing drawing)
     }
 
     Rect paint_rect = intersect(screen_rect, drawn_rect);
+    paint_rect = intersect(paint_rect, drawing.clip_rect);
 
     V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
@@ -247,6 +248,7 @@ void render_bitmap(Bitmap screen, Drawing drawing)
     }
 
     Rect paint_rect = intersect(screen_rect, drawn_rect);
+    paint_rect = intersect(paint_rect, drawing.clip_rect);
 #if 0
 
     V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
@@ -354,22 +356,28 @@ void render_bitmap(Bitmap screen, Drawing drawing)
 #endif
 }
 
-void render_light(Game_memory *memory, Bitmap screen, Drawing drawing)
+void render_light(Game_memory *memory, Drawing drawing)
 {
-    V2 darkness_scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale;
-    f32 radius = drawing.size.x * darkness_scale.x;
-    drawing.pos *= darkness_scale;
-    radius *= 1.0f - fabsf(memory->transition);
-
+    f32 radius = drawing.size.x * (1.0f - fabsf(memory->transition));
     Rect rect = {
         drawing.pos - V2{radius, radius},
         drawing.pos + V2{radius, radius},
     };
+    rect = intersect(rect, drawing.clip_rect);
+
+    V2 darkness_scale = memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS / memory->camera.scale;
+    radius = drawing.size.x * darkness_scale.x;
+    drawing.pos *= darkness_scale;
+
+    rect.min = floor(rect.min * darkness_scale);
+    rect.max = floor(rect.max * darkness_scale);
+
     Rect screen_rect = {
         V2{0, 0},
         memory->darkness.size,
     };
-    rect = intersect(rect, screen_rect);
+
+    Rect paint_rect = intersect(rect, screen_rect);
 #if 0
 
     for (f32 y = rect.min.y; y <= rect.max.y; y++)
@@ -399,17 +407,17 @@ void render_light(Game_memory *memory, Bitmap screen, Drawing drawing)
     f32_8x radius_8x = set1_f32(radius);
     f32_8x zero_8x = set1_f32(0.0f);
     f32_8x one_8x = set1_f32(1.0f);
-    V2_8x max_rect_8x = V2_8x{set1_f32(rect.max.x + 1), set1_f32(rect.max.y + 1)};
+    V2_8x max_rect_8x = V2_8x{set1_f32(paint_rect.max.x), set1_f32(paint_rect.max.y + 1)};
 
     V4 color = argb_to_v4({drawing.color});
     color = color * color.a;
     V4_8x color_8x = V4_8x{set1_f32(color.r), set1_f32(color.g), set1_f32(color.b), set1_f32(0x00)};
 
-    for (i32 y = (i32)rect.min.y; y <= (i32)rect.max.y; y++)
+    for (i32 y = (i32)paint_rect.min.y; y <= (i32)paint_rect.max.y; y++)
     {
-        u32 *pixel_ptr = memory->darkness.pixels + y * memory->darkness.pitch + (i32)rect.min.x;
+        u32 *pixel_ptr = memory->darkness.pixels + y * memory->darkness.pitch + (i32)paint_rect.min.x;
         f32_8x y_8x = set1_f32((f32)y);
-        for (i32 x = (i32)rect.min.x; x <= (i32)rect.max.x; x += 8)
+        for (i32 x = (i32)paint_rect.min.x; x <= (i32)paint_rect.max.x; x += 8)
         {
             V2_8x d = V2_8x{set1_f32((f32)x) + zero_to_seven, y_8x};
 
@@ -441,6 +449,7 @@ void render_text(Game_memory *memory, Bitmap screen, Drawing drawing)
         letter_drawing.bitmap = letter.bitmap;
         letter_drawing.angle = 0;
         letter_drawing.alpha = 1;
+        letter_drawing.clip_rect = drawing.clip_rect;
         render_bitmap(screen, letter_drawing);
         if (drawing.string[char_index + 1])
         {
@@ -463,11 +472,35 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
 
     if (drawing.type == DRAWING_TYPE_LIGHT)
     {
-        render_light(memory, screen, drawing);
+        render_light(memory, drawing);
     }
 
     if (drawing.type == DRAWING_TYPE_TEXT)
     {
         render_text(memory, screen, drawing);
+    }
+}
+
+typedef struct
+{
+    Game_memory *memory;
+    Bitmap screen;
+    Rect clip_rect;
+} Drawing_work;
+
+void draw_items_in_rect(Drawing_work *work)
+{
+    for (i32 i = 0; i < work->memory->draw_queue_size; i++)
+    {
+        Drawing item = work->memory->draw_queue[i];
+
+        item.pos = world_to_screen(work->screen, work->memory->camera, item.pos);
+        item.size *= work->memory->camera.scale;
+
+        item.clip_rect = work->clip_rect;
+        draw_item(work->memory, work->screen, item);
+
+        item.pos = screen_to_world(work->screen, work->memory->camera, item.pos);
+        item.size /= work->memory->camera.scale;
     }
 }

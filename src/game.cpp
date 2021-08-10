@@ -1,6 +1,19 @@
 #include "game.h"
 #include <malloc.h>
 #include "resources.h"
+
+V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
+{
+    V2 result = (p - camera.pos) * camera.scale + screen.size * 0.5f;
+    return result;
+}
+
+V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
+{
+    V2 result = (p - screen.size * 0.5f) / camera.scale + camera.pos;
+    return result;
+}
+
 #include "drawing.h"
 
 //таймеры
@@ -47,18 +60,6 @@ void border_camera(Game_memory *memory, Bitmap screen)
 
 #include "tile_map.h"
 #include "collisions.h"
-
-V2 world_to_screen(Bitmap screen, Camera camera, V2 p)
-{
-    V2 result = (p - camera.pos) * camera.scale + screen.size * 0.5f;
-    return result;
-}
-
-V2 screen_to_world(Bitmap screen, Camera camera, V2 p)
-{
-    V2 result = (p - screen.size * 0.5f) / camera.scale + camera.pos;
-    return result;
-}
 
 #define THROWING_SPEED 30.0f
 #define TOSSING_SPEED 6.0f
@@ -131,7 +132,7 @@ extern "C" GAME_UPDATE(game_update)
         memory->camera.scale = V2{1, 1} * 0.4f;
         memory->camera.target = V2{0, 0};
 
-        V2 darkness_size = ceil(screen.size / memory->camera.scale * memory->bitmaps[Bitmap_type_BRICKS].size.x / TILE_SIZE_PIXELS);
+        V2 darkness_size = ceil(screen.size / memory->camera.scale / SPRITE_SCALE);
         memory->darkness = create_empty_bitmap(darkness_size);
 
         memory->transition = 0;
@@ -264,19 +265,25 @@ extern "C" GAME_UPDATE(game_update)
             if (memory->draw_queue[drawing_index].layer < memory->draw_queue[drawing_index - 1].layer)
             {
                 Drawing drawing = memory->draw_queue[drawing_index];
+
                 memory->draw_queue[drawing_index] = memory->draw_queue[drawing_index - 1];
                 memory->draw_queue[drawing_index - 1] = drawing;
+
                 mistakes++;
             }
         }
     } while (mistakes != 0);
 
-    for (i32 i = 0; i < memory->draw_queue_size; i++)
+#define THREADS_COUNT 4
+    f32 TILE_HEIGHT = ceilf(screen.size.y / THREADS_COUNT);
+
+    for (u32 drawing_tile_index = 0; drawing_tile_index < THREADS_COUNT; drawing_tile_index++)
     {
-        memory->draw_queue[i].pos = world_to_screen(screen, memory->camera, memory->draw_queue[i].pos);
-        memory->draw_queue[i].size *= memory->camera.scale;
-        draw_item(memory, screen, memory->draw_queue[i]);
-        memory->draw_queue[i].pos = screen_to_world(screen, memory->camera, memory->draw_queue[i].pos);
-        memory->draw_queue[i].size /= memory->camera.scale;
+        Drawing_work work = {};
+        work.memory = memory;
+        work.screen = screen;
+        work.clip_rect = Rect{V2{0, TILE_HEIGHT * drawing_tile_index}, V2{screen.size.x, TILE_HEIGHT * (drawing_tile_index + 1)}};
+
+        draw_items_in_rect(&work);
     }
 }
