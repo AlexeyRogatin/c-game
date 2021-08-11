@@ -129,7 +129,7 @@ extern "C" GAME_UPDATE(game_update)
         load_letters(memory, memory->stbtt_read_font, "./fonts/comic.ttf", 128.0f);
 
         memory->camera.pos = V2{0, 0};
-        memory->camera.scale = V2{1, 1} * 0.4f;
+        memory->camera.scale = V2{1, 1} * 0.55f;
         memory->camera.target = V2{0, 0};
 
         V2 darkness_size = ceil(screen.size / memory->camera.scale / SPRITE_SCALE);
@@ -275,8 +275,6 @@ extern "C" GAME_UPDATE(game_update)
         }
     } while (mistakes != 0);
 
-#define THREADS_COUNT 8
-
-    render_queue(memory, screen, memory->darkness, THREADS_COUNT, memory->light_queue, memory->light_queue_size);
-    render_queue(memory, screen, screen, THREADS_COUNT, memory->draw_queue, memory->draw_queue_size);
+    clip_rect_items_render(memory->high_priority_queue, memory, screen, memory->darkness, memory->light_queue, memory->light_queue_size);
+    clip_rect_items_render(memory->high_priority_queue, memory, screen, screen, memory->draw_queue, memory->draw_queue_size);
 }

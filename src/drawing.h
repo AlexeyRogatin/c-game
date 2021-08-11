@@ -477,10 +477,11 @@ typedef struct
     Rect clip_rect;
     Drawing *queue;
     i32 queue_size;
-} Drawing_work;
+} Clip_rect_render_work;
 
-void draw_items_in_rect(Drawing_work *work)
+PLATFORM_WORK_QUEUE_CALLBACK(draw_items_in_rect)
 {
+    Clip_rect_render_work *work = (Clip_rect_render_work *)data;
     for (i32 i = 0; i < work->queue_size; i++)
     {
         Drawing item = work->queue[i];
@@ -496,24 +497,41 @@ void draw_items_in_rect(Drawing_work *work)
     }
 }
 
-void render_queue(Game_memory *memory, Bitmap screen, Bitmap bitmap, u32 threads_count, Drawing *queue, i32 queue_size)
+void clip_rect_items_render(Platform_work_queue *render_queue,
+                            Game_memory *memory, Bitmap screen, Bitmap bitmap, Drawing *queue, i32 queue_size)
 {
-    f32 TILE_HEIGHT = ceilf(bitmap.size.y / threads_count);
-    f32 rect_min_y = 0;
-    f32 rect_max_y = TILE_HEIGHT;
+    f32 TILE_WIDTH = ceilf(bitmap.size.x / CLIP_RECTS_COUNT_X);
+    f32 TILE_HEIGHT = ceilf(bitmap.size.y / CLIP_RECTS_COUNT_Y);
 
-    for (u32 drawing_tile_index = 0; drawing_tile_index < threads_count; drawing_tile_index++)
+    Clip_rect_render_work work_queue[CLIP_RECTS_COUNT_X * CLIP_RECTS_COUNT_Y] = {};
+
+    Clip_rect_render_work work = {};
+    work.memory = memory;
+    work.screen = screen;
+    work.queue = queue;
+    work.queue_size = queue_size;
+    work.clip_rect.min.y = 0;
+    work.clip_rect.max.y = TILE_HEIGHT;
+
+    for (u32 clip_rect_y = 0; clip_rect_y < CLIP_RECTS_COUNT_Y; clip_rect_y++)
     {
-        Drawing_work work = {};
-        work.memory = memory;
-        work.screen = screen;
-        work.queue = queue;
-        work.queue_size = queue_size;
-        work.clip_rect = Rect{V2{0, rect_min_y}, V2{bitmap.size.x, rect_max_y}};
+        work.clip_rect.min.x = 0;
+        work.clip_rect.max.x = TILE_WIDTH;
+        for (u32 clip_rect_x = 0; clip_rect_x < CLIP_RECTS_COUNT_X; clip_rect_x++)
+        {
 
-        draw_items_in_rect(&work);
+            i32 clip_rect_index = clip_rect_y * CLIP_RECTS_COUNT_X + clip_rect_x;
 
-        rect_min_y = rect_max_y;
-        rect_max_y += TILE_HEIGHT;
+            work_queue[clip_rect_index] = work;
+            // draw_items_in_rect((void *)&work);
+            memory->platform_add_work_queue_entry(render_queue, draw_items_in_rect, &work_queue[clip_rect_index]);
+
+            work.clip_rect.min.x = work.clip_rect.max.x;
+            work.clip_rect.max.x += TILE_WIDTH;
+        }
+        work.clip_rect.min.y = work.clip_rect.max.y;
+        work.clip_rect.max.y += TILE_HEIGHT;
     }
+
+    memory->platform_complete_all_work(render_queue);
 }

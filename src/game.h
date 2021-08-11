@@ -345,6 +345,34 @@ typedef READ_BMP(Read_BMP);
 #define READ_FONT(name) Letter name(char *file_name, i32 letter_code, f32 letter_height)
 typedef READ_FONT(Read_Font);
 
+//work queue
+#define THREADS_COUNT 8
+#define CLIP_RECTS_COUNT_Y 4
+#define CLIP_RECTS_COUNT_X 4
+
+#define PLATFORM_WORK_QUEUE_CALLBACK(name) void name(void *data)
+typedef PLATFORM_WORK_QUEUE_CALLBACK(Platform_work_queue_callback);
+
+typedef struct
+{
+    Platform_work_queue_callback *callback;
+    void *data;
+} Platform_work_queue_entry;
+
+typedef struct
+{
+    void *semaphore_handle;
+    u32 volatile completion_count;
+    u32 volatile next_entry_to_write;
+    u32 volatile next_entry_to_read;
+    u32 volatile completion_goal;
+
+    Platform_work_queue_entry entries[CLIP_RECTS_COUNT_Y * CLIP_RECTS_COUNT_X + 1];
+} Platform_work_queue;
+
+typedef void Platform_add_entry(Platform_work_queue *queue, Platform_work_queue_callback callback, void *data);
+typedef void Platform_complete_all_work(Platform_work_queue *queue);
+
 //состояние игры
 typedef struct
 {
@@ -387,6 +415,11 @@ typedef struct
 
     i32 screen_shake_timer;
     f32 screen_shake_power;
+
+    Platform_work_queue *high_priority_queue;
+
+    Platform_add_entry *platform_add_work_queue_entry;
+    Platform_complete_all_work *platform_complete_all_work;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)

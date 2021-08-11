@@ -443,92 +443,70 @@ void process_messages(HWND window, win32_State *win32_state, Input *input, WINDO
     }
 }
 
-typedef struct
+void win32_add_entry(Platform_work_queue *queue, Platform_work_queue_callback callback, void *data)
 {
-    void *user_pointer;
-} Work_queue_entry_storage;
-
-typedef struct
-{
-    HANDLE semaphore_handle;
-    i32 volatile entry_completion_count;
-    i32 volatile next_entry_to_do;
-    i32 volatile entry_count;
-
-    Work_queue_entry_storage entries[256];
-} Work_queue;
-
-typedef struct
-{
-    void *data;
-    bool is_valid;
-} Work_queue_entry;
-
-Work_queue_entry complete_and_get_next_queue_entry(Work_queue *queue, Work_queue_entry сompleted)
-{
-    Work_queue_entry result = {};
-    if (сompleted.is_valid)
-    {
-        InterlockedIncrement((u64 volatile *)&queue->entry_completion_count);
-    }
-
-    if (queue->next_entry_to_do < queue->entry_count)
-    {
-        u32 index = (i32)InterlockedIncrement((u64 volatile *)&queue->next_entry_to_do) - 1;
-        result.data = queue->entries[index].user_pointer;
-        result.is_valid = true;
-        _ReadBarrier();
-    }
-    return result;
-}
-
-void add_queue_entry(Work_queue *queue, void *pointer)
-{
-    assert(queue->entry_count < ARRAY_COUNT(queue->entries));
-    queue->entries[queue->entry_count].user_pointer = pointer;
+    u32 new_next_entry_to_write = (queue->next_entry_to_write + 1) % ARRAY_COUNT(queue->entries);
+    assert(new_next_entry_to_write != queue->next_entry_to_read);
+    Platform_work_queue_entry *entry = &queue->entries[queue->next_entry_to_write];
+    entry->data = data;
+    entry->callback = callback;
     _WriteBarrier();
     _mm_sfence();
-    queue->entry_count++;
+    queue->completion_goal++;
+    queue->next_entry_to_write = new_next_entry_to_write;
     ReleaseSemaphore(queue->semaphore_handle, 1, 0);
 }
 
-bool queue_work_still_in_progress(Work_queue *queue)
+bool win32_do_next_queue_entry(Platform_work_queue *queue)
 {
-    bool result = queue->entry_count == queue->entry_completion_count;
-    return result;
+    bool we_should_sleep = false;
+
+    u32 original_next_entry_to_read = queue->next_entry_to_read;
+    u32 new_next_entry_to_read = (original_next_entry_to_read + 1) % ARRAY_COUNT(queue->entries);
+    if (original_next_entry_to_read != queue->next_entry_to_write)
+    {
+        u32 index = (u32)InterlockedCompareExchange((LONG volatile *)&queue->next_entry_to_read, new_next_entry_to_read, original_next_entry_to_read);
+        if (index == original_next_entry_to_read)
+        {
+            Platform_work_queue_entry entry = queue->entries[index];
+
+            entry.callback(entry.data);
+
+            InterlockedIncrement((u64 volatile *)&queue->completion_count);
+        }
+    }
+    else
+    {
+        we_should_sleep = true;
+    }
+
+    return we_should_sleep;
 }
 
-void mark_queue_entry_compleated(Work_queue *queue, Work_queue_entry entry)
+void win32_complete_all_work(Platform_work_queue *queue)
 {
-    InterlockedIncrement((u64 volatile *)&queue->entry_completion_count);
-}
+    while (queue->completion_goal != queue->completion_count)
+    {
+        win32_do_next_queue_entry(queue);
+    }
 
-void do_work(Work_queue_entry entry, i32 logical_thread_index)
-{
-    char buffer[256];
-    sprintf_s(buffer, "Thread %u: %s\n", logical_thread_index, (char *)entry.data);
-    OutputDebugStringA(buffer);
+    queue->completion_count = 0;
+    queue->completion_goal = 0;
 }
 
 typedef struct
 {
     i32 logical_thread_index;
-    Work_queue *queue;
+    Platform_work_queue *queue;
 } win32_thread_info;
 
 DWORD WINAPI ThreadProc(LPVOID lpParameter)
 {
     win32_thread_info *thread_info = (win32_thread_info *)lpParameter;
 
-    Work_queue_entry entry = {};
     while (running)
     {
-        entry = complete_and_get_next_queue_entry(thread_info->queue, entry);
-        if (entry.is_valid)
-        {
-            do_work(entry, thread_info->logical_thread_index);
-        }
-        else
+        if (win32_do_next_queue_entry(thread_info->queue))
         {
             WaitForSingleObjectEx(thread_info->queue->semaphore_handle, INFINITE, FALSE);
         }
@@ -537,15 +515,11 @@ DWORD WINAPI ThreadProc(LPVOID lpParameter)
     return 0;
 };
 
-i32 get_next_available_work_queue_index(Work_queue *queue)
+PLATFORM_WORK_QUEUE_CALLBACK(do_worker_work)
 {
-    i32 result = queue->entry_count;
-    return result;
-}
-
-void push_string(Work_queue *queue, char *string)
-{
-    add_queue_entry(queue, string);
+    char buffer[256];
+    sprintf_s(buffer, "Thread %u: %s\n", GetCurrentThreadId(), (char *)data);
+    OutputDebugStringA(buffer);
 }
 
 INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
@@ -570,9 +544,9 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     performance_frequency = perf_frequency_li.QuadPart;
 
     //multithreading
-    Work_queue queue = {};
+    Platform_work_queue queue = {};
 
-    win32_thread_info info[7] = {};
+    win32_thread_info info[THREADS_COUNT] = {};
     i32 thread_count = ARRAY_COUNT(info);
     i32 initial_count = 0;
 
@@ -592,24 +566,21 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         CreateThread(0, 0, ThreadProc, &info[thread_index], 0, 0);
     }
 
-    push_string(&queue, "String 0\n");
-    push_string(&queue, "String 1\n");
-    push_string(&queue, "String 2\n");
-    push_string(&queue, "String 3\n");
-    push_string(&queue, "String 4\n");
-    push_string(&queue, "String 5\n");
-    push_string(&queue, "String 6\n");
-    push_string(&queue, "String 7\n");
+    // win32_add_entry(&queue, do_worker_work, "String 0\n");
+    // win32_add_entry(&queue, do_worker_work, "String 1\n");
+    // win32_add_entry(&queue, do_worker_work, "String 2\n");
+    // win32_add_entry(&queue, do_worker_work, "String 3\n");
+    // win32_add_entry(&queue, do_worker_work, "String 4\n");
+    // win32_add_entry(&queue, do_worker_work, "String 5\n");
+    // win32_add_entry(&queue, do_worker_work, "String 6\n");
+    // win32_add_entry(&queue, do_worker_work, "String 7\n");
+    // win32_add_entry(&queue, do_worker_work, "String 8\n");
 
-    Work_queue_entry entry = {0};
-    while (queue_work_still_in_progress(&queue))
-    {
-        entry = complete_and_get_next_queue_entry(&queue, entry);
-        if (entry.is_valid)
-        {
-            do_work(entry, 7);
-        }
-    }
+    // win32_complete_all_work(&queue);
+
+    win32_state.memory->platform_add_work_queue_entry = win32_add_entry;
+    win32_state.memory->platform_complete_all_work = win32_complete_all_work;
+    win32_state.memory->high_priority_queue = &queue;
 
     WNDCLASSA wndClass = {0};
     wndClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -637,8 +608,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ReleaseDC(window, device_context);
 
     RECT rect;
-    i32 game_width = 512;
-    i32 game_height = 288;
+    i32 game_width = 640;
+    i32 game_height = 360;
 
     BITMAPINFO bitmap_info = {0};
     bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -689,7 +660,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         game_code.game_update(game_screen, win32_state.memory, input);
 
-        SetStretchBltMode(device_context, STRETCH_DELETESCANS);
+        SetStretchBltMode(device_context, COLORONCOLOR);
 
         StretchDIBits(
             device_context,
@@ -718,9 +689,9 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         prev_time = win32_get_time();
 
-        // char buffer[256];
-        // sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
+        char buffer[256];
+        sprintf_s(buffer, 256, "time_per_frame: %f; fps: %f\n", time_per_frame, 1 / time_per_frame);
 
-        // OutputDebugStringA(buffer);
+        OutputDebugStringA(buffer);
     }
 }
