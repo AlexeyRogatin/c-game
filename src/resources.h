@@ -48,8 +48,8 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[3] = win32_read_bmp("./bitmaps/dashaJump.bmp");
     memory->bitmaps[4] = win32_read_bmp("./bitmaps/dashaCrouchIdle.bmp");
     memory->bitmaps[5] = win32_read_bmp("./bitmaps/dashaWall.bmp");
-    memory->bitmaps[6] = win32_read_bmp("./bitmaps/dashaWall.bmp");
-    memory->bitmaps[7] = win32_read_bmp("./bitmaps/dashaWall.bmp");
+    memory->bitmaps[6] = win32_read_bmp("./bitmaps/dashaWallUp.bmp");
+    memory->bitmaps[7] = win32_read_bmp("./bitmaps/dashaWallDown.bmp");
     memory->bitmaps[8] = win32_read_bmp("./bitmaps/dashaLookingUp.bmp");
     memory->bitmaps[9] = win32_read_bmp("./bitmaps/dashaStep1.bmp");
     memory->bitmaps[10] = win32_read_bmp("./bitmaps/dashaStep2.bmp");

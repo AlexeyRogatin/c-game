@@ -295,6 +295,9 @@ typedef enum
     Bitmap_type_BOMB,
     Bitmap_type_PLANK,
     Bitmap_type_UNBREAKABLE_PLANK,
+    Bitmap_type_RAT_IDLE,
+    Bitmap_type_RAT_STEP,
+    Bitmap_type_RAT_STEP_END = Bitmap_type_RAT_STEP + 1,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -347,8 +350,8 @@ typedef READ_FONT(Read_Font);
 
 //work queue
 #define THREADS_COUNT 8
-#define CLIP_RECTS_COUNT_Y 4
-#define CLIP_RECTS_COUNT_X 4
+#define CLIP_RECTS_COUNT_Y 8
+#define CLIP_RECTS_COUNT_X 1
 
 #define PLATFORM_WORK_QUEUE_CALLBACK(name) void name(void *data)
 typedef PLATFORM_WORK_QUEUE_CALLBACK(Platform_work_queue_callback);
@@ -420,6 +423,8 @@ typedef struct
 
     Platform_add_entry *platform_add_work_queue_entry;
     Platform_complete_all_work *platform_complete_all_work;
+
+    Bitmap map_bitmap;
 } Game_memory;
 
 #define GAME_UPDATE(name) void name(Bitmap screen, Game_memory *memory, Input input)

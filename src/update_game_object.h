@@ -417,9 +417,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         //интерфейс
 
-#define BAR_HEIGHT 15 / memory->camera.scale.y
-#define BAR_WIDTH 45 / memory->camera.scale.x
-#define INTERVAL 5 / memory->camera.scale
+#define BAR_HEIGHT 75.0f * (screen.size.y / 1080) / memory->camera.scale.y
+#define BAR_WIDTH 225.0f * (screen.size.x / 1920) / memory->camera.scale.x
+#define INTERVAL 25.0f * ((screen.size / V2{1080, 1920}) / memory->camera.scale)
 
         // V2 UI_shake = V2{0, 0};
 
@@ -982,13 +982,15 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                         if (distance_between_points(game_object->pos, tile_pos * TILE_SIZE_PIXELS) < explosion_radius)
                         {
                             tile->type = Tile_Type_NONE;
-                            tile->sprite = memory->bitmaps[Bitmap_type_NONE];
+                            tile->sprite = memory->bitmaps[Bitmap_type_BACKGROUND];
                             tile->timer = -1;
                             tile->solid = (Solidness_Type)0;
                         }
                     }
                 }
             }
+
+            update_map_bitmap(memory, Rect{tile_min, tile_max});
 
 #define EXPLOSION_BOOST 40
 

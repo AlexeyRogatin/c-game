@@ -155,8 +155,6 @@ V4_8x bilinear_blend(Bilinear_Sample_8x sample, V2_8x f)
 
 void render_rect(Bitmap screen, Drawing drawing)
 {
-    Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
-
     V2 rect_size = drawing.size;
     if (rect_size.x >= 0)
         rect_size.x += 1;
@@ -189,7 +187,13 @@ void render_rect(Bitmap screen, Drawing drawing)
         drawn_rect.max.y = max(drawn_rect.max.y, vertex.y);
     }
 
+    Rect screen_rect = {
+        V2{0, 0},
+        screen.size + V2{1, 1},
+    };
+
     Rect paint_rect = intersect(drawn_rect, drawing.clip_rect);
+    paint_rect = intersect(paint_rect, screen_rect);
 
     V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
@@ -210,10 +214,6 @@ void render_rect(Bitmap screen, Drawing drawing)
 
 void render_bitmap(Bitmap screen, Drawing drawing)
 {
-    bool is_tile = drawing.layer == LAYER_TILE || drawing.layer == LAYER_BACKGROUND_MAIN;
-
-    Rect screen_rect = {{0, 0}, {screen.size.x, screen.size.y}};
-
     V2 rect_size = drawing.size;
     if (rect_size.x >= 0)
         rect_size.x += 1;
@@ -246,7 +246,13 @@ void render_bitmap(Bitmap screen, Drawing drawing)
         drawn_rect.max.y = ceilf(max(drawn_rect.max.y, vertex.y));
     }
 
+    Rect screen_rect = {
+        V2{0, 0},
+        screen.size + V2{1, 1},
+    };
+
     Rect paint_rect = intersect(drawn_rect, drawing.clip_rect);
+    paint_rect = intersect(paint_rect, screen_rect);
 #if 0
 
     V2 pixel_scale = abs(drawing.size) / drawing.bitmap.size;
@@ -297,7 +303,6 @@ void render_bitmap(Bitmap screen, Drawing drawing)
     V2 texture_size = drawing.bitmap.size + 1 / pixel_scale;
     V2 inverted_sqr_rect_size = 1 / (rect_size * rect_size);
 
-    f32_8x is_tile_multiplier = set1_f32(f32(1 - is_tile));
     V2_8x x_axis_8x = set1(x_axis);
     V2_8x y_axis_8x = set1(y_axis);
     V2_8x inverted_sqr_rect_size_8x = set1(inverted_sqr_rect_size);
@@ -341,7 +346,7 @@ void render_bitmap(Bitmap screen, Drawing drawing)
                 texel = texel * alpha_8x;
                 texel = clamp01(texel + color_8x * texel.a);
 
-                f32_8x inverted_alpha = one_8x - texel.a * is_tile_multiplier;
+                f32_8x inverted_alpha = one_8x - texel.a;
                 V4_8x result = inverted_alpha * pixel + texel;
 
                 mask_store(pixel_ptr, v4_to_argb_8x(result), mask);
@@ -361,12 +366,18 @@ void render_light(Game_memory *memory, Drawing drawing)
     drawing.pos *= darkness_scale;
     radius *= 1.0f - fabsf(memory->transition);
 
-    Rect rect = {
+    Rect drawn_rect = {
         drawing.pos - V2{radius, radius},
         drawing.pos + V2{radius, radius},
     };
 
-    Rect paint_rect = intersect(rect, drawing.clip_rect);
+    Rect screen_rect = {
+        V2{0, 0},
+        memory->darkness.size + V2{1, 1},
+    };
+
+    Rect paint_rect = intersect(drawn_rect, drawing.clip_rect);
+    paint_rect = intersect(paint_rect, screen_rect);
 #if 0
 
     for (f32 y = rect.min.y; y <= rect.max.y; y++)
@@ -381,14 +392,14 @@ void render_light(Game_memory *memory, Drawing drawing)
         }
     }
 #else
-    if ((i32)rect.min.x & 7)
+    if ((i32)paint_rect.min.x & 7)
     {
-        rect.min.x = (f32)((i32)rect.min.x & ~7);
+        paint_rect.min.x = (f32)((i32)paint_rect.min.x & ~7);
     }
 
-    if ((i32)rect.max.x & 7)
+    if ((i32)paint_rect.max.x & 7)
     {
-        rect.max.x = (f32)(((i32)rect.max.x & ~7) + 8);
+        paint_rect.max.x = (f32)(((i32)paint_rect.max.x & ~7) + 8);
     }
 
     f32_8x zero_to_seven = set8_f32(0, 1, 2, 3, 4, 5, 6, 7);
@@ -396,7 +407,7 @@ void render_light(Game_memory *memory, Drawing drawing)
     f32_8x radius_8x = set1_f32(radius);
     f32_8x zero_8x = set1_f32(0.0f);
     f32_8x one_8x = set1_f32(1.0f);
-    V2_8x max_rect_8x = V2_8x{set1_f32(paint_rect.max.x), set1_f32(paint_rect.max.y + 1)};
+    V2_8x max_rect_8x = V2_8x{set1_f32(screen_rect.max.x), set1_f32(screen_rect.max.y)};
 
     V4 color = argb_to_v4({drawing.color});
     color = color * color.a;
@@ -410,7 +421,7 @@ void render_light(Game_memory *memory, Drawing drawing)
         {
             V2_8x d = V2_8x{set1_f32((f32)x) + zero_to_seven, y_8x};
 
-            i32_8x mask = d.x < max_rect_8x.x & d.y < max_rect_8x.y;
+            i32_8x mask = d.x < max_rect_8x.x;
             V4_8x pixel = argb_to_v4_8x(load(pixel_ptr));
             f32_8x intensity = min(one_8x, (length_8x(d - drawing_pos_8x) + one_8x) / radius_8x);
             V4_8x texel = pixel * intensity + color_8x * pixel.a * (one_8x - intensity) * intensity;

@@ -451,7 +451,7 @@ void win32_add_entry(Platform_work_queue *queue, Platform_work_queue_callback ca
     entry->data = data;
     entry->callback = callback;
     _WriteBarrier();
-    _mm_sfence();
+    // _mm_sfence();
     queue->completion_goal++;
     queue->next_entry_to_write = new_next_entry_to_write;
     ReleaseSemaphore(queue->semaphore_handle, 1, 0);
@@ -596,7 +596,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         920, //x
-        480, //y
+        380, //y
         512, //width
         325, //height
         NULL,

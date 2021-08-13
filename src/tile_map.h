@@ -26,7 +26,7 @@ void spawn_enemies(Game_memory *memory, V2 enter_pos)
         Tile down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 1})];
         Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
         Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (random_tile->type == Tile_Type_NONE && random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_NONE].pixels && down_tile.solid)
+        if (!random_tile->solid && down_tile.solid)
         {
             if (!left_tile.solid || !right_tile.solid)
             {
@@ -67,7 +67,7 @@ void spawn_lamps(Game_memory *memory, V2 enter_pos)
         Tile down_down_down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 3})];
         Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
         Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (random_tile->type == Tile_Type_NONE && random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_NONE].pixels && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
+        if (random_tile->type == Tile_Type_NONE && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
         {
             if (!left_tile.solid || !right_tile.solid)
             {
@@ -106,6 +106,31 @@ char *invert_chunk(char *chunk)
         }
     }
     return result;
+}
+
+void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
+{
+    for (u32 tile_y = (u32)updated_tiles.min.y; tile_y < updated_tiles.max.y; tile_y++)
+    {
+        for (u32 tile_x = (u32)updated_tiles.min.x; tile_x < updated_tiles.max.x; tile_x++)
+        {
+            V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
+            i32 tile_index = get_index(tile_pos);
+            Tile tile = memory->tile_map[tile_index];
+
+            V2 first_pixel_pos = TILE_SIZE_PIXELS * tile_pos / SPRITE_SCALE;
+
+            for (u32 pixel_y = 0; pixel_y < tile.sprite.size.y; pixel_y++)
+            {
+                for (u32 pixel_x = 0; pixel_x < tile.sprite.size.x; pixel_x++)
+                {
+                    V2 chunk_pixel_pos = first_pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
+
+                    memory->map_bitmap.pixels[(i32)(chunk_pixel_pos.y * memory->map_bitmap.pitch + chunk_pixel_pos.x)] = tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1];
+                }
+            }
+        }
+    }
 }
 
 void generate_new_map(Game_memory *memory, Bitmap screen)
@@ -318,6 +343,8 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
     i32 tile_count = i32(map_size.x * map_size.y);
 
+    memory->map_bitmap = create_empty_bitmap(map_size * TILE_SIZE_PIXELS / SPRITE_SCALE);
+
     for (i32 index = 0; index < tile_count; index++)
     {
         memory->tile_map[index].type = Tile_Type_BORDER;
@@ -405,7 +432,9 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     {
         for (i32 chunk_index_x = 0; chunk_index_x < CHUNK_COUNT_X; chunk_index_x++)
         {
-            chunk_string = chunks_strings[chunk_index_y * CHUNK_COUNT_X + chunk_index_x];
+            i32 chunk_index = chunk_index_y * CHUNK_COUNT_X + chunk_index_x;
+
+            chunk_string = chunks_strings[chunk_index];
             for (i32 y = 0; y < CHUNK_SIZE_Y; y++)
             {
                 for (i32 x = 0; x < CHUNK_SIZE_X; x++)
@@ -417,14 +446,10 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     Tile_type type = Tile_Type_NONE;
                     Solidness_Type solid = Solidness_Type_NONE;
                     i32 timer = -1;
-                    Bitmap sprite = memory->bitmaps[Bitmap_type_NONE];
+                    Bitmap sprite = memory->bitmaps[Bitmap_type_BACKGROUND];
 
                     switch (tile_char)
                     {
-                    case ' ':
-                    {
-                    }
-                    break;
                     case '#':
                     {
                         type = Tile_Type_NORMAL;
@@ -467,8 +492,6 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     {
                         type = Tile_Type_ENTER;
 
-                        sprite = memory->bitmaps[Bitmap_type_DOOR];
-
                         //addPlayer
                         enter_pos = tile_pos;
                         V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0.0f, 0.001f};
@@ -486,7 +509,6 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     {
                         type = Tile_Type_EXIT;
                         timer = add_timer(memory, -1);
-                        sprite = memory->bitmaps[Bitmap_type_DOOR + 6];
                     }
                     break;
                     case 'T':
@@ -498,19 +520,16 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case 'P':
                     {
                         type = Tile_Type_PARAPET;
-                        sprite = memory->bitmaps[Bitmap_type_PARAPET];
                     }
                     break;
                     case '^':
                     {
                         type = Tile_Type_SPIKES;
-                        sprite = memory->bitmaps[Bitmap_type_SPIKES];
                     }
                     break;
                     case '_':
                     {
                         type = Tile_Type_PLANK;
-                        sprite = memory->bitmaps[Bitmap_type_PLANK];
                         solid = Solidness_Type_UP;
                     }
                     break;
@@ -523,6 +542,16 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                 }
             }
         }
+    }
+
+    for (int i = 3; i <= 5; i++)
+    {
+        free(normal_chunks[i]);
+        free(down_passage_chunks[i]);
+        free(enter_down_passage_chunks[i]);
+        free(enter_chunks[i]);
+        free(passage_chunks[i]);
+        free(exit_chunks[i]);
     }
 
     //налаживаем свойства тайлов после полной расстановки
@@ -637,25 +666,30 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
             Tile *up_tile = &memory->tile_map[get_index(tile_pos + V2{0, 1})];
             up_tile->type = Tile_Type_NONE;
             up_tile->solid = (Solidness_Type)Solidness_Type_NONE;
-            up_tile->sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN_OFF];
             up_tile->timer = add_timer(memory, -(i32)INFINITY);
         }
 
         memory->tile_map[index].sprite = sprite;
     }
 
+    for (u32 chunk_y = 0; chunk_y < CHUNK_COUNT_Y; chunk_y++)
+    {
+        for (u32 chunk_x = 0; chunk_x < CHUNK_COUNT_X; chunk_x++)
+        {
+            update_map_bitmap(memory, Rect{V2{0, 0}, V2{map_size.x, map_size.y}});
+        }
+    }
+
     spawn_enemies(memory, enter_pos);
     spawn_lamps(memory, enter_pos);
+}
 
-    for (int i = 3; i <= 5; i++)
-    {
-        free(normal_chunks[i]);
-        free(down_passage_chunks[i]);
-        free(enter_down_passage_chunks[i]);
-        free(enter_chunks[i]);
-        free(passage_chunks[i]);
-        free(exit_chunks[i]);
-    }
+void draw_tile_map(Game_memory *memory)
+{
+    V2 map_size = V2{CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2} * TILE_SIZE_PIXELS;
+    V2 map_center = map_size * 0.5f - V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f + V2{SPRITE_SCALE, SPRITE_SCALE};
+
+    add_bitmap_to_queue(memory, map_center, map_size, 0, memory->map_bitmap, 1, 0x00000000, LAYER_TILE);
 }
 
 void update_tile(Game_memory *memory, i32 tile_index)
@@ -666,25 +700,6 @@ void update_tile(Game_memory *memory, i32 tile_index)
     //обновление тайлов
     switch (tile->type)
     {
-    case Tile_Type_NONE:
-    {
-    }
-    break;
-    case Tile_Type_NORMAL:
-    {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_TILE);
-    }
-    break;
-    case Tile_Type_BORDER:
-    {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_TILE);
-    }
-    break;
-    case Tile_Type_FLOOR:
-    {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_TILE);
-    }
-    break;
     case Tile_Type_PARAPET:
     {
         if (memory->tile_map[get_index(tile_pos + V2{0, -1})].type == Tile_Type_NONE)
@@ -694,12 +709,14 @@ void update_tile(Game_memory *memory, i32 tile_index)
         }
         else
         {
-            add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_FORGROUND);
+            add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_PARAPET], 1, 0x00000000, LAYER_FORGROUND);
         }
     }
     break;
     case Tile_Type_ENTER:
     {
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->bitmaps[Bitmap_type_DOOR].size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->bitmaps[Bitmap_type_DOOR].size * SPRITE_SCALE, 0, memory->bitmaps[Bitmap_type_DOOR], 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
+
         V2 down_tile_pos = tile_pos - V2{0, 1};
         i32 down_tile_index = get_index(down_tile_pos);
         Tile *down_tile = &memory->tile_map[down_tile_index];
@@ -707,16 +724,11 @@ void update_tile(Game_memory *memory, i32 tile_index)
         {
             down_tile->type = Tile_Type_UNBREAKABLE_PLANK;
             down_tile->solid = Solidness_Type_UP;
-            down_tile->sprite = memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK];
         }
-
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->tile_map[tile_index].sprite.size * SPRITE_SCALE, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
     }
     break;
     case Tile_Type_EXIT:
     {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->bitmaps[Bitmap_type_DOOR_BACK].size * SPRITE_SCALE, 0, memory->bitmaps[Bitmap_type_DOOR_BACK], 1, 0x00000000, LAYER_ON_BACKGROUND);
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (memory->tile_map[tile_index].sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->tile_map[tile_index].sprite.size * SPRITE_SCALE, 0, memory->tile_map[tile_index].sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
 
         V2 down_tile_pos = tile_pos - V2{0, 1};
         i32 down_tile_index = get_index(down_tile_pos);
@@ -728,33 +740,36 @@ void update_tile(Game_memory *memory, i32 tile_index)
             down_tile->sprite = memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK];
         }
 
+        Bitmap door_sprite = memory->bitmaps[Bitmap_type_DOOR + 5];
+
         if (memory->timers[tile->timer] > 0)
         {
             i8 step = (i8)floor(memory->timers[tile->timer] / 60.0f * 6.0f);
-            tile->sprite = memory->bitmaps[Bitmap_type_DOOR + step];
+            door_sprite = memory->bitmaps[Bitmap_type_DOOR + step];
         }
         else if (memory->timers[tile->timer] == 0)
         {
             memory->transition = -0.001f;
         }
 
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (door_sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, memory->bitmaps[Bitmap_type_DOOR_BACK].size * SPRITE_SCALE, 0, memory->bitmaps[Bitmap_type_DOOR_BACK], 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS + V2{0, (door_sprite.size.y * SPRITE_SCALE - TILE_SIZE_PIXELS) * 0.5f}, door_sprite.size * SPRITE_SCALE, 0, door_sprite, 1, 0x00000000, LAYER_ON_ON_BACKGROUND);
+
+        //лампа
         V2 up_tile_pos = tile_pos + V2{0, 1};
         i32 up_tile_index = get_index(up_tile_pos);
         Tile *up_tile = &memory->tile_map[up_tile_index];
+        Bitmap sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN_OFF];
         if (memory->timers[up_tile->timer] < -60)
         {
             memory->timers[up_tile->timer] = 60;
         }
-        else if (memory->timers[up_tile->timer] < 0)
+        else if (memory->timers[up_tile->timer] > 0)
         {
-            up_tile->sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN_OFF];
-        }
-        else
-        {
-            up_tile->sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN];
+            sprite = memory->bitmaps[Bitmap_type_EXIT_SIGN];
             add_light_to_queue(memory, up_tile_pos * TILE_SIZE_PIXELS, 100, 0x3300FF00);
         }
-        add_bitmap_to_queue(memory, up_tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->tile_map[up_tile_index].sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, up_tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
     case Tile_Type_LAMP:
@@ -769,13 +784,13 @@ void update_tile(Game_memory *memory, i32 tile_index)
             }
         }
 
+        Bitmap sprite = memory->bitmaps[Bitmap_type_LAMP];
         if (tile->timer == -1)
         {
             tile->sprite = memory->bitmaps[Bitmap_type_LAMP_OFF];
         }
         else
         {
-            tile->sprite = memory->bitmaps[Bitmap_type_LAMP];
             f32 transition_lvl = (1.0f - max((f32)memory->timers[tile->timer], 0.0f) / 6.0f) + random_float(&memory->__global_random_state, -0.005f, 0.005f);
             if (memory->timers[tile->timer] == 0)
             {
@@ -784,7 +799,7 @@ void update_tile(Game_memory *memory, i32 tile_index)
             if (memory->timers[tile->timer] == -1000)
             {
                 transition_lvl = 0;
-                tile->sprite = memory->bitmaps[Bitmap_type_LAMP_OFF];
+                sprite = memory->bitmaps[Bitmap_type_LAMP_OFF];
                 if (random_float(&memory->__global_random_state, 0.0f, 1.0f) < 0.7)
                 {
                     memory->timers[tile->timer] = random_int(&memory->__global_random_state, -999, -950);
@@ -796,7 +811,7 @@ void update_tile(Game_memory *memory, i32 tile_index)
             }
             add_light_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, 150 * transition_lvl, 0x55FFAA00);
         }
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
     case Tile_Type_SPIKES:
@@ -806,23 +821,18 @@ void update_tile(Game_memory *memory, i32 tile_index)
             tile->type = Tile_Type_NONE;
             tile->sprite = memory->bitmaps[Bitmap_type_BACKGROUND];
         }
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_SPIKES], 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
     case Tile_Type_PLANK:
     {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_PLANK], 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
     case Tile_Type_UNBREAKABLE_PLANK:
     {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, tile->sprite, 1, 0x00000000, LAYER_ON_BACKGROUND);
+        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK], 1, 0x00000000, LAYER_ON_BACKGROUND);
     }
     break;
-    }
-
-    if (tile->solid != Solidness_Type_NORMAL)
-    {
-        add_bitmap_to_queue(memory, tile_pos * TILE_SIZE_PIXELS, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_BACKGROUND], 1, 0x00000000, LAYER_BACKGROUND_MAIN);
     }
 }
