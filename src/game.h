@@ -145,6 +145,7 @@ typedef enum
 {
     Game_Object_PLAYER,
     Game_Object_ZOMBIE,
+    Game_Object_RAT,
     Game_Object_TOY_GUN,
     Game_Object_BOMB,
     Game_Object_TOY_GUN_BULLET,
@@ -152,9 +153,10 @@ typedef enum
 
 typedef enum
 {
+    Direction_NONE = 0,
     Direction_RIGHT = 1,
     Direction_LEFT = -1,
-    Direction_VERTICAL = 0,
+    Direction_VERTICAL = 2,
 } Direction;
 
 typedef enum
@@ -211,8 +213,7 @@ typedef struct
 
     Game_Object_Handle weapon;
 
-    bool go_left;
-    bool go_right;
+    Direction mooving_direction;
     i32 jump;
 
     f32 accel;

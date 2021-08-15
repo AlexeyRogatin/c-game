@@ -1,3 +1,72 @@
+void apply_deflection(Game_Object *game_object, V2 recent_speed)
+{
+    if (recent_speed.y != 0 && game_object->speed.y == 0)
+    {
+        game_object->target_deflection = V2{-recent_speed.y, recent_speed.y};
+    }
+    if (game_object->speed.y != 0)
+    {
+        game_object->target_deflection = V2{game_object->speed.y, -game_object->speed.y};
+    }
+
+    game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3f;
+
+    if (length(game_object->target_deflection - game_object->deflection) < 0.1f)
+    {
+        game_object->target_deflection = V2{0, 0};
+    }
+}
+
+void walking_AI(Game_memory *memory, Collisions collisions, Game_Object *game_object)
+{
+    V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+
+    Tile front_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1.0f * game_object->mooving_direction, 1})];
+    Tile down_front_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1.0f * game_object->mooving_direction, 0})];
+
+    //если доходит до края тайла, то разворачивается
+    if ((!down_front_tile.solid || front_tile.solid == Solidness_Type_NORMAL) &&
+        (game_object->pos.x + game_object->speed.x * game_object->mooving_direction) * game_object->mooving_direction >
+            collided_y_tile_pos.x * TILE_SIZE_PIXELS * game_object->mooving_direction)
+    {
+        game_object->mooving_direction = (Direction)(-game_object->mooving_direction);
+    }
+}
+
+void standing_on_one_tile_AI(Game_memory *memory, Collisions collisions, Game_Object *game_object)
+{
+    V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
+
+    Tile right_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1.0f, 1})];
+    Tile down_right_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1.0f, 0})];
+    Tile left_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{-1.0f, 1})];
+    Tile down_left_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{-1.0f, 0})];
+
+    if ((right_tile.solid == Solidness_Type_NORMAL || !down_right_tile.solid) && (left_tile.solid == Solidness_Type_NORMAL || !down_left_tile.solid))
+    {
+
+        if (fabs(collided_y_tile_pos.x * TILE_SIZE_PIXELS - game_object->pos.x) > 8)
+        {
+            game_object->mooving_direction = (Direction)(i32)unit(V2{collided_y_tile_pos.x * TILE_SIZE_PIXELS - game_object->pos.x, 0}).x;
+        }
+        else
+        {
+            game_object->mooving_direction = Direction_NONE;
+            if (!(right_tile.solid == Solidness_Type_NORMAL && left_tile.solid == Solidness_Type_NORMAL))
+            {
+                if (right_tile.solid == Solidness_Type_NORMAL)
+                {
+                    game_object->looking_direction = Direction_LEFT;
+                }
+                if (left_tile.solid == Solidness_Type_NORMAL)
+                {
+                    game_object->looking_direction = Direction_RIGHT;
+                }
+            }
+        }
+    }
+}
+
 void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap screen)
 {
     Game_Object *game_object = &memory->game_objects[index];
@@ -17,6 +86,10 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
     {
         V2 recent_speed = game_object->speed;
 
+        //хитбокс
+        game_object->hit_box_pos = V2{0, -3};
+        game_object->hit_box = V2{40, 75};
+
         //движение игрока
         if (memory->timers[game_object->cant_control_timer] < 0)
         {
@@ -25,13 +98,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 memory->timers[game_object->jump] = JUMP_BUTTON_DURATION;
             }
 
-            game_object->go_left = input.left.is_down;
-            game_object->go_right = input.right.is_down;
+            game_object->mooving_direction = (Direction)(input.right.is_down - input.left.is_down);
         }
         else
         {
-            game_object->go_left = false;
-            game_object->go_right = false;
+            game_object->mooving_direction = Direction_NONE;
             memory->timers[game_object->jump] = 0;
         }
 
@@ -52,7 +123,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //скорость по x
-        game_object->speed += {(game_object->go_right - game_object->go_left) * game_object->accel, 0};
+        game_object->speed += {game_object->mooving_direction * game_object->accel, 0};
 
         //во время прыжка
         if (memory->timers[game_object->jump_timer] > 0)
@@ -97,16 +168,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         //направление
         if (!(game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN))
         {
-            if (!(game_object->go_left && game_object->go_right))
+            if (game_object->mooving_direction != Direction_NONE)
             {
-                if (game_object->go_right)
-                {
-                    game_object->looking_direction = Direction_RIGHT;
-                }
-                if (game_object->go_left)
-                {
-                    game_object->looking_direction = Direction_LEFT;
-                }
+                game_object->looking_direction = game_object->mooving_direction;
             }
         }
 
@@ -242,7 +306,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
         }
 
-        //работа с предполагаемым состоянием (возможно нужно убрать)
+        //работа с предполагаемым состоянием (TODO возможно нужно убрать)
         if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
             (supposed_cond == Condition_HANGING || supposed_cond == Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_HANGING_LOOKING_UP))
         {
@@ -328,6 +392,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                     game_object->sprite = memory->bitmaps[Bitmap_type_PLAYER_CROUCH_STEP + step];
                 }
             }
+
+            game_object->hit_box_pos = V2{0, -22};
+            game_object->hit_box = V2{40, 37};
         }
 
         if (game_object->condition == Condition_LOOKING_UP)
@@ -393,14 +460,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //искривление
-        if (recent_speed.y != 0 && game_object->speed.y == 0)
-        {
-            game_object->target_deflection = V2{-recent_speed.y, recent_speed.y};
-        }
-        if (game_object->speed.y != 0)
-        {
-            game_object->target_deflection = V2{game_object->speed.y, -game_object->speed.y};
-        }
+        apply_deflection(game_object, recent_speed);
 
         game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3f;
 
@@ -614,7 +674,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             sprite_size.y = game_object->sprite.size.y / game_object->sprite.size.x * sprite_size.y;
         }
 
-        // draw_rect(memory, game_object->pos + game_object->collision_box_pos, game_object->collision_box, 0, 0xFFFF0000, LAYER_UI);
+        // add_rect_to_queue(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_UI);
 
         add_bitmap_to_queue(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f},
                             V2{(sprite_size.x + game_object->deflection.x) * game_object->looking_direction,
@@ -633,11 +693,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         V2 recent_speed = game_object->speed;
 
-        //константы скорости
-        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
-
         //движение
-        game_object->speed.x += (game_object->go_right - game_object->go_left) * game_object->accel;
+        game_object->speed.x += game_object->mooving_direction * game_object->accel;
 
         //прыжок
         if (game_object->condition != Condition_FALLING)
@@ -647,29 +704,19 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 game_object->speed.y = f32(2 * game_object->jump_height / game_object->jump_duration * random_float(&memory->__global_random_state, 0.4f, 1));
                 game_object->accel = ZOMBIE_ACCEL;
             }
-            else if (memory->timers[game_object->jump] > 0)
-            {
-                game_object->go_left = false;
-                game_object->go_right = false;
-            }
         }
 
-        //гравитация и трение
+        //гравитация
+        f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
         game_object->speed.y += gravity;
 
+        //трение
         game_object->speed.x *= game_object->friction;
 
         //направление
-        if (!(game_object->go_left && game_object->go_right))
+        if (game_object->mooving_direction != Direction_NONE)
         {
-            if (game_object->go_left)
-            {
-                game_object->looking_direction = Direction_LEFT;
-            }
-            if (game_object->go_right)
-            {
-                game_object->looking_direction = Direction_RIGHT;
-            }
+            game_object->looking_direction = game_object->mooving_direction;
         }
 
         //поведение, связанное с тайлами
@@ -698,59 +745,12 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             //если не заряжает прыжок
             if (memory->timers[game_object->jump] < 0 && game_object->speed.y <= 0)
             {
-                V2 collided_y_tile_pos = get_tile_pos(collisions.y.tile_index);
-
-                Tile downleft_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{-1, 0})];
-                Tile downright_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1, 0})];
-                Tile left_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{-1, 1})];
-                Tile right_tile = memory->tile_map[get_index(collided_y_tile_pos + V2{1, 1})];
-                //если доходит до края тайла, то разворачивается
-                if ((!downleft_tile.solid || left_tile.solid) && game_object->pos.x + game_object->hit_box_pos.x - game_object->hit_box.x * 0.25 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                {
-                    if (left_tile.solid)
-                    {
-                        game_object->looking_direction = Direction_RIGHT;
-                    }
-                    game_object->go_right = true;
-                    game_object->go_left = false;
-                }
-                if ((!downright_tile.solid || right_tile.solid) && game_object->pos.x + game_object->hit_box_pos.x + game_object->hit_box.x * 0.25 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                {
-                    if (right_tile.solid)
-                    {
-                        game_object->looking_direction = Direction_LEFT;
-                    }
-                    game_object->go_right = false;
-                    game_object->go_left = true;
-                }
-                //если находится на одиночном тайле, то останавливается посередине
-                if ((!downleft_tile.solid || left_tile.solid) && (!downright_tile.solid || right_tile.solid))
-                {
-                    if (game_object->pos.x + TILE_SIZE_PIXELS * 0.2 <= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                    {
-                        game_object->go_right = true;
-                    }
-                    else if (game_object->pos.x - TILE_SIZE_PIXELS * 0.2 >= collided_y_tile_pos.x * TILE_SIZE_PIXELS)
-                    {
-                        game_object->go_left = true;
-                    }
-                    else
-                    {
-                        game_object->go_right = false;
-                        game_object->go_left = false;
-                        if (!(left_tile.solid && right_tile.solid))
-                        {
-                            if (left_tile.solid)
-                            {
-                                game_object->looking_direction = Direction_RIGHT;
-                            }
-                            if (right_tile.solid)
-                            {
-                                game_object->looking_direction = Direction_LEFT;
-                            }
-                        }
-                    }
-                }
+                walking_AI(memory, collisions, game_object);
+                standing_on_one_tile_AI(memory, collisions, game_object);
+            }
+            else
+            {
+                game_object->mooving_direction = Direction_NONE;
             }
         }
         else
@@ -779,12 +779,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (game_object->condition == Condition_FALLING)
         {
-            bool bool_direction = (game_object->looking_direction + 1) * 0.5;
-            game_object->go_right = bool_direction;
-            game_object->go_left = !bool_direction;
+            game_object->mooving_direction = game_object->looking_direction;
             game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_IDLE];
         }
 
+        //обзор
         Game_Object_Type triggers[1];
         triggers[0] = Game_Object_PLAYER;
 
@@ -809,25 +808,15 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //искривление
-        if (recent_speed.y != 0 && game_object->speed.y == 0)
-        {
-            game_object->target_deflection = V2{-recent_speed.y, recent_speed.y};
-        }
-        if (game_object->speed.y != 0)
-        {
-            game_object->target_deflection = V2{game_object->speed.y, -game_object->speed.y};
-        }
-
-        game_object->deflection += (game_object->target_deflection - game_object->deflection) * 0.3f;
-
-        if (length(game_object->target_deflection - game_object->deflection) < 0.1f)
-        {
-            game_object->target_deflection = V2{0, 0};
-        }
+        apply_deflection(game_object, recent_speed);
 
         // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
         // draw_rect(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
         add_bitmap_to_queue(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, 0x00000000, game_object->layer);
+    }
+
+    if (game_object->type == Game_Object_RAT)
+    {
     }
 
     if (game_object->type >= Game_Object_TOY_GUN_BULLET && game_object->type <= Game_Object_TOY_GUN_BULLET)
@@ -971,9 +960,10 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             f32 explosion_radius = TILE_SIZE_PIXELS * 2.5f;
             V2 tile_min = floor((game_object->pos - V2{explosion_radius, explosion_radius}) / TILE_SIZE_PIXELS);
             V2 tile_max = ceil((game_object->pos + V2{explosion_radius, explosion_radius}) / TILE_SIZE_PIXELS);
-            for (i32 y = (i32)tile_min.y; y <= (i32)tile_max.y; y++)
+            Rect explosion_rect = intersect(Rect{tile_min, tile_max}, Rect{V2{0, 0}, V2{CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2}});
+            for (i32 y = (i32)explosion_rect.min.y; y <= (i32)explosion_rect.max.y; y++)
             {
-                for (i32 x = (i32)tile_min.x; x <= (i32)tile_max.x; x++)
+                for (i32 x = (i32)explosion_rect.min.x; x <= (i32)explosion_rect.max.x; x++)
                 {
                     V2 tile_pos = V2{(f32)x, (f32)y};
                     Tile *tile = &memory->tile_map[get_index(tile_pos)];
@@ -990,7 +980,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 }
             }
 
-            update_map_bitmap(memory, Rect{tile_min, tile_max});
+            update_map_bitmap(memory, explosion_rect);
 
 #define EXPLOSION_BOOST 40
 

@@ -26,7 +26,7 @@ void spawn_enemies(Game_memory *memory, V2 enter_pos)
         Tile down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 1})];
         Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
         Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (!random_tile->solid && down_tile.solid)
+        if (random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_BACKGROUND].pixels && down_tile.solid)
         {
             if (!left_tile.solid || !right_tile.solid)
             {
@@ -118,13 +118,13 @@ void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
             i32 tile_index = get_index(tile_pos);
             Tile tile = memory->tile_map[tile_index];
 
-            V2 first_pixel_pos = TILE_SIZE_PIXELS * tile_pos / SPRITE_SCALE;
+            V2 center_pixel_pos = (TILE_SIZE_PIXELS * tile_pos + V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f) / SPRITE_SCALE - tile.sprite.size * 0.5f;
 
             for (u32 pixel_y = 0; pixel_y < tile.sprite.size.y; pixel_y++)
             {
                 for (u32 pixel_x = 0; pixel_x < tile.sprite.size.x; pixel_x++)
                 {
-                    V2 chunk_pixel_pos = first_pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
+                    V2 chunk_pixel_pos = center_pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
 
                     memory->map_bitmap.pixels[(i32)(chunk_pixel_pos.y * memory->map_bitmap.pitch + chunk_pixel_pos.x)] = tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1];
                 }
@@ -491,6 +491,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case 'N':
                     {
                         type = Tile_Type_ENTER;
+                        sprite = memory->bitmaps[Bitmap_type_NONE];
 
                         //addPlayer
                         enter_pos = tile_pos;
@@ -509,6 +510,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     {
                         type = Tile_Type_EXIT;
                         timer = add_timer(memory, -1);
+                        sprite = memory->bitmaps[Bitmap_type_NONE];
                     }
                     break;
                     case 'T':
@@ -737,17 +739,16 @@ void update_tile(Game_memory *memory, i32 tile_index)
         {
             down_tile->type = Tile_Type_UNBREAKABLE_PLANK;
             down_tile->solid = Solidness_Type_UP;
-            down_tile->sprite = memory->bitmaps[Bitmap_type_UNBREAKABLE_PLANK];
         }
 
         Bitmap door_sprite = memory->bitmaps[Bitmap_type_DOOR + 5];
 
-        if (memory->timers[tile->timer] > 0)
+        if (memory->timers[tile->timer] >= 0)
         {
             i8 step = (i8)floor(memory->timers[tile->timer] / 60.0f * 6.0f);
             door_sprite = memory->bitmaps[Bitmap_type_DOOR + step];
         }
-        else if (memory->timers[tile->timer] == 0)
+        if (memory->timers[tile->timer] == 0)
         {
             memory->transition = -0.001f;
         }
@@ -787,7 +788,7 @@ void update_tile(Game_memory *memory, i32 tile_index)
         Bitmap sprite = memory->bitmaps[Bitmap_type_LAMP];
         if (tile->timer == -1)
         {
-            tile->sprite = memory->bitmaps[Bitmap_type_LAMP_OFF];
+            sprite = memory->bitmaps[Bitmap_type_LAMP_OFF];
         }
         else
         {

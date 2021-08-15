@@ -363,8 +363,7 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                 {
                     if (obj_collision.object->condition != Condition_FALLING)
                     {
-                        obj_collision.object->go_right = clamp(unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x, 0, 1);
-                        obj_collision.object->go_left = !obj_collision.object->go_right;
+                        obj_collision.object->mooving_direction = (Direction)(i32)unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x;
                     }
                     game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
                     game_object->speed.y *= 0.5;

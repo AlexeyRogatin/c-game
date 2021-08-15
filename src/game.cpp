@@ -42,9 +42,9 @@ void border_camera(Game_memory *memory, Bitmap screen)
         memory->camera.pos.x = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.x / memory->camera.scale.x * 0.5 + SPRITE_SCALE);
     }
 
-    if (!(memory->camera.pos.x + screen.size.x / memory->camera.scale.x * 0.5 - SPRITE_SCALE < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
+    if (!(memory->camera.pos.x + screen.size.x / memory->camera.scale.x * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        memory->camera.pos.x = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / memory->camera.scale.x * 0.5 + SPRITE_SCALE);
+        memory->camera.pos.x = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_X * CHUNK_SIZE_X + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.x / memory->camera.scale.x * 0.5);
     }
 
     if (!(memory->camera.pos.y - screen.size.y / memory->camera.scale.y * 0.5 - SPRITE_SCALE > -TILE_SIZE_PIXELS * 0.5))
@@ -52,9 +52,9 @@ void border_camera(Game_memory *memory, Bitmap screen)
         memory->camera.pos.y = f32(-TILE_SIZE_PIXELS * 0.5 + screen.size.y / memory->camera.scale.y * 0.5 + SPRITE_SCALE);
     }
 
-    if (!(memory->camera.pos.y + screen.size.y / memory->camera.scale.y * 0.5 - SPRITE_SCALE < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
+    if (!(memory->camera.pos.y + screen.size.y / memory->camera.scale.y * 0.5 < -TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS))
     {
-        memory->camera.pos.y = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / memory->camera.scale.y * 0.5 + SPRITE_SCALE);
+        memory->camera.pos.y = f32(-TILE_SIZE_PIXELS * 0.5 + TILE_SIZE_PIXELS * CHUNK_COUNT_Y * CHUNK_SIZE_Y + 2 * BORDER_SIZE * TILE_SIZE_PIXELS - screen.size.y / memory->camera.scale.y * 0.5);
     }
 }
 
@@ -270,6 +270,8 @@ extern "C" GAME_UPDATE(game_update)
 
                 memory->draw_queue[drawing_index] = memory->draw_queue[drawing_index - 1];
                 memory->draw_queue[drawing_index - 1] = drawing;
+
+                assert(memory->draw_queue[drawing_index].bitmap.pixels != 0);
 
                 mistakes++;
             }

@@ -49,7 +49,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     game_object.pos = pos;
     game_object.collision_box_pos = V2{0, -12};
     game_object.collision_box = V2{35, 56};
-    game_object.hit_box_pos = V2{0, -12};
+    game_object.hit_box_pos = V2{0, -3};
     game_object.hit_box = V2{40, 75};
     game_object.speed = V2{0, 0};
     game_object.delta = V2{0, 0};
@@ -59,8 +59,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
     game_object.weapon = Game_Object_Handle{0, 0};
 
-    game_object.go_left = false;
-    game_object.go_right = false;
+    game_object.mooving_direction = Direction_NONE;
     game_object.jump = NULL;
 
     game_object.accel = 0.75f;
@@ -115,8 +114,22 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.jump_duration = 15;
 
-        game_object.go_left = random_int(&memory->__global_random_state, 0, 1);
-        game_object.go_right = !game_object.go_left;
+        game_object.mooving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
+    }
+
+    if (type == Game_Object_RAT)
+    {
+        game_object.collision_box_pos = V2{0, -12};
+        game_object.collision_box = V2{150, 56};
+        game_object.hit_box_pos = V2{0, -3};
+        game_object.hit_box = V2{170, 75};
+
+        game_object.healthpoints = 3;
+        game_object.max_healthpoints = 3;
+
+        game_object.jump = add_timer(memory, -1);
+
+        game_object.mooving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
     }
 
     if (type == Game_Object_TOY_GUN)
