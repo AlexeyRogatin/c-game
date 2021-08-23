@@ -24,17 +24,60 @@ void spawn_enemies(Game_memory *memory, V2 enter_pos)
                                 (f32)random_int(&memory->__global_random_state, BORDER_SIZE, BORDER_SIZE + CHUNK_SIZE_Y * CHUNK_COUNT_Y - 1)};
         Tile *random_tile = &memory->tile_map[get_index(random_tile_pos)];
         Tile down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 1})];
-        Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
-        Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
+        Tile *left_tile = &memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
+        Tile *right_tile = &memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
         if (random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_BACKGROUND].pixels && down_tile.solid)
         {
-            if (!left_tile.solid || !right_tile.solid)
+            if (!left_tile->solid || !right_tile->solid)
             {
                 if (distance_between_points(enter_pos, random_tile_pos) > CHUNK_SIZE_X * 0.5)
                 {
-                    add_game_object(memory, Game_Object_ZOMBIE, random_tile_pos * TILE_SIZE_PIXELS + V2{0, 0.01f});
-                    random_tile->type = Tile_Type_OCCUPIED;
-                    points++;
+                    if (random_float(&memory->__global_random_state, 0, 1) < 0.75)
+                    {
+                        add_game_object(memory, Game_Object_ZOMBIE, random_tile_pos * TILE_SIZE_PIXELS + V2{0, 0.01f});
+                        random_tile->type = Tile_Type_OCCUPIED;
+                        points++;
+                    }
+                    else
+                    {
+                        Tile_type save_type = random_tile->type;
+                        random_tile->type = Tile_Type_OCCUPIED;
+                        points += 2;
+                        V2 obj_pos = V2{0, 0};
+                        if (!left_tile->solid && !right_tile->solid)
+                        {
+                            if (random_int(&memory->__global_random_state, 0, 1) == 0)
+                            {
+                                obj_pos = V2{-0.5f, 0};
+                                left_tile->type = Tile_Type_OCCUPIED;
+                            }
+                            else
+                            {
+                                obj_pos = V2{0.5f, 0};
+                                right_tile->type = Tile_Type_OCCUPIED;
+                            }
+                        }
+                        else if (!left_tile->solid)
+                        {
+                            obj_pos = V2{-0.5f, 0};
+                            left_tile->type = Tile_Type_OCCUPIED;
+                        }
+                        else if (!right_tile->solid)
+                        {
+                            obj_pos = V2{0.5f, 0};
+                            right_tile->type = Tile_Type_OCCUPIED;
+                        }
+                        else
+                        {
+                            points -= 2;
+                            random_tile->type = save_type;
+                        }
+
+                        if (random_tile->type == Tile_Type_OCCUPIED)
+                        {
+                            add_game_object(memory, Game_Object_RAT, (random_tile_pos + obj_pos) * TILE_SIZE_PIXELS + V2{0, 0.01f});
+                        }
+                    }
                 }
             }
         }
@@ -67,7 +110,7 @@ void spawn_lamps(Game_memory *memory, V2 enter_pos)
         Tile down_down_down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 3})];
         Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
         Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (random_tile->type == Tile_Type_NONE && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
+        if (random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_BACKGROUND].pixels && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
         {
             if (!left_tile.solid || !right_tile.solid)
             {

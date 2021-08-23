@@ -126,7 +126,7 @@ extern "C" GAME_UPDATE(game_update)
         memory->initialized = true;
 
         load_bitmaps(memory, memory->win32_read_bmp);
-        load_letters(memory, memory->stbtt_read_font, "./fonts/comic.ttf", 128.0f);
+        // load_letters(memory, memory->stbtt_read_font, "./fonts/comic.ttf", 128.0f);
 
         memory->camera.pos = V2{0, 0};
         memory->camera.scale = V2{1, 1} * 0.55f;
@@ -271,7 +271,7 @@ extern "C" GAME_UPDATE(game_update)
                 memory->draw_queue[drawing_index] = memory->draw_queue[drawing_index - 1];
                 memory->draw_queue[drawing_index - 1] = drawing;
 
-                assert(memory->draw_queue[drawing_index].bitmap.pixels != 0);
+                assert(!(memory->draw_queue[drawing_index].bitmap.pixels == 0 && memory->draw_queue[drawing_index].type == DRAWING_TYPE_BITMAP));
 
                 mistakes++;
             }

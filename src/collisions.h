@@ -19,7 +19,7 @@ bool test_side(f32 wall_x, f32 obj_speed_x, f32 obj_speed_y, f32 obj_rel_pos_x, 
     return hit;
 }
 
-Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bounce, bool ignores_up_collision)
+Collisions check_collision(Game_memory *memory, Game_Object *game_object, bool ignores_up_collision)
 {
     Collisions collisions = {0};
 
@@ -118,12 +118,12 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, f32 bo
         total_speed *= 1.0f - min_time;
 
         //удаляем скорость столкновения
-        game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal * (bounce + 1.0f);
+        game_object->speed -= dot(game_object->speed, wall_normal) * wall_normal * (game_object->bounce + 1.0f);
         total_speed -= dot(total_speed, wall_normal) * wall_normal;
 
         remaining_time -= min_time * remaining_time;
     }
-    game_object->delta = game_object->pos - (old_pos - game_object->collision_box_pos);
+    game_object->delta += game_object->pos - (old_pos - game_object->collision_box_pos);
 
     return collisions;
 }
@@ -215,7 +215,7 @@ Object_Collision check_object_collision(Game_memory *memory, Game_Object *game_o
     V2 real_hit_box_pos = V2{game_object->hit_box_pos.x * game_object->looking_direction, game_object->hit_box_pos.y};
     V2 obj_pos = game_object->pos + real_hit_box_pos - game_object->delta;
     Object_Collision collision = {};
-    collision.side = (Side)-1;
+    collision.side = (Side)-2;
 
     f32 min_time = 1.0f;
     for (i32 game_object_index = 0; game_object_index < memory->game_object_count; game_object_index++)
@@ -226,15 +226,15 @@ Object_Collision check_object_collision(Game_memory *memory, Game_Object *game_o
             if (trigger_object->exists && trigger_object->type == triggering_objects[trigger_index])
             {
 
-                V2 trigger_min = (trigger_object->hit_box + game_object->hit_box) * (-0.5);
-                V2 trigger_max = (trigger_object->hit_box + game_object->hit_box) * 0.5;
+                V2 trigger_min = (trigger_object->hit_box + game_object->hit_box) * (-0.5f);
+                V2 trigger_max = (trigger_object->hit_box + game_object->hit_box) * 0.5f;
 
                 V2 trigger_real_hit_box_pos = V2{trigger_object->hit_box_pos.x * trigger_object->looking_direction, trigger_object->hit_box_pos.y};
 
                 V2 obj_rel_pos = obj_pos - (trigger_object->pos - trigger_object->delta + trigger_real_hit_box_pos);
 
-                if (obj_rel_pos.x >= trigger_min.x && obj_rel_pos.x <= trigger_max.x &&
-                    obj_rel_pos.y >= trigger_min.y && obj_rel_pos.y <= trigger_max.y)
+                if (obj_rel_pos.x > trigger_min.x && obj_rel_pos.x < trigger_max.x &&
+                    obj_rel_pos.y > trigger_min.y && obj_rel_pos.y < trigger_max.y)
                 {
                     collision.side = Side_INNER;
                     collision.object = trigger_object;
@@ -246,17 +246,17 @@ Object_Collision check_object_collision(Game_memory *memory, Game_Object *game_o
                         collision.side = Side_LEFT;
                         collision.object = trigger_object;
                     }
-                    if (test_side(trigger_max.x, game_object->speed.x - trigger_object->speed.x, game_object->speed.y - trigger_object->speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
+                    if (test_side(trigger_max.x, game_object->delta.x - trigger_object->delta.x, game_object->delta.y - trigger_object->delta.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, trigger_min.y, trigger_max.y))
                     {
                         collision.side = Side_RIGHT;
                         collision.object = trigger_object;
                     }
-                    if (test_side(trigger_min.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
+                    if (test_side(trigger_min.y, game_object->delta.y - trigger_object->delta.y, game_object->delta.x - trigger_object->delta.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                     {
                         collision.side = Side_BOTTOM;
                         collision.object = trigger_object;
                     }
-                    if (test_side(trigger_max.y, game_object->speed.y - trigger_object->speed.y, game_object->speed.x - trigger_object->speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
+                    if (test_side(trigger_max.y, game_object->delta.y - trigger_object->delta.y, game_object->delta.x - trigger_object->delta.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, trigger_min.x, trigger_max.x))
                     {
                         collision.side = Side_TOP;
                         collision.object = trigger_object;
@@ -333,22 +333,52 @@ Result:
 
 void check_hits(Game_memory *memory, Game_Object *game_object)
 {
+    if (game_object->type == Game_Object_RAT)
+    {
+
+        Game_Object_Type triggers[] = {
+            Game_Object_ZOMBIE,
+            Game_Object_PLAYER,
+        };
+        Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, ARRAY_COUNT(triggers));
+
+        if (obj_collision.side != -2)
+        {
+            if (memory->timers[game_object->jump] >= 0)
+            {
+                if (game_object->mooving_direction == -obj_collision.side)
+                {
+                    V2 save_speed = obj_collision.object->speed;
+                    f32 speed_x = game_object->pos.x + (game_object->hit_box.x + obj_collision.object->hit_box.x + 0.002f) * 0.5f * game_object->mooving_direction - obj_collision.object->pos.x;
+                    obj_collision.object->speed = V2{speed_x, 0};
+                    Collisions other_collisions = check_collision(memory, obj_collision.object, false);
+                    if (other_collisions.x.happened)
+                    {
+                        deal_damage(memory, game_object, obj_collision.object, obj_collision.object->healthpoints);
+                    }
+                    obj_collision.object->speed = save_speed;
+                }
+            }
+        }
+    }
+
     if (game_object->type == Game_Object_PLAYER)
     {
         //столкновения и движение
         Game_Object_Type triggers[] = {
             Game_Object_ZOMBIE,
+            Game_Object_RAT,
         };
         Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
 
-        if (obj_collision.side != -1)
+        if (obj_collision.side != -2)
         {
             if (obj_collision.side == Side_TOP)
             {
                 if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
                 {
                     game_object->speed.y = obj_collision.object->pos.y + obj_collision.object->hit_box_pos.y + obj_collision.object->hit_box.y * 0.5f + 0.001f - game_object->hit_box_pos.y + game_object->hit_box.y * 0.5f - game_object->pos.y;
-                    check_collision(memory, game_object, 0, false);
+                    check_collision(memory, game_object, false);
 
                     game_object->speed.y = JUMP_ON_ENEMY_BOOST;
                     obj_collision.object->speed.y -= game_object->speed.y + JUMP_ON_ENEMY_BOOST;
@@ -359,20 +389,24 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
             }
             else
             {
-                if (deal_damage(memory, obj_collision.object, game_object, obj_collision.object->damage))
+                if (!(obj_collision.object->type == Game_Object_RAT && memory->timers[obj_collision.object->jump] >= 0 && obj_collision.object->mooving_direction == obj_collision.side))
                 {
-                    if (obj_collision.object->condition != Condition_FALLING)
+                    if (deal_damage(memory, obj_collision.object, game_object, obj_collision.object->damage))
                     {
-                        obj_collision.object->mooving_direction = (Direction)(i32)unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x;
+                        if (obj_collision.object->condition != Condition_FALLING)
+                        {
+                            obj_collision.object->mooving_direction = (Direction)(i32)unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x;
+                        }
+                        game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
+                        game_object->speed.y *= 0.5f;
+                        game_object->speed.y += 7;
+
+                        memory->timers[game_object->invulnerable_timer] = 90;
+                        memory->timers[game_object->cant_control_timer] = 20;
+                        memory->timers[game_object->hanging_animation_timer] = 0;
+                        memory->pause = 3;
+                        game_object->condition = Condition_FALLING;
                     }
-                    game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
-                    game_object->speed.y *= 0.5;
-                    game_object->speed.y += 7;
-                    memory->timers[game_object->invulnerable_timer] = 90;
-                    memory->timers[game_object->cant_control_timer] = 20;
-                    memory->timers[game_object->hanging_animation_timer] = 0;
-                    memory->pause = 3;
-                    game_object->condition = Condition_FALLING;
                 }
             }
         }
@@ -382,10 +416,11 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
         //столкновения и движение
         Game_Object_Type triggers[] = {
             Game_Object_ZOMBIE,
+            Game_Object_RAT,
         };
         Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
 
-        if (obj_collision.side != -1)
+        if (obj_collision.side != -2)
         {
             if (deal_damage(memory, game_object, obj_collision.object, game_object->damage))
             {
@@ -397,10 +432,11 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
     {
         Game_Object_Type triggers[] = {
             Game_Object_ZOMBIE,
+            Game_Object_RAT,
         };
 
         Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, sizeof(triggers) / sizeof(Game_Object_Type));
-        if (obj_collision.side != -1)
+        if (obj_collision.side != -2)
         {
             if (length(game_object->speed) > 18.0f * game_object->mass)
             {

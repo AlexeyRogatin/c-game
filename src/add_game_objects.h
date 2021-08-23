@@ -1,7 +1,7 @@
 typedef enum
 {
-    Side_LEFT,
-    Side_RIGHT,
+    Side_LEFT = -1,
+    Side_RIGHT = 1,
     Side_BOTTOM,
     Side_TOP,
     Side_INNER,
@@ -49,8 +49,8 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     game_object.pos = pos;
     game_object.collision_box_pos = V2{0, -12};
     game_object.collision_box = V2{35, 56};
-    game_object.hit_box_pos = V2{0, -3};
-    game_object.hit_box = V2{40, 75};
+    game_object.hit_box = V2{40, 70};
+    game_object.hit_box_pos = V2{0, -5};
     game_object.speed = V2{0, 0};
     game_object.delta = V2{0, 0};
     game_object.deflection = V2{0, 0};
@@ -111,6 +111,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.jump = add_timer(memory, -1);
         game_object.can_jump = add_timer(memory, 0);
+        game_object.knockback = 30.0f;
 
         game_object.jump_duration = 15;
 
@@ -120,12 +121,14 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     if (type == Game_Object_RAT)
     {
         game_object.collision_box_pos = V2{0, -12};
-        game_object.collision_box = V2{150, 56};
-        game_object.hit_box_pos = V2{0, -3};
-        game_object.hit_box = V2{170, 75};
+        game_object.collision_box = V2{140, 56};
+        game_object.hit_box_pos = V2{0, -5};
+        game_object.hit_box = V2{140, 70};
 
-        game_object.healthpoints = 3;
-        game_object.max_healthpoints = 3;
+        game_object.healthpoints = 10;
+        game_object.max_healthpoints = 10;
+        game_object.knockback = 30.0f;
+        game_object.damage = 0.0f;
 
         game_object.jump = add_timer(memory, -1);
 

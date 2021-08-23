@@ -223,6 +223,7 @@ typedef struct
     f32 jump_duration;
     f32 bounce;
     f32 mass;
+    f32 knockback;
 
     i32 moved_through_pixels;
     Direction looking_direction;
