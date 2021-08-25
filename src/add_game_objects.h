@@ -2,9 +2,9 @@ typedef enum
 {
     Side_LEFT = -1,
     Side_RIGHT = 1,
-    Side_BOTTOM,
-    Side_TOP,
-    Side_INNER,
+    Side_BOTTOM = -2,
+    Side_TOP = 2,
+    Side_INNER = 0,
 } Side;
 
 typedef struct

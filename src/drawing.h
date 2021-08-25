@@ -46,6 +46,7 @@ void add_bitmap_to_queue(Game_memory *memory, V2 pos, V2 size, f32 angle, Bitmap
     drawing.alpha = alpha;
     assert(memory->draw_queue_size < 1024 * 8);
     memory->draw_queue[memory->draw_queue_size] = drawing;
+    assert(!(memory->draw_queue[memory->draw_queue_size].bitmap.pixels == 0 && memory->draw_queue[memory->draw_queue_size].type == DRAWING_TYPE_BITMAP));
     memory->draw_queue_size++;
 }
 

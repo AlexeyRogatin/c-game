@@ -271,8 +271,6 @@ extern "C" GAME_UPDATE(game_update)
                 memory->draw_queue[drawing_index] = memory->draw_queue[drawing_index - 1];
                 memory->draw_queue[drawing_index - 1] = drawing;
 
-                assert(!(memory->draw_queue[drawing_index].bitmap.pixels == 0 && memory->draw_queue[drawing_index].type == DRAWING_TYPE_BITMAP));
-
                 mistakes++;
             }
         }

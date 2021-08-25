@@ -803,7 +803,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (game_object->condition == Condition_MOOVING)
         {
-            i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.05);
+            i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.05f);
             while (step > 5)
             {
                 step -= 6;
@@ -851,7 +851,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
         else
         {
-            game_object->accel = 0.75f;
+            game_object->accel = 0.66f;
         }
         //движение
         game_object->speed.x += game_object->mooving_direction * game_object->accel;
