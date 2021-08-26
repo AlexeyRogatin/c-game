@@ -153,9 +153,9 @@ char *invert_chunk(char *chunk)
 
 void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
 {
-    for (u32 tile_y = (u32)updated_tiles.min.y; tile_y < updated_tiles.max.y; tile_y++)
+    for (u32 tile_y = (u32)updated_tiles.min.y; tile_y <= updated_tiles.max.y; tile_y++)
     {
-        for (u32 tile_x = (u32)updated_tiles.min.x; tile_x < updated_tiles.max.x; tile_x++)
+        for (u32 tile_x = (u32)updated_tiles.min.x; tile_x <= updated_tiles.max.x; tile_x++)
         {
             V2 tile_pos = V2{(f32)tile_x, (f32)tile_y};
             i32 tile_index = get_index(tile_pos);
@@ -169,7 +169,7 @@ void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
                 {
                     V2 chunk_pixel_pos = center_pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
 
-                    memory->map_bitmap.pixels[(i32)(chunk_pixel_pos.y * memory->map_bitmap.pitch + chunk_pixel_pos.x)] = tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1];
+                    memory->map_bitmap.pixels[(i32)((chunk_pixel_pos.y + 1) * memory->map_bitmap.pitch + (chunk_pixel_pos.x + 1))] = tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1];
                 }
             }
         }
@@ -721,7 +721,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
     {
         for (u32 chunk_x = 0; chunk_x < CHUNK_COUNT_X; chunk_x++)
         {
-            update_map_bitmap(memory, Rect{V2{0, 0}, V2{map_size.x, map_size.y}});
+            update_map_bitmap(memory, Rect{V2{0, 0}, V2{map_size.x - 1, map_size.y - 1}});
         }
     }
 
@@ -732,7 +732,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
 void draw_tile_map(Game_memory *memory)
 {
     V2 map_size = V2{CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2} * TILE_SIZE_PIXELS;
-    V2 map_center = map_size * 0.5f - V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f + V2{SPRITE_SCALE, SPRITE_SCALE};
+    V2 map_center = map_size * 0.5f - V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f;
 
     add_bitmap_to_queue(memory, map_center, map_size, 0, memory->map_bitmap, 1, 0x00000000, LAYER_TILE);
 }

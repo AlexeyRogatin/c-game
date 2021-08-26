@@ -242,8 +242,7 @@ extern "C" GAME_UPDATE(game_update)
         }
 
         //прорисовка темноты
-        f32 scale = TILE_SIZE_PIXELS / memory->bitmaps[Bitmap_type_BRICKS].size.x;
-        add_bitmap_to_queue(memory, memory->camera.pos, memory->darkness.size * scale, 0, memory->darkness, 1, 0x00000000, LAYER_DARKNESS);
+        add_bitmap_to_queue(memory, memory->camera.pos, memory->darkness.size * SPRITE_SCALE, 0, memory->darkness, 1, 0x00000000, LAYER_DARKNESS);
 
         // draw_text(memory, "aiAWAWAWAWVA", memory->camera.pos - V2{screen.size.x / memory->camera.scale.x * 0.45f, 0.0f}, V2{0, 0}, 0, 0.0f, 0, 0.0f, LAYER_UI);
 

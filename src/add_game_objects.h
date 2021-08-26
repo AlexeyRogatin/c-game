@@ -59,7 +59,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
     game_object.weapon = Game_Object_Handle{0, 0};
 
-    game_object.mooving_direction = Direction_NONE;
+    game_object.moving_direction = Direction_NONE;
     game_object.jump = NULL;
 
     game_object.accel = 0.75f;
@@ -115,7 +115,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.jump_duration = 15;
 
-        game_object.mooving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
+        game_object.moving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
     }
 
     if (type == Game_Object_RAT)
@@ -132,7 +132,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
         game_object.jump = add_timer(memory, -1);
 
-        game_object.mooving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
+        game_object.moving_direction = (Direction)(random_int(&memory->__global_random_state, 0, 1) * 2 - 1);
     }
 
     if (type == Game_Object_TOY_GUN)

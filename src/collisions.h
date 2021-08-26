@@ -351,15 +351,19 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                 if (fabs(obj_collision.side) == 1)
                 {
                     obj_collision.object->speed.x = game_object->pos.x + (game_object->hit_box.x + obj_collision.object->hit_box.x + 0.002f) * 0.5f * (-obj_collision.side) - obj_collision.object->pos.x;
+                    obj_collision.object->condition = Condition_FALLING;
+                    save_speed.x = obj_collision.object->speed.x;
                 }
                 else if (obj_collision.side == Side_TOP)
                 {
+                    save_speed.y = obj_collision.object->speed.y;
                     obj_collision.object->speed.y = game_object->pos.y + (game_object->hit_box.y + obj_collision.object->hit_box.y + 0.002f) * 0.5f * (-1.0f) - obj_collision.object->pos.y;
                 }
                 Collisions other_collisions = check_collision(memory, obj_collision.object, false);
                 if (other_collisions.x.happened || other_collisions.y.happened)
                 {
                     deal_damage(memory, game_object, obj_collision.object, obj_collision.object->healthpoints, true);
+                    obj_collision.object->condition = Condition_FALLING;
                 }
                 obj_collision.object->speed = save_speed;
             }
@@ -399,7 +403,7 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                     {
                         if (obj_collision.object->condition != Condition_FALLING)
                         {
-                            obj_collision.object->mooving_direction = (Direction)(i32)unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x;
+                            obj_collision.object->moving_direction = (Direction)(i32)unit(V2{game_object->pos.x - obj_collision.object->pos.x, 0}).x;
                         }
                         game_object->speed = unit(game_object->pos - obj_collision.object->pos) * KNOCKBACK;
                         game_object->speed.y *= 0.5f;

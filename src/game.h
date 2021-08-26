@@ -213,7 +213,7 @@ typedef struct
 
     Game_Object_Handle weapon;
 
-    Direction mooving_direction;
+    Direction moving_direction;
     i32 jump;
 
     f32 accel;

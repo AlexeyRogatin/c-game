@@ -30,13 +30,13 @@ Walking_AI_product walking_AI(Game_memory *memory, Game_Object *game_object)
     V2 obj_pos = game_object->pos + game_object->collision_box_pos + V2{game_object->collision_box.x * 0.5f * game_object->looking_direction, 0};
     V2 obj_tile_pos = round(obj_pos / TILE_SIZE_PIXELS);
 
-    Tile front_tile = memory->tile_map[get_index(obj_tile_pos + V2{1.0f * game_object->mooving_direction, 0})];
-    Tile down_front_tile = memory->tile_map[get_index(obj_tile_pos + V2{1.0f * game_object->mooving_direction, -1})];
+    Tile front_tile = memory->tile_map[get_index(obj_tile_pos + V2{1.0f * game_object->moving_direction, 0})];
+    Tile down_front_tile = memory->tile_map[get_index(obj_tile_pos + V2{1.0f * game_object->moving_direction, -1})];
 
     //если доходит до края тайла, то разворачивается
     if ((!down_front_tile.solid || front_tile.solid == Solidness_Type_NORMAL) &&
-        obj_pos.x * game_object->mooving_direction >
-            (obj_tile_pos.x + 0.4f * game_object->mooving_direction) * TILE_SIZE_PIXELS * game_object->mooving_direction)
+        obj_pos.x * game_object->moving_direction >
+            (obj_tile_pos.x + 0.4f * game_object->moving_direction) * TILE_SIZE_PIXELS * game_object->moving_direction)
     {
         if (front_tile.solid == Solidness_Type_NORMAL)
         {
@@ -46,7 +46,7 @@ Walking_AI_product walking_AI(Game_memory *memory, Game_Object *game_object)
         {
             result.abyss_rotation = true;
         }
-        game_object->mooving_direction = (Direction)(-game_object->mooving_direction);
+        game_object->moving_direction = (Direction)(-game_object->moving_direction);
     }
 
     return result;
@@ -75,11 +75,11 @@ bool standing_on_one_tile_AI(Game_memory *memory, Collisions collisions, Game_Ob
         f32 destination = (obj_right_tile_pos.x + obj_left_tile_pos.x) * TILE_SIZE_PIXELS * 0.5f;
         if (fabs(destination - game_object->pos.x) >= 5)
         {
-            game_object->mooving_direction = (Direction)(i32)unit(V2{destination - game_object->pos.x, 0}).x;
+            game_object->moving_direction = (Direction)(i32)unit(V2{destination - game_object->pos.x, 0}).x;
         }
         else
         {
-            game_object->mooving_direction = Direction_NONE;
+            game_object->moving_direction = Direction_NONE;
             if (!(right_tile.solid == Solidness_Type_NORMAL && left_tile.solid == Solidness_Type_NORMAL))
             {
                 if (right_tile.solid == Solidness_Type_NORMAL)
@@ -131,11 +131,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 memory->timers[game_object->jump] = JUMP_BUTTON_DURATION;
             }
 
-            game_object->mooving_direction = (Direction)(input.right.is_down - input.left.is_down);
+            game_object->moving_direction = (Direction)(input.right.is_down - input.left.is_down);
         }
         else
         {
-            game_object->mooving_direction = Direction_NONE;
+            game_object->moving_direction = Direction_NONE;
             memory->timers[game_object->jump] = 0;
         }
 
@@ -156,7 +156,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
 
         //скорость по x
-        game_object->speed += {game_object->mooving_direction * game_object->accel, 0};
+        game_object->speed += {game_object->moving_direction * game_object->accel, 0};
 
         //во время прыжка
         if (memory->timers[game_object->jump_timer] > 0)
@@ -201,9 +201,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         //направление
         if (!(game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN))
         {
-            if (game_object->mooving_direction != Direction_NONE)
+            if (game_object->moving_direction != Direction_NONE)
             {
-                game_object->looking_direction = game_object->mooving_direction;
+                game_object->looking_direction = game_object->moving_direction;
             }
         }
 
@@ -392,11 +392,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 {
                     step_length = 50;
                 }
-                i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) / step_length);
-                while (step > 5)
-                {
-                    step -= 6;
-                }
+                u8 step = (u32)(floorf(fabsf(game_object->moved_through_pixels / step_length))) % 6;
 
                 game_object->sprite = memory->bitmaps[Bitmap_type_PLAYER_STEP + step];
             }
@@ -417,11 +413,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 }
                 if (game_object->condition == Condition_CROUCHING_MOOVING)
                 {
-                    i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.1);
-                    while (step > 5)
-                    {
-                        step -= 6;
-                    }
+                    u8 step = (u32)(floorf(fabsf(game_object->moved_through_pixels * 0.1f))) % 6;
+
                     game_object->sprite = memory->bitmaps[Bitmap_type_PLAYER_CROUCH_STEP + step];
                 }
             }
@@ -727,7 +720,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         V2 recent_speed = game_object->speed;
 
         //движение
-        game_object->speed.x += game_object->mooving_direction * game_object->accel;
+        game_object->speed.x += game_object->moving_direction * game_object->accel;
 
         //прыжок
         if (game_object->condition != Condition_FALLING)
@@ -736,6 +729,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             {
                 game_object->speed.y = f32(2 * game_object->jump_height / game_object->jump_duration * random_float(&memory->__global_random_state, 0.4f, 1));
                 game_object->accel = ZOMBIE_ACCEL;
+                game_object->moving_direction = game_object->looking_direction;
             }
         }
 
@@ -747,9 +741,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         game_object->speed.x *= game_object->friction;
 
         //направление
-        if (game_object->mooving_direction != Direction_NONE)
+        if (game_object->moving_direction != Direction_NONE)
         {
-            game_object->looking_direction = game_object->mooving_direction;
+            game_object->looking_direction = game_object->moving_direction;
         }
 
         //поведение, связанное с тайлами
@@ -785,7 +779,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
             else
             {
-                game_object->mooving_direction = Direction_NONE;
+                game_object->moving_direction = Direction_NONE;
             }
         }
         else
@@ -795,28 +789,21 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //эффекты состояний
+        game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_IDLE];
+
         if (game_object->condition == Condition_IDLE)
         {
             game_object->speed.x *= game_object->friction;
-            game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_IDLE];
         }
 
         if (game_object->condition == Condition_MOOVING)
         {
-            i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.05f);
-            while (step > 5)
-            {
-                step -= 6;
-            }
+            u8 step = (u32)(floorf(fabsf(game_object->moved_through_pixels * 0.05f))) % 6;
 
             game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_STEP + step];
         }
 
-        if (game_object->condition == Condition_FALLING)
-        {
-            game_object->mooving_direction = game_object->looking_direction;
-            game_object->sprite = memory->bitmaps[Bitmap_type_ZOMBIE_IDLE];
-        }
+        assert(game_object->sprite.pixels);
 
         //обзор
         Game_Object_Type triggers[1];
@@ -854,7 +841,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             game_object->accel = 0.66f;
         }
         //движение
-        game_object->speed.x += game_object->mooving_direction * game_object->accel;
+        game_object->speed.x += game_object->moving_direction * game_object->accel;
 
         //гравитация
         f32 gravity = -2 * game_object->jump_height / (game_object->jump_duration * game_object->jump_duration);
@@ -864,9 +851,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         game_object->speed.x *= game_object->friction;
 
         //направление
-        if (game_object->mooving_direction != Direction_NONE)
+        if (game_object->moving_direction != Direction_NONE)
         {
-            game_object->looking_direction = game_object->mooving_direction;
+            game_object->looking_direction = game_object->moving_direction;
         }
 
         //поведение, связанное с тайлами
@@ -901,7 +888,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             {
                 if (product.abyss_rotation)
                 {
-                    game_object->mooving_direction = (Direction)-game_object->mooving_direction;
+                    game_object->moving_direction = (Direction)-game_object->moving_direction;
                 }
 
                 if (product.wall_rotation)
@@ -924,18 +911,14 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (game_object->condition == Condition_MOOVING)
         {
-            i8 step = (i8)floor(fabsf((f32)game_object->moved_through_pixels) * 0.05);
-            while (step > 1)
-            {
-                step -= 2;
-            }
+            u8 step = (u32)(floorf(fabsf(game_object->moved_through_pixels * 0.05f))) % 2;
 
             game_object->sprite = memory->bitmaps[Bitmap_type_RAT_STEP + step];
         }
 
         if (game_object->condition == Condition_FALLING)
         {
-            game_object->mooving_direction = game_object->looking_direction;
+            game_object->moving_direction = game_object->looking_direction;
             game_object->sprite = memory->bitmaps[Bitmap_type_RAT_IDLE];
         }
 
@@ -948,7 +931,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         if (check_vision_box(memory, &trigger_index, game_object->pos, game_object->pos + V2{(RAT_VISION_BOX.x + game_object->hit_box.x) * (f32)(game_object->looking_direction), 0} * 0.5f, RAT_VISION_BOX, triggers, 1, false, false))
         {
             memory->timers[game_object->jump] = 180;
-            game_object->mooving_direction = game_object->looking_direction;
+            game_object->moving_direction = game_object->looking_direction;
         }
 
         //искривление
