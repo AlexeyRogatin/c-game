@@ -27,6 +27,11 @@ Walking_AI_product walking_AI(Game_memory *memory, Game_Object *game_object)
 {
     Walking_AI_product result = {0};
 
+    if (game_object->moving_direction == Direction_NONE)
+    {
+        game_object->moving_direction = game_object->looking_direction;
+    }
+
     V2 obj_pos = game_object->pos + game_object->collision_box_pos + V2{game_object->collision_box.x * 0.5f * game_object->looking_direction, 0};
     V2 obj_tile_pos = round(obj_pos / TILE_SIZE_PIXELS);
 
@@ -716,7 +721,6 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
     if (game_object->type == Game_Object_ZOMBIE)
     {
-
         V2 recent_speed = game_object->speed;
 
         //движение
@@ -770,7 +774,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
 
             //если не заряжает прыжок
-            if (memory->timers[game_object->jump] < 0)
+            if (memory->timers[game_object->jump] <= 0)
             {
                 if (!standing_on_one_tile_AI(memory, collisions, game_object))
                 {

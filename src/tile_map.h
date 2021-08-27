@@ -161,15 +161,18 @@ void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
             i32 tile_index = get_index(tile_pos);
             Tile tile = memory->tile_map[tile_index];
 
-            V2 center_pixel_pos = (TILE_SIZE_PIXELS * tile_pos + V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f) / SPRITE_SCALE - tile.sprite.size * 0.5f;
+            V2 pixel_pos = floor((TILE_SIZE_PIXELS * tile_pos + V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f) / SPRITE_SCALE - tile.sprite.size * 0.5f);
 
             for (u32 pixel_y = 0; pixel_y < tile.sprite.size.y; pixel_y++)
             {
                 for (u32 pixel_x = 0; pixel_x < tile.sprite.size.x; pixel_x++)
                 {
-                    V2 chunk_pixel_pos = center_pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
+                    V2 chunk_pixel_pos = pixel_pos + V2{(f32)pixel_x, (f32)pixel_y};
 
-                    memory->map_bitmap.pixels[(i32)((chunk_pixel_pos.y + 1) * memory->map_bitmap.pitch + (chunk_pixel_pos.x + 1))] = tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1];
+                    i32 pixel_index = (i32)((chunk_pixel_pos.y + 1) * memory->map_bitmap.pitch + (chunk_pixel_pos.x + 1));
+                    ARGB texel = {tile.sprite.pixels[(pixel_y + 1) * tile.sprite.pitch + pixel_x + 1]};
+
+                    memory->map_bitmap.pixels[pixel_index] = texel.argb;
                 }
             }
         }

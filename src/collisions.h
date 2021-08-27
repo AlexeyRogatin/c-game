@@ -347,7 +347,9 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
             if (obj_collision.side != Side_BOTTOM)
             {
                 V2 save_speed = obj_collision.object->speed;
+                V2 save_delta = obj_collision.object->delta;
                 obj_collision.object->speed = V2{0, 0};
+                obj_collision.object->condition = Condition_FALLING;
                 if (fabs(obj_collision.side) == 1)
                 {
                     obj_collision.object->speed.x = game_object->pos.x + (game_object->hit_box.x + obj_collision.object->hit_box.x + 0.002f) * 0.5f * (-obj_collision.side) - obj_collision.object->pos.x;
@@ -360,12 +362,18 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                     obj_collision.object->speed.y = game_object->pos.y + (game_object->hit_box.y + obj_collision.object->hit_box.y + 0.002f) * 0.5f * (-1.0f) - obj_collision.object->pos.y;
                 }
                 Collisions other_collisions = check_collision(memory, obj_collision.object, false);
-                if (other_collisions.x.happened || other_collisions.y.happened)
+
+                obj_collision.object->delta = obj_collision.object->delta - save_delta;
+
+                Game_Object_Type rat_trigger[] = {Game_Object_RAT};
+                Object_Collision other_rat_collision = check_object_collision(memory, obj_collision.object, rat_trigger, ARRAY_COUNT(rat_trigger));
+
+                if (other_collisions.x.happened || other_collisions.y.happened || (other_rat_collision.side != -3 && other_rat_collision.object != game_object))
                 {
                     deal_damage(memory, game_object, obj_collision.object, obj_collision.object->healthpoints, true);
-                    obj_collision.object->condition = Condition_FALLING;
                 }
                 obj_collision.object->speed = save_speed;
+                obj_collision.object->delta += save_delta;
             }
         }
     }
