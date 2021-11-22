@@ -51,6 +51,10 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, bool i
                     V2 tile_pos = V2{(f32)tile_x, (f32)tile_y} * TILE_SIZE_PIXELS;
                     V2 tile_min = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * (-0.5);
                     V2 tile_max = (V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} + game_object->collision_box) * 0.5;
+                    if (tile.solid == Solidness_Type_DOWN_SPIKES)
+                    {
+                        tile_max.y -= TILE_SIZE_PIXELS * 0.5;
+                    }
 
                     V2 obj_rel_pos = game_object->pos + real_collision_box_pos - tile_pos;
 
@@ -299,14 +303,14 @@ bool check_vision_box(Game_memory *memory, i32 *trigger_index, V2 vision_point, 
                                 {
                                     tile_pos *= TILE_SIZE_PIXELS;
                                     i32 collisions = 0;
-                                    f32 x1 = (f32)(((tile_pos.y - TILE_SIZE_PIXELS * 0.5) - b) / k);
-                                    f32 x2 = (f32)(((tile_pos.y + TILE_SIZE_PIXELS * 0.5) - b) / k);
-                                    f32 y1 = (f32)(k * (tile_pos.x - TILE_SIZE_PIXELS * 0.5) + b);
-                                    f32 y2 = (f32)(k * (tile_pos.x + TILE_SIZE_PIXELS * 0.5) + b);
-                                    bool bx1 = x1 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5 && x1 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5;
-                                    bool bx2 = x2 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5 && x2 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5;
-                                    bool by1 = y1 >= tile_pos.y - TILE_SIZE_PIXELS * 0.5 && y1 <= tile_pos.y + TILE_SIZE_PIXELS * 0.5;
-                                    bool by2 = y2 >= tile_pos.y - TILE_SIZE_PIXELS * 0.5 && y2 <= tile_pos.y + TILE_SIZE_PIXELS * 0.5;
+                                    f32 x1 = (f32)(((tile_pos.y - TILE_SIZE_PIXELS * 0.5f) - b) / k);
+                                    f32 x2 = (f32)(((tile_pos.y + TILE_SIZE_PIXELS * 0.5f) - b) / k);
+                                    f32 y1 = (f32)(k * (tile_pos.x - TILE_SIZE_PIXELS * 0.5f) + b);
+                                    f32 y2 = (f32)(k * (tile_pos.x + TILE_SIZE_PIXELS * 0.5f) + b);
+                                    bool bx1 = x1 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5f && x1 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5f;
+                                    bool bx2 = x2 >= tile_pos.x - TILE_SIZE_PIXELS * 0.5f && x2 <= tile_pos.x + TILE_SIZE_PIXELS * 0.5f;
+                                    bool by1 = y1 >= tile_pos.y - TILE_SIZE_PIXELS * 0.5f && y1 <= tile_pos.y + TILE_SIZE_PIXELS * 0.5f;
+                                    bool by2 = y2 >= tile_pos.y - TILE_SIZE_PIXELS * 0.5f && y2 <= tile_pos.y + TILE_SIZE_PIXELS * 0.5f;
                                     if (bx1 || bx2 || by1 || by2)
                                     {
                                         vision_triggered = false;

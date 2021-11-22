@@ -120,6 +120,7 @@ i32 check_for_interactive_tiles(Game_memory *memory, Game_Object *game_object)
 
 extern "C" GAME_UPDATE(game_update)
 {
+    memory->camera.scale = 0.55f * V2{1, 1};
     //выполняется один раз
     if (!memory->initialized)
     {

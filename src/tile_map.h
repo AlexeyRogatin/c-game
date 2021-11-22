@@ -14,83 +14,95 @@ i32 get_index(V2 coords)
     return index;
 }
 
+#define ITERATIONS_COUNT 100
+
 void spawn_enemies(Game_memory *memory, V2 enter_pos)
 {
+    //кол-во очков опасности на уровне
     f32 danger_points = 30;
     f32 points = 0;
+
+    //пока не достигнуто нужное кол-во очков
     while (points < danger_points)
     {
-        V2 random_tile_pos = V2{(f32)random_int(&memory->__global_random_state, BORDER_SIZE, BORDER_SIZE + CHUNK_SIZE_X * CHUNK_COUNT_X - 1),
-                                (f32)random_int(&memory->__global_random_state, BORDER_SIZE, BORDER_SIZE + CHUNK_SIZE_Y * CHUNK_COUNT_Y - 1)};
-        Tile *random_tile = &memory->tile_map[get_index(random_tile_pos)];
-        Tile down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 1})];
-        Tile *left_tile = &memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
-        Tile *right_tile = &memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_BACKGROUND].pixels && down_tile.solid)
-        {
-            if (!left_tile->solid || !right_tile->solid)
-            {
-                if (distance_between_points(enter_pos, random_tile_pos) > CHUNK_SIZE_X * 0.5)
-                {
-                    if (random_float(&memory->__global_random_state, 0, 1) < 0.75)
-                    {
-                        add_game_object(memory, Game_Object_ZOMBIE, random_tile_pos * TILE_SIZE_PIXELS + V2{0, 0.01f});
-                        random_tile->type = Tile_Type_OCCUPIED;
-                        points++;
-                    }
-                    else
-                    {
-                        Tile_type save_type = random_tile->type;
-                        random_tile->type = Tile_Type_OCCUPIED;
-                        points += 2;
-                        V2 obj_pos = V2{0, 0};
-                        if (!left_tile->solid && !right_tile->solid)
-                        {
-                            if (random_int(&memory->__global_random_state, 0, 1) == 0)
-                            {
-                                obj_pos = V2{-0.5f, 0};
-                                left_tile->type = Tile_Type_OCCUPIED;
-                            }
-                            else
-                            {
-                                obj_pos = V2{0.5f, 0};
-                                right_tile->type = Tile_Type_OCCUPIED;
-                            }
-                        }
-                        else if (!left_tile->solid)
-                        {
-                            obj_pos = V2{-0.5f, 0};
-                            left_tile->type = Tile_Type_OCCUPIED;
-                        }
-                        else if (!right_tile->solid)
-                        {
-                            obj_pos = V2{0.5f, 0};
-                            right_tile->type = Tile_Type_OCCUPIED;
-                        }
-                        else
-                        {
-                            points -= 2;
-                            random_tile->type = save_type;
-                        }
+        //выбираем случайный объект, который хотим расположить
+        Game_Object *random_game_object = add_game_object(memory, (Game_Object_Type)random_int(&memory->__global_random_state, Game_Object_ZOMBIE, Game_Object_RAT), {0, 0});
+        V2 object_length = ceil(random_game_object->collision_box / TILE_SIZE_PIXELS);
 
-                        if (random_tile->type == Tile_Type_OCCUPIED)
+        i32 iterations = 0;
+
+        //попытаемся за 1000 иттераций поместить его на карту
+        while (iterations < ITERATIONS_COUNT)
+        {
+            V2 random_tile_pos = V2{(f32)random_int(&memory->__global_random_state, BORDER_SIZE, BORDER_SIZE + CHUNK_SIZE_X * CHUNK_COUNT_X - 1 - object_length.x),
+                                    (f32)random_int(&memory->__global_random_state, BORDER_SIZE, BORDER_SIZE + CHUNK_SIZE_Y * CHUNK_COUNT_Y - 1) - object_length.y};
+
+            V2 object_pos = random_tile_pos + object_length * 0.5f;
+
+            bool place_found = true;
+
+            if (distance_between_points(enter_pos, object_pos) < CHUNK_SIZE_X * 0.5f)
+            {
+                place_found = false;
+            }
+
+            if (place_found)
+            {
+                V2 left_tile_pos = random_tile_pos - V2{1, 0};
+                V2 right_tile_pos = random_tile_pos + V2{1, 0} + V2{object_length.x, 0};
+                if (memory->tile_map[get_index(left_tile_pos)].solid && memory->tile_map[get_index(right_tile_pos)].solid)
+                {
+                    place_found = false;
+                }
+            }
+
+            if (place_found)
+            {
+                for (f32 bottom_x = random_tile_pos.x; bottom_x < random_tile_pos.x + object_length.x; bottom_x++)
+                {
+                    V2 bottom_tile_pos = V2{bottom_x, random_tile_pos.y - 1};
+                    if (!memory->tile_map[get_index(bottom_tile_pos)].solid)
+                    {
+                        place_found = false;
+                    }
+                }
+            }
+
+            if (place_found)
+            {
+                for (f32 tile_y = random_tile_pos.y; tile_y < random_tile_pos.y + object_length.y; tile_y++)
+                {
+                    for (f32 tile_x = random_tile_pos.x; tile_x < random_tile_pos.x + object_length.x; tile_x++)
+                    {
+                        Tile tile = memory->tile_map[get_index(V2{tile_x, tile_y})];
+                        if (!tile.spawnable)
                         {
-                            add_game_object(memory, Game_Object_RAT, (random_tile_pos + obj_pos) * TILE_SIZE_PIXELS + V2{0, 0.01f});
+                            place_found = false;
+                            goto cycleEnd;
                         }
                     }
                 }
             }
+        cycleEnd:
+
+            if (place_found)
+            {
+                for (f32 tile_y = random_tile_pos.y; tile_y < random_tile_pos.y + object_length.y; tile_y++)
+                {
+                    for (f32 tile_x = random_tile_pos.x; tile_x < random_tile_pos.x + object_length.x; tile_x++)
+                    {
+                        Tile tile = memory->tile_map[get_index(V2{tile_x, tile_y})];
+                        tile.spawnable = false;
+                    }
+                }
+                random_game_object->pos = (object_pos - V2{0.49f, 0.49f}) * TILE_SIZE_PIXELS;
+                points += object_length.x * object_length.y;
+                break;
+            }
         }
-    }
-
-    V2 map_size = {CHUNK_COUNT_X * CHUNK_SIZE_X + BORDER_SIZE * 2, CHUNK_COUNT_Y * CHUNK_SIZE_Y + BORDER_SIZE * 2};
-    i32 tile_count = i32(map_size.x * map_size.y);
-
-    for (i32 tile_index = 0; tile_index < tile_count; tile_index++)
-    {
-        if (memory->tile_map[tile_index].type == Tile_Type_OCCUPIED)
+        if (iterations >= ITERATIONS_COUNT)
         {
-            memory->tile_map[tile_index].type = Tile_Type_NONE;
+            random_game_object->exists = false;
         }
     }
 }
@@ -493,6 +505,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     Solidness_Type solid = Solidness_Type_NONE;
                     i32 timer = -1;
                     Bitmap sprite = memory->bitmaps[Bitmap_type_BACKGROUND];
+                    bool spawnable = true;
 
                     switch (tile_char)
                     {
@@ -517,6 +530,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         {
                             sprite = memory->bitmaps[Bitmap_type_BRICKS + random_int(&memory->__global_random_state, 7, 11)];
                         }
+                        spawnable = false;
                     }
                     break;
                     case '=':
@@ -524,6 +538,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         type = Tile_Type_NORMAL;
                         solid = Solidness_Type_NORMAL;
                         sprite = memory->bitmaps[Bitmap_type_ELEGANT_BRICK];
+                        spawnable = false;
                     }
                     break;
                     case '-':
@@ -532,6 +547,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         solid = Solidness_Type_NORMAL;
 
                         sprite = memory->bitmaps[Bitmap_type_BORDER];
+                        spawnable = false;
                     }
                     break;
                     case 'N':
@@ -550,6 +566,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         memory->camera.target = spawn_pos;
                         border_camera(memory, screen);
                         memory->camera.pos = memory->camera.target;
+                        spawnable = false;
                     }
                     break;
                     case 'X':
@@ -557,12 +574,14 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         type = Tile_Type_EXIT;
                         timer = add_timer(memory, -1);
                         sprite = memory->bitmaps[Bitmap_type_NONE];
+                        spawnable = false;
                     }
                     break;
                     case 'T':
                     {
                         type = Tile_Type_FLOOR;
                         solid = Solidness_Type_NORMAL;
+                        spawnable = false;
                     }
                     break;
                     case 'P':
@@ -573,12 +592,15 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     case '^':
                     {
                         type = Tile_Type_SPIKES;
+                        solid = Solidness_Type_DOWN_SPIKES;
+                        spawnable = false;
                     }
                     break;
                     case '_':
                     {
                         type = Tile_Type_PLANK;
                         solid = Solidness_Type_UP;
+                        spawnable = false;
                     }
                     break;
                     }
@@ -587,6 +609,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                     memory->tile_map[index].solid = solid;
                     memory->tile_map[index].timer = timer;
                     memory->tile_map[index].sprite = sprite;
+                    memory->tile_map[index].spawnable = spawnable;
                 }
             }
         }

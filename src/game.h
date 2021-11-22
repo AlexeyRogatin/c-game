@@ -149,6 +149,7 @@ typedef enum
     Game_Object_TOY_GUN,
     Game_Object_BOMB,
     Game_Object_TOY_GUN_BULLET,
+    Game_Object_LENGTH,
 } Game_Object_Type;
 
 typedef enum
@@ -334,6 +335,7 @@ typedef enum
     Solidness_Type_NONE = 0,
     Solidness_Type_NORMAL = 1,
     Solidness_Type_UP = 2,
+    Solidness_Type_DOWN_SPIKES = 3,
 } Solidness_Type;
 
 typedef struct
@@ -341,6 +343,7 @@ typedef struct
     Tile_type type;
     Bitmap sprite;
     Solidness_Type solid;
+    bool spawnable;
     i32 timer;
 } Tile;
 

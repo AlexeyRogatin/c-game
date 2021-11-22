@@ -84,7 +84,6 @@ bool standing_on_one_tile_AI(Game_memory *memory, Collisions collisions, Game_Ob
         }
         else
         {
-            game_object->moving_direction = Direction_NONE;
             if (!(right_tile.solid == Solidness_Type_NORMAL && left_tile.solid == Solidness_Type_NORMAL))
             {
                 if (right_tile.solid == Solidness_Type_NORMAL)
@@ -96,6 +95,7 @@ bool standing_on_one_tile_AI(Game_memory *memory, Collisions collisions, Game_Ob
                     game_object->looking_direction = Direction_RIGHT;
                 }
             }
+            game_object->moving_direction = Direction_NONE;
         }
         result = true;
     }
@@ -215,8 +215,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         //столкновения
         Collisions collisions = check_collision(memory, game_object, memory->timers[game_object->walks_throught_planks_timer] > 0);
 
-        Game_Object old_object = *game_object;
-        old_object.pos -= game_object->delta;
+        V2 old_object_pos = game_object->pos - game_object->delta;
 
         //функции движения, связанные с коллизией
         //состояние падает
@@ -281,8 +280,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             if (memory->tile_map[collision_up_tile_index].solid != Solidness_Type_NORMAL && memory->tile_map[collision_frontup_tile_index].solid != Solidness_Type_NORMAL && tile_direction == game_object->looking_direction)
             {
                 if (game_object->delta.y < 0 &&
-                    old_object.pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2 &&
-                    old_object.pos.y + game_object->collision_box_pos.y + game_object->delta.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2)
+                    old_object_pos.y + game_object->collision_box_pos.y > collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2 &&
+                    old_object_pos.y + game_object->collision_box_pos.y + game_object->delta.y <= collided_x_tile_pos.y * TILE_SIZE_PIXELS - 2)
                 {
                     supposed_cond = Condition_HANGING;
 
@@ -293,6 +292,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                     game_object->pos.y = collided_x_tile_pos.y * TILE_SIZE_PIXELS - game_object->collision_box_pos.y - 2;
 
                     game_object->pos.x = collided_x_tile_pos.x * (f32)TILE_SIZE_PIXELS - game_object->looking_direction * (TILE_SIZE_PIXELS * 0.5f + game_object->collision_box.x * 0.5f + 0.001f) + game_object->collision_box_pos.x;
+
+                    game_object->delta = game_object->pos - old_object_pos;
                 }
             }
         }
@@ -307,8 +308,8 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 i32 collisionY_front_tile_pos_index = get_index(collisionY_front_tile_pos);
 
                 if (!memory->tile_map[collisionY_front_tile_pos_index].solid &&
-                    ((old_object.pos.x + game_object->delta.x + game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) && (ceilf(old_object.pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5f) >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) ||
-                     (old_object.pos.x + game_object->delta.x - game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f) && (floorf(old_object.pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5f) <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f)))
+                    ((old_object_pos.x + game_object->delta.x + game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) && (ceilf(old_object_pos.x + game_object->collision_box_pos.x + game_object->collision_box.x * 0.5f) >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS + TILE_SIZE_PIXELS * 0.5f) ||
+                     (old_object_pos.x + game_object->delta.x - game_object->collision_box.x * 0.5f + game_object->collision_box_pos.x >= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f) && (floorf(old_object_pos.x + game_object->collision_box_pos.x - game_object->collision_box.x * 0.5f) <= collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - TILE_SIZE_PIXELS * 0.5f)))
                 {
                     game_object->pos.x = collisionY_front_tile_pos.x * (f32)TILE_SIZE_PIXELS - ((TILE_SIZE_PIXELS - game_object->collision_box.x) * 0.5f - 0.001f) * game_object->looking_direction;
 
