@@ -120,7 +120,6 @@ i32 check_for_interactive_tiles(Game_memory *memory, Game_Object *game_object)
 
 extern "C" GAME_UPDATE(game_update)
 {
-    memory->camera.scale = 0.55f * V2{1, 1};
     //выполняется один раз
     if (!memory->initialized)
     {
@@ -215,11 +214,14 @@ extern "C" GAME_UPDATE(game_update)
                 update_game_object(memory, object_index, input, screen);
             }
         }
-        for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
+        for (i32 type = 0; type < Game_Object_LENGTH; type++)
         {
-            if (memory->game_objects[object_index].exists)
+            for (i32 object_index = 0; object_index < memory->game_object_count; object_index++)
             {
-                check_hits(memory, &memory->game_objects[object_index]);
+                if (memory->game_objects[object_index].type == type && memory->game_objects[object_index].exists)
+                {
+                    check_hits(memory, &memory->game_objects[object_index]);
+                }
             }
         }
 

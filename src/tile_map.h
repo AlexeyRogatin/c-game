@@ -122,7 +122,7 @@ void spawn_lamps(Game_memory *memory, V2 enter_pos)
         Tile down_down_down_tile = memory->tile_map[get_index(random_tile_pos - V2{0, 3})];
         Tile left_tile = memory->tile_map[get_index(random_tile_pos - V2{1, 0})];
         Tile right_tile = memory->tile_map[get_index(random_tile_pos + V2{1, 0})];
-        if (random_tile->sprite.pixels == memory->bitmaps[Bitmap_type_BACKGROUND].pixels && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
+        if (random_tile->spawnable && !down_tile.solid && (down_down_tile.solid || down_down_down_tile.solid))
         {
             if (!left_tile.solid || !right_tile.solid)
             {
@@ -738,6 +738,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
             up_tile->type = Tile_Type_NONE;
             up_tile->solid = (Solidness_Type)Solidness_Type_NONE;
             up_tile->timer = add_timer(memory, -(i32)INFINITY);
+            up_tile->spawnable = false;
         }
 
         memory->tile_map[index].sprite = sprite;

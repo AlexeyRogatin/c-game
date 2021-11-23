@@ -122,11 +122,11 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
     {
         game_object.collision_box_pos = V2{0, -12};
         game_object.collision_box = V2{140, 56};
-        game_object.hit_box_pos = V2{0, 5};
-        game_object.hit_box = V2{150, 62};
+        game_object.hit_box_pos = V2{0, -1};
+        game_object.hit_box = V2{150, 50};
 
-        game_object.healthpoints = 10;
-        game_object.max_healthpoints = 10;
+        game_object.healthpoints = 3;
+        game_object.max_healthpoints = 3;
         game_object.knockback = 30.0f;
         game_object.damage = 0.0f;
 

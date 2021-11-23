@@ -343,6 +343,8 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
         Game_Object_Type triggers[] = {
             Game_Object_ZOMBIE,
             Game_Object_PLAYER,
+            // Game_Object_TOY_GUN,
+            Game_Object_BOMB,
         };
         Object_Collision obj_collision = check_object_collision(memory, game_object, triggers, ARRAY_COUNT(triggers));
 
@@ -353,11 +355,14 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                 V2 save_speed = obj_collision.object->speed;
                 V2 save_delta = obj_collision.object->delta;
                 obj_collision.object->speed = V2{0, 0};
-                obj_collision.object->condition = Condition_FALLING;
-                if (fabs(obj_collision.side) == 1)
+                obj_collision.object->moved_through_pixels = 0;
+                if (obj_collision.object->condition == Condition_HANGING)
+                {
+                    obj_collision.object->condition = Condition_FALLING;
+                }
+                if (fabs(obj_collision.side) == Side_RIGHT)
                 {
                     obj_collision.object->speed.x = game_object->pos.x + (game_object->hit_box.x + obj_collision.object->hit_box.x + 0.002f) * 0.5f * (-obj_collision.side) - obj_collision.object->pos.x;
-                    obj_collision.object->condition = Condition_FALLING;
                     save_speed.x = obj_collision.object->speed.x;
                 }
                 else if (obj_collision.side == Side_TOP)
@@ -372,9 +377,13 @@ void check_hits(Game_memory *memory, Game_Object *game_object)
                 Game_Object_Type rat_trigger[] = {Game_Object_RAT};
                 Object_Collision other_rat_collision = check_object_collision(memory, obj_collision.object, rat_trigger, ARRAY_COUNT(rat_trigger));
 
-                if (other_collisions.x.happened || other_collisions.y.happened || (other_rat_collision.side != -3 && other_rat_collision.object != game_object))
+                if (other_collisions.x.happened || other_collisions.y.happened || (other_rat_collision.object != game_object && other_rat_collision.side == obj_collision.side))
                 {
                     deal_damage(memory, game_object, obj_collision.object, obj_collision.object->healthpoints, true);
+                    if (obj_collision.object->type == Game_Object_BOMB)
+                    {
+                        memory->timers[obj_collision.object->invulnerable_timer] = 1;
+                    }
                 }
                 obj_collision.object->speed = save_speed;
                 obj_collision.object->delta += save_delta;
