@@ -286,12 +286,12 @@ bool check_vision_box(Game_memory *memory, i32 *trigger_index, V2 vision_point, 
                     vision_pos.y - vision_size.y * 0.5 - game_object.hit_box.y * 0.5 < game_object.pos.y && vision_pos.y + vision_size.y * 0.5 + game_object.hit_box.y * 0.5 > game_object.pos.y)
                 {
                     vision_triggered = true;
-                    trigger_index = &game_object_index;
+                    *trigger_index = game_object_index;
                     if (!goes_through_walls)
                     {
                         f32 k = (vision_point.y - game_object.pos.y) / (vision_point.x - game_object.pos.x);
                         f32 b = vision_point.y - k * vision_point.x;
-                        //y=kx+b
+                        // y=kx+b
                         V2 min_point = round(V2{min(vision_point.x, game_object.pos.x), min(vision_point.y, game_object.pos.y)} / TILE_SIZE_PIXELS);
                         V2 max_point = round(V2{max(vision_point.x, game_object.pos.x), max(vision_point.y, game_object.pos.y)} / TILE_SIZE_PIXELS);
                         for (i32 y = (i32)min_point.y; y <= max_point.y; y++)

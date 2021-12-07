@@ -119,6 +119,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 #define CROUCHING_ANIMATION_TIME 8
 #define LOOKING_DISTANCE 80
 #define COLLISION_EXPANCION 8
+#define ROPE_LENGTH (TILE_SIZE_PIXELS * 3.6)
 
     if (game_object->type == Game_Object_PLAYER)
     {
@@ -200,8 +201,27 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
         }
 
+        if (game_object->condition == Condition_CLIMBING)
+        {
+            game_object->speed.y = game_object->accel * (input.up.is_down - input.down.is_down);
+            game_object->speed.x = 0;
+        }
+
         //трение
         game_object->speed.x *= game_object->friction;
+
+        if (game_object->condition == Condition_CLIMBING)
+        {
+            Game_Object *rope = &memory->game_objects[game_object->hanging_index];
+            if (game_object->pos.y + game_object->speed.y > rope->pos.y)
+            {
+                game_object->speed.y = rope->pos.y - game_object->pos.y;
+            }
+            else if (game_object->pos.y + game_object->speed.y < rope->pos.y - ROPE_LENGTH)
+            {
+                game_object->condition = Condition_FALLING;
+            }
+        }
 
         //направление
         if (!(game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_DOWN))
@@ -345,9 +365,24 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             }
         }
 
+        //состояние забирается по верёвке
+        if (input.up.is_down)
+        {
+            Game_Object_Type triggers[] = {Game_Object_ROPE};
+            i32 rope_index = -1;
+            if (check_vision_box(memory, &rope_index, game_object->pos + game_object->collision_box_pos + V2{0, -game_object->collision_box.y * 0.5f},
+                                 game_object->pos + V2{0, ROPE_LENGTH * 0.5f} + V2{0, -TILE_SIZE_PIXELS * 0.5f},
+                                 V2{1, ROPE_LENGTH}, triggers, ARRAY_COUNT(triggers), false, false))
+            {
+                supposed_cond = Condition_CLIMBING;
+                game_object->hanging_index = rope_index;
+                game_object->pos.x = memory->game_objects[rope_index].pos.x;
+            }
+        }
+
         //работа с предполагаемым состоянием (TODO возможно нужно убрать)
-        if ((game_object->condition != Condition_HANGING && game_object->condition != Condition_HANGING_LOOKING_DOWN && game_object->condition != Condition_HANGING_LOOKING_UP) ||
-            (supposed_cond == Condition_HANGING || supposed_cond == Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_HANGING_LOOKING_UP))
+        if ((((game_object->condition < Condition_HANGING || game_object->condition > Condition_HANGING_LOOKING_DOWN) && game_object->condition != Condition_CLIMBING) ||
+             (supposed_cond >= Condition_HANGING && supposed_cond <= Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_CLIMBING)))
         {
             //начинаем смотреть вверх и вниз
             if ((game_object->condition != Condition_CROUCHING_IDLE && supposed_cond == Condition_CROUCHING_IDLE) ||
@@ -463,7 +498,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
             memory->timers[game_object->can_jump] = 2;
 
-            if (game_object->hanging_index)
+            if (game_object->hanging_index && game_object->condition >= Condition_HANGING && game_object->condition <= Condition_HANGING_LOOKING_UP)
             {
                 Tile tile = memory->tile_map[game_object->hanging_index];
                 if (!tile.solid)
@@ -471,6 +506,10 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                     game_object->condition = Condition_FALLING;
                 }
             }
+        }
+        else if (game_object->condition == Condition_CLIMBING)
+        {
+            memory->timers[game_object->can_jump] = 2;
         }
         else
         {
@@ -579,18 +618,19 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             else
             {
                 //спрыгиваем с планок
-                if (collisions.y.happened)
+                if (memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_UP && input.down.is_down)
                 {
-                    if (memory->tile_map[collisions.y.tile_index].solid == Solidness_Type_UP && input.down.is_down)
-                    {
 
-                        memory->timers[game_object->walks_throught_planks_timer] = 2;
-                        memory->timers[game_object->can_jump] = 0;
-                    }
-                    else
+                    memory->timers[game_object->walks_throught_planks_timer] = 2;
+                    memory->timers[game_object->can_jump] = 0;
+                }
+                else
+                {
+                    game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                    memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                    if (game_object->condition == Condition_CLIMBING)
                     {
-                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                        memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                        game_object->condition = Condition_FALLING;
                     }
                 }
             }
@@ -623,6 +663,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 V2 rotated_vector = rotate_vector(V2{TOSSING_SPEED, 0}, NORMAL_ANGLE);
                 bomb->speed = (V2{rotated_vector.x * game_object->looking_direction, rotated_vector.y} + game_object->speed) * bomb->mass;
             }
+        }
+
+        if (input.a.went_down)
+        {
+            add_game_object(memory, Game_Object_ROPE, game_object->pos);
         }
 
         //оружие
@@ -943,7 +988,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         apply_deflection(game_object, recent_speed);
 
         // draw_rect(game_object->pos, game_object->collision_box, 0, 0xFF00FF00, LAYER_FORGROUND);
-        add_rect_to_queue(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
+        // add_rect_to_queue(memory, game_object->pos + game_object->hit_box_pos, game_object->hit_box, 0, 0xFFFF0000, LAYER_FORGROUND);
         add_bitmap_to_queue(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, 0x00000000, game_object->layer);
     }
 
@@ -1150,5 +1195,21 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         add_bitmap_to_queue(memory,
                             game_object->pos + V2{random_float(&memory->__global_random_state, -4.0f, 4.0f), random_float(&memory->__global_random_state, -4.0f, 4.0f)} * (1.0f - transition_lvl),
                             V2{(f32)TILE_SIZE_PIXELS * game_object->looking_direction, TILE_SIZE_PIXELS} + V2{TILE_SIZE_PIXELS * (f32)game_object->looking_direction, TILE_SIZE_PIXELS} * (1.0f - transition_lvl), game_object->angle, game_object->sprite, 1, color.argb, game_object->layer);
+    }
+
+    if (game_object->type == Game_Object_ROPE)
+    {
+        game_object->speed.y += game_object->gravity;
+        game_object->speed *= game_object->friction;
+
+        Collisions collisions = check_collision(memory, game_object, false);
+
+        if (game_object->speed.y <= 0 || collisions.y.happened)
+        {
+            game_object->gravity = 0;
+            game_object->speed.y = 0;
+        }
+
+        add_bitmap_to_queue(memory, game_object->pos, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_HOOK], 1, 0x00000000, LAYER_GAME_OBJECT);
     }
 }

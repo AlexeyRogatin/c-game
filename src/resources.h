@@ -48,8 +48,8 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[3] = win32_read_bmp("./bitmaps/lexaJump.bmp");
     memory->bitmaps[4] = win32_read_bmp("./bitmaps/lexaCrouchIdle.bmp");
     memory->bitmaps[5] = win32_read_bmp("./bitmaps/lexaWall.bmp");
-    memory->bitmaps[6] = win32_read_bmp("./bitmaps/lexaWall.bmp");
-    memory->bitmaps[7] = win32_read_bmp("./bitmaps/lexaWall.bmp");
+    memory->bitmaps[6] = win32_read_bmp("./bitmaps/lexaWallUp.bmp");
+    memory->bitmaps[7] = win32_read_bmp("./bitmaps/lexaWallDown.bmp");
     memory->bitmaps[8] = win32_read_bmp("./bitmaps/lexaLookingUp.bmp");
     memory->bitmaps[9] = win32_read_bmp("./bitmaps/lexaStep1.bmp");
     memory->bitmaps[10] = win32_read_bmp("./bitmaps/lexaStep2.bmp");
@@ -124,6 +124,8 @@ void load_bitmaps(Game_memory *memory, READ_BMP(win32_read_bmp))
     memory->bitmaps[79] = win32_read_bmp("./bitmaps/ratIdle.bmp");
     memory->bitmaps[80] = win32_read_bmp("./bitmaps/ratStep1.bmp");
     memory->bitmaps[81] = win32_read_bmp("./bitmaps/ratStep2.bmp");
+    memory->bitmaps[82] = win32_read_bmp("./bitmaps/hook.bmp");
+    memory->bitmaps[83] = win32_read_bmp("./bitmaps/rope.bmp");
 }
 
 void load_letters(Game_memory *memory, READ_FONT(stbtt_read_font), char *file_name, f32 letter_height)

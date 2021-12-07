@@ -1,7 +1,7 @@
 V2 get_tile_pos(i32 index)
 {
-    //size_x = CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2;
-    //index = y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + x;
+    // size_x = CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2;
+    // index = y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2) + x;
     f32 y = (f32)floor(index / (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2));
     f32 x = index - y * (CHUNK_SIZE_X * CHUNK_COUNT_X + BORDER_SIZE * 2);
     V2 result = {x, y};
@@ -174,7 +174,6 @@ void update_map_bitmap(Game_memory *memory, Rect updated_tiles)
             Tile tile = memory->tile_map[tile_index];
 
             V2 pixel_pos = floor((TILE_SIZE_PIXELS * tile_pos + V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS} * 0.5f) / SPRITE_SCALE - tile.sprite.size * 0.5f);
-
             for (u32 pixel_y = 0; pixel_y < tile.sprite.size.y; pixel_y++)
             {
                 for (u32 pixel_x = 0; pixel_x < tile.sprite.size.x; pixel_x++)
@@ -555,7 +554,7 @@ void generate_new_map(Game_memory *memory, Bitmap screen)
                         type = Tile_Type_ENTER;
                         sprite = memory->bitmaps[Bitmap_type_NONE];
 
-                        //addPlayer
+                        // addPlayer
                         enter_pos = tile_pos;
                         V2 spawn_pos = tile_pos * TILE_SIZE_PIXELS + V2{0.0f, 0.001f};
                         Game_Object *player = add_game_object(memory, Game_Object_PLAYER, spawn_pos);

@@ -419,6 +419,11 @@ void process_messages(HWND window, win32_State *win32_state, Input *input, WINDO
                 handle_button(&input->s, key_went_up);
             }
             break;
+            case 'A':
+            {
+                handle_button(&input->a, key_went_up);
+            }
+            break;
             case VK_SHIFT:
             {
                 handle_button(&input->shift, key_went_up);

@@ -27,7 +27,7 @@ typedef u8 byte;
 #include "game_math.cpp"
 #include <string.h>
 
-//fps
+// fps
 #define TARGET_TIME_PER_FRAME (1.0f / 60.0f)
 #define DT ((f32)TARGET_TIME_PER_FRAME)
 
@@ -81,7 +81,7 @@ typedef struct
     bool went_up;
 } Button;
 
-#define BUTTON_COUNT 13
+#define BUTTON_COUNT 14
 
 typedef union
 {
@@ -98,6 +98,7 @@ typedef union
         Button p;
         Button t;
         Button s;
+        Button a;
         Button shift;
         Button space;
     };
@@ -148,6 +149,7 @@ typedef enum
     Game_Object_RAT,
     Game_Object_TOY_GUN,
     Game_Object_BOMB,
+    Game_Object_ROPE,
     Game_Object_TOY_GUN_BULLET,
     Game_Object_LENGTH,
 } Game_Object_Type;
@@ -172,6 +174,7 @@ typedef enum
     Condition_HANGING,
     Condition_HANGING_LOOKING_UP,
     Condition_HANGING_LOOKING_DOWN,
+    Condition_CLIMBING,
 } Condition;
 
 //камера
@@ -231,7 +234,7 @@ typedef struct
     Condition condition;
     Bitmap sprite;
 
-    //player
+    // player
     i32 can_jump;
 
     i32 jump_timer;
@@ -301,6 +304,8 @@ typedef enum
     Bitmap_type_RAT_IDLE,
     Bitmap_type_RAT_STEP,
     Bitmap_type_RAT_STEP_END = Bitmap_type_RAT_STEP + 1,
+    Bitmap_type_HOOK,
+    Bitmap_type_ROPE,
     Bitmap_type_COUNT,
 } Bitmap_type;
 
@@ -328,6 +333,7 @@ typedef enum
     Tile_Type_LAMP,
     Tile_Type_PLANK,
     Tile_Type_UNBREAKABLE_PLANK,
+    Tile_Type_ROPE,
 } Tile_type;
 
 typedef enum
@@ -353,7 +359,7 @@ typedef READ_BMP(Read_BMP);
 #define READ_FONT(name) Letter name(char *file_name, i32 letter_code, f32 letter_height)
 typedef READ_FONT(Read_Font);
 
-//work queue
+// work queue
 #define THREADS_COUNT 8
 #define CLIP_RECTS_COUNT_Y 8
 #define CLIP_RECTS_COUNT_X 1

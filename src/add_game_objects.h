@@ -180,6 +180,23 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
         game_object.invulnerable_timer = add_timer(memory, 240);
     }
 
+    if (type == Game_Object_ROPE)
+    {
+        game_object.collision_box = V2{35, 50};
+        game_object.collision_box_pos = V2{0, 0.0f} * SPRITE_SCALE;
+        game_object.hit_box = V2{5, 5} * SPRITE_SCALE;
+        game_object.hit_box_pos = V2{0, 0.0f} * SPRITE_SCALE;
+
+        game_object.friction = 0.96f;
+
+        game_object.sprite = memory->bitmaps[Bitmap_type_BOMB];
+        game_object.bounce = 0.3f;
+        game_object.mass = 0.75f;
+        game_object.speed.y = 26.6f;
+
+        game_object.gravity = -0.66f;
+    }
+
     i32 slot_index = memory->game_object_count;
 
     for (i32 objectIndex = 0; objectIndex < memory->game_object_count; objectIndex++)
