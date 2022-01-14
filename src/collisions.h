@@ -44,6 +44,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, bool i
         {
             for (i32 tile_x = (i32)start_tile.x; tile_x <= finish_tile.x; tile_x++)
             {
+                f32 recent_time = min_time;
                 i32 index = get_index(V2{(f32)tile_x, (f32)tile_y});
                 Tile tile = memory->tile_map[index];
                 if (tile.solid)
@@ -58,7 +59,7 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, bool i
 
                     V2 obj_rel_pos = game_object->pos + real_collision_box_pos - tile_pos;
 
-                    if (tile.solid != Solidness_Type_UP)
+                    if (tile.solid == Solidness_Type_NORMAL)
                     {
                         if (test_side(tile_min.x, total_speed.x, total_speed.y, obj_rel_pos.x, obj_rel_pos.y, &min_time, tile_min.y, tile_max.y))
                         {
@@ -89,11 +90,19 @@ Collisions check_collision(Game_memory *memory, Game_Object *game_object, bool i
                     {
                         if (test_side(tile_max.y, total_speed.y, total_speed.x, obj_rel_pos.y, obj_rel_pos.x, &min_time, tile_min.x, tile_max.x))
                         {
-                            wall_normal = V2{0, 1};
-                            collision_iteration.y.happened = true;
-                            collision_iteration.x.happened = false;
-                            collision_iteration.y.tile_index = index;
-                            collision_iteration.y.tile_side = Side_TOP;
+                            if (tile.solid == Solidness_Type_DOWN_SPIKES)
+                            {
+                                game_object->healthpoints = 0;
+                                min_time = recent_time;
+                            }
+                            else
+                            {
+                                wall_normal = V2{0, 1};
+                                collision_iteration.y.happened = true;
+                                collision_iteration.x.happened = false;
+                                collision_iteration.y.tile_index = index;
+                                collision_iteration.y.tile_side = Side_TOP;
+                            }
                         }
                     }
                 }
@@ -299,7 +308,7 @@ bool check_vision_box(Game_memory *memory, i32 *trigger_index, V2 vision_point, 
                             for (i32 x = (i32)min_point.x; x <= max_point.x; x++)
                             {
                                 V2 tile_pos = V2{(f32)x, (f32)y};
-                                if (memory->tile_map[get_index(tile_pos)].solid)
+                                if (memory->tile_map[get_index(tile_pos)].solid == Solidness_Type_NORMAL)
                                 {
                                     tile_pos *= TILE_SIZE_PIXELS;
                                     i32 collisions = 0;

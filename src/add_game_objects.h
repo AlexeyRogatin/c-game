@@ -41,7 +41,7 @@ Game_Object *add_game_object(Game_memory *memory, Game_Object_Type type, V2 pos)
 
     game_object.exists = true;
 
-    game_object.healthpoints = 0;
+    game_object.healthpoints = 1;
     game_object.max_healthpoints = 0;
 
     game_object.damage = 1.0f;

@@ -129,7 +129,7 @@ extern "C" GAME_UPDATE(game_update)
         // load_letters(memory, memory->stbtt_read_font, "./fonts/comic.ttf", 128.0f);
 
         memory->camera.pos = V2{0, 0};
-        memory->camera.scale = V2{1, 1} * 0.55f;
+        memory->camera.scale = V2{1, 1} * 0.7f;
         memory->camera.target = V2{0, 0};
 
         V2 darkness_size = ceil(screen.size / memory->camera.scale / SPRITE_SCALE);
@@ -256,7 +256,7 @@ extern "C" GAME_UPDATE(game_update)
 
     //сортируем qrawQueue
 
-    //to do переделать под insertion sort
+    // to do переделать под insertion sort
     i32 mistakes;
     do
     {

@@ -179,7 +179,10 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //гравитация
-        game_object->speed.y += gravity;
+        if (game_object->condition != Condition_CLIMBING)
+        {
+            game_object->speed.y += gravity;
+        }
 
         if (game_object->speed.y > TILE_SIZE_PIXELS * 0.5)
         {
@@ -203,8 +206,9 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (game_object->condition == Condition_CLIMBING)
         {
-            game_object->speed.y = game_object->accel * (input.up.is_down - input.down.is_down);
+            game_object->speed.y += 2 * (input.up.is_down - input.down.is_down);
             game_object->speed.x = 0;
+            game_object->speed.y *= game_object->friction;
         }
 
         //трение
@@ -366,23 +370,25 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         }
 
         //состояние забирается по верёвке
-        if (input.up.is_down)
+        if (input.up.is_down && game_object->speed.y <= 6)
         {
             Game_Object_Type triggers[] = {Game_Object_ROPE};
             i32 rope_index = -1;
-            if (check_vision_box(memory, &rope_index, game_object->pos + game_object->collision_box_pos + V2{0, -game_object->collision_box.y * 0.5f},
-                                 game_object->pos + V2{0, ROPE_LENGTH * 0.5f} + V2{0, -TILE_SIZE_PIXELS * 0.5f},
-                                 V2{1, ROPE_LENGTH}, triggers, ARRAY_COUNT(triggers), false, false))
+            if (check_vision_box(memory, &rope_index, game_object->pos,
+                                 game_object->pos + V2{0, ROPE_LENGTH * 0.5f},
+                                 V2{7, ROPE_LENGTH + TILE_SIZE_PIXELS * 0.5f}, triggers, ARRAY_COUNT(triggers), false, false))
             {
                 supposed_cond = Condition_CLIMBING;
                 game_object->hanging_index = rope_index;
                 game_object->pos.x = memory->game_objects[rope_index].pos.x;
+                // game_object->speed = V2{0, 0};
             }
         }
 
         //работа с предполагаемым состоянием (TODO возможно нужно убрать)
         if ((((game_object->condition < Condition_HANGING || game_object->condition > Condition_HANGING_LOOKING_DOWN) && game_object->condition != Condition_CLIMBING) ||
-             (supposed_cond >= Condition_HANGING && supposed_cond <= Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_CLIMBING)))
+             (supposed_cond >= Condition_HANGING && supposed_cond <= Condition_HANGING_LOOKING_DOWN || supposed_cond == Condition_CLIMBING)) ||
+            (game_object->condition == Condition_CLIMBING && collisions.y.tile_side == Side_TOP))
         {
             //начинаем смотреть вверх и вниз
             if ((game_object->condition != Condition_CROUCHING_IDLE && supposed_cond == Condition_CROUCHING_IDLE) ||
@@ -510,6 +516,16 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         else if (game_object->condition == Condition_CLIMBING)
         {
             memory->timers[game_object->can_jump] = 2;
+            if (input.down.is_down || input.up.is_down)
+            {
+                game_object->moved_through_pixels += (i32)floor(game_object->pos.y - old_object_pos.y);
+            }
+            i32 step = ((i32)floor(game_object->moved_through_pixels / 25) % 3);
+            if (step < 0)
+            {
+                step += 4;
+            }
+            game_object->sprite = memory->bitmaps[Bitmap_type_PLAYER_CLIMB_STEP + step];
         }
         else
         {
@@ -626,8 +642,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
                 }
                 else
                 {
-                    game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
-                    memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                    if (game_object->condition != Condition_CLIMBING || !input.down.is_down)
+                    {
+                        game_object->speed.y = 2 * game_object->jump_height / game_object->jump_duration;
+                        memory->timers[game_object->jump_timer] = (i32)ceilf(game_object->jump_duration + 1.0f);
+                    }
                     if (game_object->condition == Condition_CLIMBING)
                     {
                         game_object->condition = Condition_FALLING;
@@ -667,7 +686,7 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
 
         if (input.a.went_down)
         {
-            add_game_object(memory, Game_Object_ROPE, game_object->pos);
+            add_game_object(memory, Game_Object_ROPE, round(game_object->pos / TILE_SIZE_PIXELS) * TILE_SIZE_PIXELS);
         }
 
         //оружие
@@ -1210,6 +1229,11 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
             game_object->speed.y = 0;
         }
 
-        add_bitmap_to_queue(memory, game_object->pos, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_HOOK], 1, 0x00000000, LAYER_GAME_OBJECT);
+        add_bitmap_to_queue(memory, game_object->pos, V2{TILE_SIZE_PIXELS, TILE_SIZE_PIXELS}, 0, memory->bitmaps[Bitmap_type_HOOK], 1, 0x00000000, LAYER_ON_BACKGROUND);
+    }
+
+    if (game_object->healthpoints == 0 && game_object->max_healthpoints != 0)
+    {
+        game_object->exists = false;
     }
 }

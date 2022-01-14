@@ -266,6 +266,8 @@ typedef enum
     Bitmap_type_PLAYER_CROUCH_START_END = Bitmap_type_PLAYER_CROUCH_START + 3,
     Bitmap_type_PLAYER_CROUCH_STEP,
     Bitmap_type_PLAYER_CROUCH_STEP_END = Bitmap_type_PLAYER_CROUCH_STEP + 5,
+    Bitmap_type_PLAYER_CLIMB_STEP,
+    Bitmap_type_PLAYER_CLIMB_STEP_END = Bitmap_type_PLAYER_CLIMB_STEP + 3,
     Bitmap_type_ZOMBIE_IDLE,
     Bitmap_type_ZOMBIE_STEP,
     Bitmap_type_ZOMBIE_STEP_END = Bitmap_type_ZOMBIE_STEP + 5,
@@ -361,7 +363,7 @@ typedef READ_FONT(Read_Font);
 
 // work queue
 #define THREADS_COUNT 8
-#define CLIP_RECTS_COUNT_Y 8
+#define CLIP_RECTS_COUNT_Y 12
 #define CLIP_RECTS_COUNT_X 1
 
 #define PLATFORM_WORK_QUEUE_CALLBACK(name) void name(void *data)

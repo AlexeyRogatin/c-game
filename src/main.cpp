@@ -375,7 +375,7 @@ void process_messages(HWND window, win32_State *win32_state, Input *input, WINDO
             {
                 if (key_went_up)
                 {
-                    //Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
+                    // Raymond (How do I switch a window between normal and fullscreen?) https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353 link in the description
                     DWORD window_style = GetWindowLong(window, GWL_STYLE);
                     DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
                     if (window_style & WS_OVERLAPPEDWINDOW)
@@ -548,7 +548,7 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     QueryPerformanceFrequency(&perf_frequency_li);
     performance_frequency = perf_frequency_li.QuadPart;
 
-    //multithreading
+    // multithreading
     Platform_work_queue queue = {};
 
     win32_thread_info info[THREADS_COUNT] = {};
@@ -600,10 +600,10 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         wndClass.lpszClassName,
         "A real game",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        920, //x
-        380, //y
-        512, //width
-        325, //height
+        920, // x
+        380, // y
+        512, // width
+        325, // height
         NULL,
         NULL,
         wndClass.hInstance,
@@ -613,8 +613,8 @@ INT WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ReleaseDC(window, device_context);
 
     RECT rect;
-    i32 game_width = 640;
-    i32 game_height = 360;
+    i32 game_width = 960;
+    i32 game_height = 540;
 
     BITMAPINFO bitmap_info = {0};
     bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
