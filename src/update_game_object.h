@@ -1011,6 +1011,19 @@ void update_game_object(Game_memory *memory, i32 index, Input input, Bitmap scre
         add_bitmap_to_queue(memory, game_object->pos + V2{0, game_object->deflection.y * 0.5f}, V2{(game_object->sprite.size.x * SPRITE_SCALE + game_object->deflection.x) * game_object->looking_direction, (game_object->sprite.size.y * SPRITE_SCALE + game_object->deflection.y)}, 0, game_object->sprite, 1, 0x00000000, game_object->layer);
     }
 
+    // if (game_object->type == Game_Object_BIRD)
+    // {
+    //     V2 recent_speed = game_object->speed;
+    //     //движение
+    //     game_object->speed.x += game_object->moving_direction * game_object->accel;
+
+    //     i32 triggers[1] = {Game_Object_PLAYER};
+    //     check_collision(memory, game_object, true);
+    //     check_vision_box(memory, triggers, game_object->pos,game_object->pos,V2{500,500},)
+
+    //         add_rect_to_queue(memory, game_object->pos, V2{50, 50}, 0, 0xFFFFFFFF, LAYER_UI);
+    // }
+
     if (game_object->type >= Game_Object_TOY_GUN_BULLET && game_object->type <= Game_Object_TOY_GUN_BULLET)
     {
         switch (game_object->type)

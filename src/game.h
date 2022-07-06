@@ -147,6 +147,7 @@ typedef enum
     Game_Object_PLAYER,
     Game_Object_ZOMBIE,
     Game_Object_RAT,
+    Game_Object_BIRD,
     Game_Object_TOY_GUN,
     Game_Object_BOMB,
     Game_Object_ROPE,
