@@ -3,6 +3,23 @@
 #include "Windows.h"
 #include "assets.h"
 
+//конкатенация строк
+void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *source_b, i64 dest_count, char *dest)
+{
+	for (i32 index = 0; index < source_a_count; index++)
+	{
+		*dest++ = *source_a++;
+	}
+
+	for (i32 index = 0; index < source_b_count; index++)
+	{
+		*dest++ = *source_b++;
+	}
+
+	*dest++ = 0;
+}
+
+//функция для отладки
 void foo(const char *str)
 {
     OutputDebugStringA(str);
@@ -10,6 +27,7 @@ void foo(const char *str)
 
 bool running = true;
 
+//обработка событий окна
 LRESULT CALLBACK WindowProc(
     _In_ HWND window,
     _In_ UINT message,
@@ -22,9 +40,15 @@ LRESULT CALLBACK WindowProc(
     {
     case WM_ACTIVATEAPP:
     {
+		//wParam указывает активируется ли окно
+
+		//проверка слойности окна
         DWORD window_ex_style = GetWindowLong(window, GWL_EXSTYLE);
+
         if (window_ex_style & WS_EX_LAYERED)
         {
+			//в зависимости от того, активируется или дезактивируется окно,
+			//изменяем его прозрачность
             if (wParam)
             {
                 SetLayeredWindowAttributes(window, RGB(0, 0, 0), 255, LWA_ALPHA);
@@ -45,6 +69,7 @@ LRESULT CALLBACK WindowProc(
 
     default:
     {
+		//функция для обработки стандартных событий
         result = DefWindowProc(window, message, wParam, lParam);
     }
     }
@@ -52,30 +77,21 @@ LRESULT CALLBACK WindowProc(
     return result;
 }
 
-void handle_button(Button *button, bool key_went_up)
-{
-    if (key_went_up && button->is_down)
-    {
-        button->went_up = true;
-        button->is_down = false;
-    }
-    else if (!button->is_down)
-    {
-        button->went_down = true;
-        button->is_down = true;
-    }
-}
-
+//чатота процессора
 u64 performance_frequency = 1;
 
+//функция нахождения времени в ms
 f64 win32_get_time(void)
 {
     LARGE_INTEGER ticks;
+	//сколько тиков часов произошло за ms
     QueryPerformanceCounter(&ticks);
+
     f64 result = (f64)ticks.QuadPart / (f64)performance_frequency;
     return result;
 }
 
+//память игры
 typedef struct
 {
     FILETIME last_write_time;
@@ -85,6 +101,8 @@ typedef struct
     bool is_valid;
 } win32_game_code;
 
+
+//функции для подгрузки динамических библиотек
 FILETIME get_last_write_time(char *src)
 {
     FILETIME last_write_time = {};
@@ -132,21 +150,9 @@ void win32_unload_game_code(win32_game_code *game_code)
     game_code->game_update = Game_Update_Stub;
 }
 
-void cat_strings(i64 source_a_count, char *source_a, i64 source_b_count, char *source_b, i64 dest_count, char *dest)
-{
-    for (i32 index = 0; index < source_a_count; index++)
-    {
-        *dest++ = *source_a++;
-    }
+//функции для сохранения и воспроизведения плейбека
 
-    for (i32 index = 0; index < source_b_count; index++)
-    {
-        *dest++ = *source_b++;
-    }
-
-    *dest++ = 0;
-}
-
+//состояния проигрывателя
 typedef enum
 {
     Replay_State_NONE,
@@ -154,6 +160,7 @@ typedef enum
     Replay_State_REPLAYING,
 } Replay_State;
 
+//состояние программы
 typedef struct
 {
     HANDLE handle;
@@ -276,6 +283,20 @@ void win32_get_exe_file_name(win32_State *win32_state)
             win32_state->exe_file_one_past_last_slash = scan + 1;
         }
     }
+}
+
+void handle_button(Button *button, bool key_went_up)
+{
+	if (key_went_up && button->is_down)
+	{
+		button->went_up = true;
+		button->is_down = false;
+	}
+	else if (!button->is_down)
+	{
+		button->went_down = true;
+		button->is_down = true;
+	}
 }
 
 void process_messages(HWND window, win32_State *win32_state, Input *input, WINDOWPLACEMENT *g_wpPrev)

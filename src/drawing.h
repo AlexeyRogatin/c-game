@@ -470,7 +470,7 @@ void draw_item(Game_memory *memory, Bitmap screen, Drawing drawing)
     {
         render_bitmap(screen, drawing);
     }
-
+	
     if (drawing.type == DRAWING_TYPE_LIGHT)
     {
         render_light(memory, drawing);

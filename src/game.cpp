@@ -62,7 +62,7 @@ void border_camera(Game_memory *memory, Bitmap screen)
 #include "collisions.h"
 
 #define THROWING_SPEED 30.0f
-#define TOSSING_SPEED 6.0f
+#define TOSSING_SPEED 60.0f
 #define NORMAL_ANGLE (f32)(PI / 6)
 #define UP_ANGLE (f32)(PI / 3)
 #define DOWN_ANGLE (f32)(-PI / 3)
